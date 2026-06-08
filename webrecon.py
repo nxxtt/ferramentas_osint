@@ -19,8 +19,13 @@ from utils import (
     extract_title,
     fetch,
     header_get,
+    setup_logging,
     status_color,
 )
+
+import logging
+
+logger = logging.getLogger("mytools.webrecon")
 
 """Ferramenta de reconhecimento HTTP para laboratórios e hosts autorizados."""
 
@@ -301,6 +306,8 @@ def run_recon(
     errors = []
     session = create_session(user_agent=user_agent, proxy=proxy)
 
+    logger.info("recon iniciado: %s", url)
+
     for target in candidate_urls(url):
         try:
             status, headers, body = fetch(session, target, timeout=timeout)
@@ -448,11 +455,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="Proxy para as requests. Ex: http://proxy:8080",
     )
     parser.add_argument("-o", "--output", help="Salva resultado em JSON.")
+    parser.add_argument("-v", "--verbose", action="store_true", help="Mostra mensagens de debug no terminal.")
+    parser.add_argument("--log-file", help="Salva logs em arquivo.")
     return parser
 
 
 def run_once(args: argparse.Namespace) -> int:
     """Executa uma única operação de reconhecimento com os argumentos fornecidos."""
+    setup_logging(verbose=args.verbose, log_file=args.log_file)
     if not args.url:
         raise ValueError("informe uma URL alvo")
     if args.timeout <= 0:

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+import os
 import threading
 import time
 
@@ -11,6 +13,7 @@ from utils import (
     extract_title,
     fetch,
     header_get,
+    setup_logging,
     status_color,
 )
 
@@ -153,3 +156,36 @@ class TestCreateSession:
     def test_no_proxy(self):
         session = create_session()
         assert session.proxies == {} or session.proxies is None or "http" not in session.proxies
+
+
+class TestSetupLogging:
+    def test_verbose_sets_debug_level(self):
+        setup_logging(verbose=True)
+        root = logging.getLogger("mytools")
+        assert root.level == logging.DEBUG
+
+    def test_default_sets_warning_level(self):
+        setup_logging()
+        root = logging.getLogger("mytools")
+        assert root.level == logging.WARNING
+
+    def test_log_file_creates_file(self, tmp_path):
+        log_file = str(tmp_path / "test.log")
+        setup_logging(log_file=log_file)
+        logger = logging.getLogger("mytools.test")
+        logger.info("test message")
+        for handler in logging.getLogger("mytools").handlers:
+            handler.flush()
+        assert os.path.exists(log_file)
+
+    def test_log_file_sets_info_level(self, tmp_path):
+        log_file = str(tmp_path / "test.log")
+        setup_logging(log_file=log_file)
+        root = logging.getLogger("mytools")
+        assert root.level == logging.INFO
+
+    def test_verbose_and_log_file(self, tmp_path):
+        log_file = str(tmp_path / "test.log")
+        setup_logging(verbose=True, log_file=log_file)
+        root = logging.getLogger("mytools")
+        assert root.level == logging.DEBUG

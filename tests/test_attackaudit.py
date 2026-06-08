@@ -524,6 +524,21 @@ class TestBuildParser:
         args = parser.parse_args(["https://example.com", "--delay", "5"])
         assert args.delay == 5.0
 
+    def test_has_verbose_argument(self):
+        parser = build_parser()
+        args = parser.parse_args(["https://example.com", "-v"])
+        assert args.verbose is True
+
+    def test_default_verbose_false(self):
+        parser = build_parser()
+        args = parser.parse_args(["https://example.com"])
+        assert args.verbose is False
+
+    def test_has_log_file_argument(self):
+        parser = build_parser()
+        args = parser.parse_args(["https://example.com", "--log-file", "audit.log"])
+        assert args.log_file == "audit.log"
+
 
 class TestSecurityHeadersConstant:
     def test_has_all_expected(self):

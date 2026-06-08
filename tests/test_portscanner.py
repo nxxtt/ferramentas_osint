@@ -173,3 +173,18 @@ class TestBuildParser:
         parser = build_parser()
         args = parser.parse_args(["127.0.0.1"])
         assert args.timeout == 0.5
+
+    def test_has_verbose_argument(self):
+        parser = build_parser()
+        args = parser.parse_args(["127.0.0.1", "-v"])
+        assert args.verbose is True
+
+    def test_default_verbose_false(self):
+        parser = build_parser()
+        args = parser.parse_args(["127.0.0.1"])
+        assert args.verbose is False
+
+    def test_has_log_file_argument(self):
+        parser = build_parser()
+        args = parser.parse_args(["127.0.0.1", "--log-file", "scan.log"])
+        assert args.log_file == "scan.log"

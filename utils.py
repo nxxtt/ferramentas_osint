@@ -2,6 +2,7 @@
 """Utilitários gerais para formatação, cores e manipulação de dados."""
 from __future__ import annotations
 
+import logging
 import os
 import sys
 import threading
@@ -10,6 +11,35 @@ import time
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
+
+logger = logging.getLogger("mytools")
+
+
+def setup_logging(verbose: bool = False, log_file: str | None = None) -> None:
+    """Configura logging para o MyTools.
+
+    Args:
+        verbose: Se True, mostra mensagens DEBUG no terminal.
+        log_file: Se fornecido, salva logs neste arquivo (sempre em modo verbose).
+    """
+    level = logging.DEBUG if verbose else logging.WARNING
+    if log_file and not verbose:
+        level = logging.INFO
+
+    log = logging.getLogger("mytools")
+    log.setLevel(level)
+    log.handlers.clear()
+
+    terminal = logging.StreamHandler(sys.stderr)
+    terminal.setLevel(level)
+    terminal.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s", datefmt="%H:%M:%S"))
+    log.addHandler(terminal)
+
+    if log_file:
+        file_handler = logging.FileHandler(log_file, encoding="utf-8")
+        file_handler.setLevel(logging.DEBUG)
+        file_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s", datefmt="%Y-%m-%d %H:%M:%S"))
+        log.addHandler(file_handler)
 
 
 USE_COLOR = sys.stdout.isatty() and os.environ.get("NO_COLOR") is None
@@ -98,6 +128,7 @@ def fetch(
     allow_redirects: bool = False,
 ) -> tuple[int, dict[str, str], bytes]:
     """Realiza uma requisicao HTTP e retorna status, headers e corpo."""
+    logger.debug("request %s %s (timeout=%.1f)", method, url, timeout)
     try:
         response = session.request(
             method=method,
@@ -105,8 +136,10 @@ def fetch(
             timeout=timeout,
             allow_redirects=allow_redirects,
         )
+        logger.debug("response %d %s (%d bytes)", response.status_code, url, len(response.content))
         return response.status_code, dict(response.headers), response.content
     except requests.exceptions.RequestException as error:
+        logger.debug("error %s: %s", url, error)
         raise ValueError(f"falha ao acessar {url}: {error}") from error
 
 

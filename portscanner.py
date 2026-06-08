@@ -15,7 +15,11 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict, dataclass
 from typing import Iterable
 
-from utils import Cyber, clear_console, color
+from utils import Cyber, clear_console, color, setup_logging
+
+import logging
+
+logger = logging.getLogger("mytools.portscanner")
 
 
 DEFAULT_PORTS = [
@@ -196,6 +200,9 @@ def scan_targets(
     total = len(targets) * len(ports)
     started = time.monotonic()
 
+    logger.info("scan iniciado: %d alvos, %d portas (%d tentativas)", len(targets), len(ports), total)
+    logger.debug("timeout=%.2f, workers=%d, banner=%s", timeout, workers, with_banner)
+
     print(color("[*]", Cyber.CYAN, Cyber.BOLD), f"Alvos: {color(str(len(targets)), Cyber.WHITE, Cyber.BOLD)} | Portas: {color(str(len(ports)), Cyber.WHITE, Cyber.BOLD)} | Tentativas: {color(str(total), Cyber.WHITE, Cyber.BOLD)}")
     print(color("[*]", Cyber.CYAN, Cyber.BOLD), f"Timeout: {color(f'{timeout:.2f}s', Cyber.YELLOW)} | Threads: {color(str(workers), Cyber.YELLOW)}")
 
@@ -338,11 +345,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--output",
         help="Salva resultado em .json ou .csv.",
     )
+    parser.add_argument("-v", "--verbose", action="store_true", help="Mostra mensagens de debug no terminal.")
+    parser.add_argument("--log-file", help="Salva logs em arquivo.")
     return parser
 
 
 def run_once(args: argparse.Namespace) -> int:
     """Executa uma única varredura com os argumentos fornecidos."""
+    setup_logging(verbose=args.verbose, log_file=args.log_file)
     if args.timeout <= 0:
         raise ValueError("timeout precisa ser maior que zero")
     if args.workers < 1:

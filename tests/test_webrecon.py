@@ -287,3 +287,18 @@ class TestBuildParser:
         parser = build_parser()
         args = parser.parse_args(["https://example.com", "--proxy", "http://proxy:8080"])
         assert args.proxy == "http://proxy:8080"
+
+    def test_has_verbose_argument(self):
+        parser = build_parser()
+        args = parser.parse_args(["https://example.com", "-v"])
+        assert args.verbose is True
+
+    def test_default_verbose_false(self):
+        parser = build_parser()
+        args = parser.parse_args(["https://example.com"])
+        assert args.verbose is False
+
+    def test_has_log_file_argument(self):
+        parser = build_parser()
+        args = parser.parse_args(["https://example.com", "--log-file", "out.log"])
+        assert args.log_file == "out.log"

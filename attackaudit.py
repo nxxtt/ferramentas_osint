@@ -25,8 +25,13 @@ from utils import (
     create_session,
     fetch,
     header_get,
+    setup_logging,
     status_color,
 )
+
+import logging
+
+logger = logging.getLogger("mytools.attackaudit")
 
 """Ferramenta de auditoria web para alvos autorizados, combinando red team e hardening defensivo."""
 
@@ -618,6 +623,9 @@ def run_audit(
     rate_limiter = RateLimiter(requests_per_second)
     session = create_session(user_agent=user_agent, proxy=proxy)
 
+    logger.info("audit iniciado: %s", target)
+    logger.debug("threads=%d, deep=%s, test_vulns=%s", threads, deep, test_vulns)
+
     print(color("[*]", Cyber.CYAN, Cyber.BOLD), f"Alvo: {color(target, Cyber.WHITE, Cyber.BOLD)}")
     if ip:
         print(color("[*]", Cyber.CYAN, Cyber.BOLD), f"IP: {color(ip, Cyber.YELLOW)}")
@@ -765,11 +773,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="Delay entre requests (requests por segundo). 0 = sem limite. Padrao: 0",
     )
     parser.add_argument("-o", "--output", help="Salva resultado em .json ou .csv.")
+    parser.add_argument("-v", "--verbose", action="store_true", help="Mostra mensagens de debug no terminal.")
+    parser.add_argument("--log-file", help="Salva logs em arquivo.")
     return parser
 
 
 def run_once(args: argparse.Namespace) -> int:
     """Executa uma unica auditoria com os argumentos fornecidos."""
+    setup_logging(verbose=args.verbose, log_file=args.log_file)
     if not args.url:
         raise ValueError("informe uma URL alvo")
     if args.timeout <= 0:

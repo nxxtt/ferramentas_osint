@@ -392,3 +392,18 @@ class TestBuildParser:
         parser = build_parser()
         args = parser.parse_args(["http://example.com", "--filter-words", "10-100"])
         assert args.filter_words == (10, 100)
+
+    def test_has_verbose_argument(self):
+        parser = build_parser()
+        args = parser.parse_args(["http://example.com", "-v"])
+        assert args.verbose is True
+
+    def test_default_verbose_false(self):
+        parser = build_parser()
+        args = parser.parse_args(["http://example.com"])
+        assert args.verbose is False
+
+    def test_has_log_file_argument(self):
+        parser = build_parser()
+        args = parser.parse_args(["http://example.com", "--log-file", "scan.log"])
+        assert args.log_file == "scan.log"
