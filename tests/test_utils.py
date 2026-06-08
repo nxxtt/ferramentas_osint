@@ -1,10 +1,15 @@
 from __future__ import annotations
 
+import threading
+import time
+
 from utils import (
     Cyber,
-    NoRedirectHandler,
+    RateLimiter,
     color,
+    create_session,
     extract_title,
+    fetch,
     header_get,
     status_color,
 )
@@ -101,8 +106,50 @@ class TestExtractTitle:
         assert extract_title("<title></title>") == ""
 
 
-class TestNoRedirectHandler:
-    def test_redirect_returns_none(self):
-        handler = NoRedirectHandler()
-        result = handler.redirect_request(None, None, 301, None, None, "http://new")
-        assert result is None
+class TestRateLimiter:
+    def test_zero_delay_does_not_block(self):
+        limiter = RateLimiter(0.0)
+        start = time.monotonic()
+        limiter.wait()
+        elapsed = time.monotonic() - start
+        assert elapsed < 0.05
+
+    def test_rate_limit_enforces_delay(self):
+        limiter = RateLimiter(10.0)
+        timestamps: list[float] = []
+        lock = threading.Lock()
+
+        def record():
+            limiter.wait()
+            with lock:
+                timestamps.append(time.monotonic())
+
+        threads = [threading.Thread(target=record) for _ in range(5)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        timestamps.sort()
+        for i in range(1, len(timestamps)):
+            assert timestamps[i] - timestamps[i - 1] >= 0.08
+
+
+class TestCreateSession:
+    def test_returns_session(self):
+        session = create_session()
+        assert session is not None
+        assert "User-Agent" in session.headers
+
+    def test_custom_user_agent(self):
+        session = create_session(user_agent="TestAgent/1.0")
+        assert session.headers["User-Agent"] == "TestAgent/1.0"
+
+    def test_proxy_set(self):
+        session = create_session(proxy="http://proxy:8080")
+        assert session.proxies.get("http") == "http://proxy:8080"
+        assert session.proxies.get("https") == "http://proxy:8080"
+
+    def test_no_proxy(self):
+        session = create_session()
+        assert session.proxies == {} or session.proxies is None or "http" not in session.proxies

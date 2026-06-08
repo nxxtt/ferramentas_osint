@@ -2,14 +2,17 @@ from __future__ import annotations
 
 import argparse
 
+import responses
+
+from utils import Cyber, create_session
 from webrecon import (
     ReconResult,
     build_parser,
     candidate_urls,
     normalize_url,
+    probe_status,
     status_text,
 )
-from utils import Cyber
 
 
 class TestNormalizeUrl:
@@ -94,6 +97,23 @@ class TestStatusText:
         assert isinstance(status_text(200), str)
 
 
+class TestProbeStatus:
+    @responses.activate
+    def test_returns_status_on_success(self):
+        responses.add(responses.GET, "http://example.com/robots.txt", body=b"User-agent: *", status=200)
+        session = create_session(user_agent="TestAgent/1.0")
+        result = probe_status(session, "http://example.com/robots.txt", 5.0)
+        assert result == 200
+
+    @responses.activate
+    def test_returns_none_on_error(self):
+        import requests as _requests
+        responses.add(responses.GET, "http://example.com/robots.txt", body=_requests.exceptions.ConnectionError("refused"))
+        session = create_session(user_agent="TestAgent/1.0")
+        result = probe_status(session, "http://example.com/robots.txt", 5.0)
+        assert result is None
+
+
 class TestReconResultDataclass:
     def test_creation(self):
         r = ReconResult(
@@ -140,3 +160,8 @@ class TestBuildParser:
         parser = build_parser()
         args = parser.parse_args(["https://example.com", "-o", "out.json"])
         assert args.output == "out.json"
+
+    def test_has_proxy_argument(self):
+        parser = build_parser()
+        args = parser.parse_args(["https://example.com", "--proxy", "http://proxy:8080"])
+        assert args.proxy == "http://proxy:8080"

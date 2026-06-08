@@ -4,7 +4,12 @@ from __future__ import annotations
 
 import os
 import sys
-from urllib.request import HTTPRedirectHandler, build_opener
+import threading
+import time
+
+import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 
 USE_COLOR = sys.stdout.isatty() and os.environ.get("NO_COLOR") is None
@@ -38,14 +43,71 @@ def clear_console() -> None:
     os.system("cls" if os.name == "nt" else "clear")
 
 
-class NoRedirectHandler(HTTPRedirectHandler):
-    """Handler que impede redirecionamento automático em requisições HTTP."""
+class RateLimiter:
+    """Rate limiter thread-safe usando lock e intervalo minimo entre requests."""
 
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
-        return None
+    def __init__(self, requests_per_second: float = 0.0) -> None:
+        self._min_interval = 1.0 / requests_per_second if requests_per_second > 0 else 0.0
+        self._lock = threading.Lock()
+        self._last_request_time = 0.0
+
+    def wait(self) -> None:
+        """Bloqueia ate que o intervalo minimo entre requests tenha passado."""
+        if self._min_interval <= 0:
+            return
+        with self._lock:
+            now = time.monotonic()
+            elapsed = now - self._last_request_time
+            if elapsed < self._min_interval:
+                time.sleep(self._min_interval - elapsed)
+            self._last_request_time = time.monotonic()
 
 
-NO_REDIRECT_OPENER = build_opener(NoRedirectHandler)
+def create_session(
+    user_agent: str = "MyTools/2.0",
+    proxy: str | None = None,
+    max_retries: int = 3,
+    backoff_factor: float = 0.5,
+) -> requests.Session:
+    """Cria uma sessao HTTP compartilhada com retry, proxy e headers padrao."""
+    session = requests.Session()
+
+    retry = Retry(
+        total=max_retries,
+        backoff_factor=backoff_factor,
+        status_forcelist=[429, 500, 502, 503, 504],
+        respect_retry_after_header=True,
+    )
+    adapter = HTTPAdapter(max_retries=retry, pool_connections=10, pool_maxsize=10)
+    session.mount("http://", adapter)
+    session.mount("https://", adapter)
+
+    session.headers.update({"User-Agent": user_agent})
+
+    if proxy:
+        session.proxies = {"http": proxy, "https": proxy}
+
+    return session
+
+
+def fetch(
+    session: requests.Session,
+    url: str,
+    timeout: float = 5.0,
+    method: str = "GET",
+    allow_redirects: bool = False,
+) -> tuple[int, dict[str, str], bytes]:
+    """Realiza uma requisicao HTTP e retorna status, headers e corpo."""
+    try:
+        response = session.request(
+            method=method,
+            url=url,
+            timeout=timeout,
+            allow_redirects=allow_redirects,
+        )
+        return response.status_code, dict(response.headers), response.content
+    except requests.exceptions.RequestException as error:
+        raise ValueError(f"falha ao acessar {url}: {error}") from error
 
 
 def status_color(status: int) -> str:

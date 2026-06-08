@@ -29,6 +29,7 @@ Fuzzing e descoberta de caminhos ocultos em servidores web com filtros de status
 ```bash
 python dirscanner.py http://target.local -x php,txt,bak -s 200,403
 python dirscanner.py http://127.0.0.1:8000 -w wordlist.txt
+python dirscanner.py http://target.local --proxy http://proxy:8080 --delay 10
 ```
 
 ### 4. Web Passive Recon (`webrecon.py`)
@@ -37,6 +38,7 @@ Reconhecimento passivo: headers de segurança, fingerprinting, robots.txt e site
 ```bash
 python webrecon.py https://example.com
 python webrecon.py https://example.com -o recon.json
+python webrecon.py https://example.com --proxy http://proxy:8080
 ```
 
 ### 5. Deep Attack & Vulnerability Audit (`attackaudit.py`)
@@ -45,6 +47,7 @@ Auditoria red/blue com verificação de CORS, TLS, cookies, métodos HTTP perigo
 ```bash
 python attackaudit.py https://example.com --deep
 python attackaudit.py https://example.com --deep -o audit.json
+python attackaudit.py https://example.com --deep --proxy http://proxy:8080 --delay 5
 ```
 
 ---
@@ -53,7 +56,6 @@ python attackaudit.py https://example.com --deep -o audit.json
 
 ### Pré-requisitos
 - **Python 3.10+**
-- Nenhuma biblioteca externa necessária (apenas stdlib)
 
 ### Instalação (desenvolvimento)
 ```bash
@@ -96,6 +98,20 @@ Use `help` para ver a ajuda, `exit` para voltar ao menu.
 | `python webrecon.py https://google.com` | Recon passivo rápido |
 | `python attackaudit.py https://example.com --deep` | Auditoria completa com deep scan |
 
+### Proxy e Rate Limiting
+Todos os módulos HTTP suportam proxy e rate limiting:
+
+```bash
+# Usar proxy
+python dirscanner.py http://target.local --proxy http://proxy:8080
+
+# Rate limiting (requests por segundo)
+python dirscanner.py http://target.local --delay 10
+
+# Proxy + rate limiting
+python attackaudit.py https://target.local --deep --proxy http://proxy:8080 --delay 5
+```
+
 ---
 
 ## Estrutura do Projeto
@@ -107,7 +123,7 @@ MyTools/
 ├── dirscanner.py      # Scanner de diretórios HTTP
 ├── webrecon.py        # Reconhecimento passivo
 ├── attackaudit.py     # Auditoria ofensiva/defensiva
-├── utils.py           # Código compartilhado (cores, helpers)
+├── utils.py           # Código compartilhado (cores, helpers, sessões HTTP)
 ├── tests/             # Testes unitários
 ├── pyproject.toml     # Configuração do projeto
 └── README.MD
@@ -126,6 +142,18 @@ python -m pytest tests/ -v
 ```bash
 pip install -e ".[dev]"
 ```
+
+---
+
+## Dependências
+
+### Runtime
+- `requests>=2.31.0` — HTTP client com sessions, proxy, retry
+- `beautifulsoup4>=4.12.0` — Parser HTML avançado
+
+### Dev
+- `pytest>=8.0` — Framework de testes
+- `responses>=0.25` — Mock de requests para testes
 
 ---
 

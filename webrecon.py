@@ -5,22 +5,21 @@ import argparse
 import json
 import os
 import shlex
-import ssl
 import sys
 import time
 from dataclasses import asdict, dataclass
-from urllib.error import HTTPError, URLError
 from urllib.parse import urljoin, urlparse
-from urllib.request import Request
 
 from utils import (
     Cyber,
-    NoRedirectHandler,
-    NO_REDIRECT_OPENER,
+    RateLimiter,
     clear_console,
     color,
+    create_session,
     extract_title,
+    fetch,
     header_get,
+    status_color,
 )
 
 """Ferramenta de reconhecimento HTTP para laboratórios e hosts autorizados."""
@@ -98,35 +97,29 @@ def candidate_urls(url: str) -> list[str]:
     return [normalize_url("https://" + url), normalize_url("http://" + url)]
 
 
-def fetch(url: str, timeout: float, user_agent: str) -> tuple[int, dict[str, str], bytes]:
-    """Realiza uma requisição GET sem seguir redirects e retorna status, headers e corpo."""
-    request = Request(url, headers={"User-Agent": user_agent}, method="GET")
-    try:
-        response = NO_REDIRECT_OPENER.open(request, timeout=timeout)
-        return response.status, dict(response.headers.items()), response.read()
-    except HTTPError as error:
-        return error.code, dict(error.headers.items()), error.read()
-    except (URLError, TimeoutError, OSError, ssl.SSLError) as error:
-        raise ValueError(f"falha ao acessar {url}: {error}") from error
-
-
-def probe_status(url: str, timeout: float, user_agent: str) -> int | None:
+def probe_status(session, url: str, timeout: float) -> int | None:
     """Verifica o status HTTP de uma URL, retornando None em caso de falha."""
     try:
-        status, _, _ = fetch(url, timeout, user_agent)
+        status, _, _ = fetch(session, url, timeout=timeout)
         return status
     except ValueError:
         return None
 
 
-def run_recon(url: str, timeout: float, user_agent: str) -> ReconResult:
+def run_recon(
+    url: str,
+    timeout: float,
+    user_agent: str,
+    proxy: str | None = None,
+) -> ReconResult:
     """Executa reconhecimento completo da URL alvo e retorna o resultado."""
     started = time.monotonic()
     errors = []
+    session = create_session(user_agent=user_agent, proxy=proxy)
 
     for target in candidate_urls(url):
         try:
-            status, headers, body = fetch(target, timeout, user_agent)
+            status, headers, body = fetch(session, target, timeout=timeout)
             break
         except ValueError as error:
             errors.append(str(error))
@@ -157,8 +150,8 @@ def run_recon(url: str, timeout: float, user_agent: str) -> ReconResult:
         redirect=header_get(headers, "location"),
         security_headers_present=present,
         security_headers_missing=missing,
-        robots_status=probe_status(robots_url, timeout, user_agent),
-        sitemap_status=probe_status(sitemap_url, timeout, user_agent),
+        robots_status=probe_status(session, robots_url, timeout),
+        sitemap_status=probe_status(session, sitemap_url, timeout),
         elapsed=time.monotonic() - started,
     )
 
@@ -233,6 +226,10 @@ def build_parser() -> argparse.ArgumentParser:
         default="Mozilla/5.0 (X11; Linux x86_64) WebRecon/1.0",
         help="User-Agent usado nas requests.",
     )
+    parser.add_argument(
+        "--proxy",
+        help="Proxy para as requests. Ex: http://proxy:8080",
+    )
     parser.add_argument("-o", "--output", help="Salva resultado em JSON.")
     return parser
 
@@ -244,7 +241,7 @@ def run_once(args: argparse.Namespace) -> int:
     if args.timeout <= 0:
         raise ValueError("timeout precisa ser maior que zero")
 
-    result = run_recon(args.url, args.timeout, args.user_agent)
+    result = run_recon(args.url, args.timeout, args.user_agent, proxy=args.proxy)
     print_result(result)
     if args.output:
         write_output(args.output, result)

@@ -10,17 +10,16 @@ import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict, dataclass
-from urllib.error import HTTPError, URLError
-from urllib.request import Request
 from urllib.parse import urljoin, urlparse
 
 from utils import (
     Cyber,
-    NoRedirectHandler,
-    NO_REDIRECT_OPENER,
+    RateLimiter,
     clear_console,
     color,
+    create_session,
     extract_title,
+    fetch,
     status_color,
 )
 
@@ -152,26 +151,20 @@ def load_paths(wordlist: str | None, extensions: list[str]) -> list[str]:
 
 
 def scan_path(
+    session,
+    rate_limiter: RateLimiter,
     base_url: str,
     path: str,
     timeout: float,
     statuses: set[int],
-    user_agent: str,
 ) -> Finding | None:
     """Realiza request HTTP para um caminho específico e retorna Finding."""
     full_url = urljoin(base_url, path)
-    request = Request(full_url, headers={"User-Agent": user_agent}, method="GET")
+    rate_limiter.wait()
 
     try:
-        response = NO_REDIRECT_OPENER.open(request, timeout=timeout)
-        status = response.status
-        headers = response.headers
-        content = response.read()
-    except HTTPError as error:
-        status = error.code
-        headers = error.headers
-        content = error.read()
-    except (URLError, TimeoutError, OSError):
+        status, headers, content = fetch(session, full_url, timeout=timeout)
+    except ValueError:
         return None
 
     if status not in statuses:
@@ -197,10 +190,14 @@ def scan_target(
     workers: int,
     statuses: set[int],
     user_agent: str,
+    proxy: str | None = None,
+    requests_per_second: float = 0.0,
 ) -> list[Finding]:
     """Executa scan paralelo de todos os caminhos contra o alvo."""
     started = time.monotonic()
     findings: list[Finding] = []
+    rate_limiter = RateLimiter(requests_per_second)
+    session = create_session(user_agent=user_agent, proxy=proxy)
 
     print(color("[*]", Cyber.CYAN, Cyber.BOLD), f"Alvo: {color(base_url, Cyber.WHITE, Cyber.BOLD)}")
     print(
@@ -212,7 +209,7 @@ def scan_target(
 
     with ThreadPoolExecutor(max_workers=workers) as executor:
         futures = [
-            executor.submit(scan_path, base_url, path, timeout, statuses, user_agent)
+            executor.submit(scan_path, session, rate_limiter, base_url, path, timeout, statuses)
             for path in paths
         ]
 
@@ -343,6 +340,16 @@ def build_parser() -> argparse.ArgumentParser:
         default="Mozilla/5.0 (X11; Linux x86_64) DirScanner/2.0",
         help="User-Agent usado nas requests.",
     )
+    parser.add_argument(
+        "--proxy",
+        help="Proxy para as requests. Ex: http://proxy:8080",
+    )
+    parser.add_argument(
+        "--delay",
+        type=float,
+        default=0.0,
+        help="Delay entre requests (requests por segundo). 0 = sem limite. Padrao: 0",
+    )
     parser.add_argument("-o", "--output", help="Salva resultado em .json ou .csv.")
     return parser
 
@@ -365,6 +372,8 @@ def run_once(args: argparse.Namespace) -> int:
         workers=args.threads,
         statuses=args.status,
         user_agent=args.user_agent,
+        proxy=args.proxy,
+        requests_per_second=args.delay,
     )
     print_table(findings)
     if args.output:

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import argparse
 
+import responses
+
 from attackaudit import (
     AuditResult,
     Finding,
@@ -15,7 +17,7 @@ from attackaudit import (
     risk_score,
     severity_color,
 )
-from utils import Cyber
+from utils import Cyber, create_session
 
 
 class TestNormalizeUrl:
@@ -297,3 +299,13 @@ class TestBuildParser:
         parser = build_parser()
         args = parser.parse_args(["https://example.com"])
         assert args.threads == 20
+
+    def test_has_proxy_argument(self):
+        parser = build_parser()
+        args = parser.parse_args(["https://example.com", "--proxy", "http://proxy:8080"])
+        assert args.proxy == "http://proxy:8080"
+
+    def test_has_delay_argument(self):
+        parser = build_parser()
+        args = parser.parse_args(["https://example.com", "--delay", "5"])
+        assert args.delay == 5.0

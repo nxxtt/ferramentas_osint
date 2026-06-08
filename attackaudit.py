@@ -13,16 +13,15 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict, dataclass
 from html.parser import HTMLParser
-from urllib.error import HTTPError, URLError
 from urllib.parse import urljoin, urlparse
-from urllib.request import Request
 
 from utils import (
     Cyber,
-    NoRedirectHandler,
-    NO_REDIRECT_OPENER,
+    RateLimiter,
     clear_console,
     color,
+    create_session,
+    fetch,
     header_get,
     status_color,
 )
@@ -164,18 +163,6 @@ def normalize_url(url: str) -> str:
     return url.rstrip("/")
 
 
-def fetch(url: str, timeout: float, user_agent: str, method: str = "GET") -> tuple[int, dict[str, str], bytes]:
-    """Realiza requisicao HTTP sem seguir redirects, retornando status, headers e corpo."""
-    request = Request(url, headers={"User-Agent": user_agent}, method=method)
-    try:
-        response = NO_REDIRECT_OPENER.open(request, timeout=timeout)
-        return response.status, dict(response.headers.items()), response.read()
-    except HTTPError as error:
-        return error.code, dict(error.headers.items()), error.read()
-    except (URLError, TimeoutError, OSError, ssl.SSLError) as error:
-        raise ValueError(f"falha ao acessar {url}: {error}") from error
-
-
 def resolve_ip(hostname: str) -> str:
     """Resolve hostname para endereco IP, retornando string vazia em caso de erro."""
     try:
@@ -213,21 +200,22 @@ def tls_info(url: str, timeout: float) -> tuple[str, str, str]:
     )
 
 
-def parse_allowed_methods(url: str, timeout: float, user_agent: str) -> list[str]:
+def parse_allowed_methods(session, url: str, timeout: float) -> list[str]:
     """Obtem metodos HTTP permitidos via requisicao OPTIONS."""
     try:
-        _, headers, _ = fetch(url, timeout, user_agent, method="OPTIONS")
+        _, headers, _ = fetch(session, url, timeout=timeout, method="OPTIONS")
     except ValueError:
         return []
     allow = header_get(headers, "allow") or header_get(headers, "access-control-allow-methods")
     return sorted({item.strip().upper() for item in allow.split(",") if item.strip()})
 
 
-def probe_path(base_url: str, path: str, timeout: float, user_agent: str) -> Probe | None:
+def probe_path(session, rate_limiter: RateLimiter, base_url: str, path: str, timeout: float) -> Probe | None:
     """Faz probing de um path especifico, retornando Probe se acessivel."""
     url = urljoin(base_url.rstrip("/") + "/", path)
+    rate_limiter.wait()
     try:
-        status, headers, body = fetch(url, timeout, user_agent)
+        status, headers, body = fetch(session, url, timeout=timeout)
     except ValueError:
         return None
     if status in {200, 204, 301, 302, 307, 308, 401, 403}:
@@ -235,12 +223,18 @@ def probe_path(base_url: str, path: str, timeout: float, user_agent: str) -> Pro
     return None
 
 
-def scan_paths(base_url: str, timeout: float, user_agent: str, threads: int) -> list[Probe]:
+def scan_paths(
+    session,
+    rate_limiter: RateLimiter,
+    base_url: str,
+    timeout: float,
+    threads: int,
+) -> list[Probe]:
     """Escaneia paths interessantes em paralelo usando ThreadPoolExecutor."""
     probes: list[Probe] = []
     with ThreadPoolExecutor(max_workers=threads) as executor:
         futures = [
-            executor.submit(probe_path, base_url, path, timeout, user_agent)
+            executor.submit(probe_path, session, rate_limiter, base_url, path, timeout)
             for path in INTERESTING_PATHS
         ]
         for future in as_completed(futures):
@@ -386,18 +380,28 @@ def severity_color(severity: str) -> str:
     }.get(severity, Cyber.WHITE)
 
 
-def run_audit(url: str, timeout: float, user_agent: str, threads: int, deep: bool) -> AuditResult:
+def run_audit(
+    url: str,
+    timeout: float,
+    user_agent: str,
+    threads: int,
+    deep: bool,
+    proxy: str | None = None,
+    requests_per_second: float = 0.0,
+) -> AuditResult:
     """Executa auditoria completa em uma URL alvo."""
     started = time.monotonic()
     target = normalize_url(url)
     parsed = urlparse(target)
     ip = resolve_ip(parsed.hostname or "")
+    rate_limiter = RateLimiter(requests_per_second)
+    session = create_session(user_agent=user_agent, proxy=proxy)
 
     print(color("[*]", Cyber.CYAN, Cyber.BOLD), f"Alvo: {color(target, Cyber.WHITE, Cyber.BOLD)}")
     if ip:
         print(color("[*]", Cyber.CYAN, Cyber.BOLD), f"IP: {color(ip, Cyber.YELLOW)}")
 
-    status, headers, body = fetch(target, timeout, user_agent)
+    status, headers, body = fetch(session, target, timeout=timeout)
     content_type = header_get(headers, "content-type")
     text = body.decode("utf-8", errors="replace") if "text/html" in content_type.lower() else ""
     parser = PageParser()
@@ -405,8 +409,8 @@ def run_audit(url: str, timeout: float, user_agent: str, threads: int, deep: boo
         parser.feed(text)
 
     tls_subject, tls_issuer, tls_not_after = tls_info(target, timeout)
-    methods = parse_allowed_methods(target, timeout, user_agent)
-    probes = scan_paths(target, timeout, user_agent, threads) if deep else []
+    methods = parse_allowed_methods(session, target, timeout)
+    probes = scan_paths(session, rate_limiter, target, timeout, threads) if deep else []
     findings = build_findings(target, status, headers, parser, methods, probes, tls_subject)
 
     return AuditResult(
@@ -488,6 +492,16 @@ def build_parser() -> argparse.ArgumentParser:
         default="Mozilla/5.0 (X11; Linux x86_64) AttackAudit/1.0",
         help="User-Agent usado nas requests.",
     )
+    parser.add_argument(
+        "--proxy",
+        help="Proxy para as requests. Ex: http://proxy:8080",
+    )
+    parser.add_argument(
+        "--delay",
+        type=float,
+        default=0.0,
+        help="Delay entre requests (requests por segundo). 0 = sem limite. Padrao: 0",
+    )
     parser.add_argument("-o", "--output", help="Salva resultado em .json ou .csv.")
     return parser
 
@@ -501,7 +515,10 @@ def run_once(args: argparse.Namespace) -> int:
     if args.threads < 1:
         raise ValueError("threads precisa ser maior que zero")
 
-    result = run_audit(args.url, args.timeout, args.user_agent, args.threads, args.deep)
+    result = run_audit(
+        args.url, args.timeout, args.user_agent, args.threads, args.deep,
+        proxy=args.proxy, requests_per_second=args.delay,
+    )
     print_result(result)
     if args.output:
         write_output(args.output, result)

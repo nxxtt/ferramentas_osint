@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import argparse
-import os
+
+import responses
 
 from dirscanner import (
     DEFAULT_PATHS,
@@ -12,7 +13,9 @@ from dirscanner import (
     normalize_base_url,
     parse_extensions,
     parse_statuses,
+    scan_path,
 )
+from utils import RateLimiter, create_session
 
 
 class TestNormalizeBaseUrl:
@@ -185,6 +188,35 @@ class TestFindingDataclass:
             pass
 
 
+class TestScanPath:
+    @responses.activate
+    def test_returns_finding_on_match(self):
+        responses.add(responses.GET, "http://example.com/admin", body=b"<title>Admin</title>", status=200, headers={"Content-Type": "text/html"})
+        session = create_session(user_agent="TestAgent/1.0")
+        limiter = RateLimiter()
+        result = scan_path(session, limiter, "http://example.com/", "admin", 5.0, {200})
+        assert result is not None
+        assert result.status == 200
+        assert result.path == "/admin"
+
+    @responses.activate
+    def test_returns_none_on_status_mismatch(self):
+        responses.add(responses.GET, "http://example.com/admin", body=b"not found", status=404)
+        session = create_session(user_agent="TestAgent/1.0")
+        limiter = RateLimiter()
+        result = scan_path(session, limiter, "http://example.com/", "admin", 5.0, {200})
+        assert result is None
+
+    @responses.activate
+    def test_returns_none_on_connection_error(self):
+        import requests as _requests
+        responses.add(responses.GET, "http://example.com/admin", body=_requests.exceptions.ConnectionError("refused"))
+        session = create_session(user_agent="TestAgent/1.0")
+        limiter = RateLimiter()
+        result = scan_path(session, limiter, "http://example.com/", "admin", 5.0, {200})
+        assert result is None
+
+
 class TestBuildParser:
     def test_returns_argparse(self):
         parser = build_parser()
@@ -204,3 +236,13 @@ class TestBuildParser:
         parser = build_parser()
         args = parser.parse_args(["http://example.com"])
         assert args.threads == 40
+
+    def test_has_proxy_argument(self):
+        parser = build_parser()
+        args = parser.parse_args(["http://example.com", "--proxy", "http://proxy:8080"])
+        assert args.proxy == "http://proxy:8080"
+
+    def test_has_delay_argument(self):
+        parser = build_parser()
+        args = parser.parse_args(["http://example.com", "--delay", "10"])
+        assert args.delay == 10.0

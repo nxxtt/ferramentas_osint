@@ -4,11 +4,15 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mytools"
-version = "1.0.0"
+version = "2.0.0"
 description = "Suite de ferramentas de auditoria e reconhecimento web/network"
 requires-python = ">=3.10"
 readme = "README.MD"
 authors = [{ name = "nxt" }]
+dependencies = [
+    "requests>=2.34.2",
+    "beautifulsoup4>=4.15.0",
+]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Programming Language :: Python :: 3",
@@ -24,7 +28,7 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0"]
+dev = ["pytest>=8.0", "responses>=0.25"]
 
 [project.scripts]
 mytools = "main:main"
