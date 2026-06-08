@@ -2,11 +2,16 @@
 """Utilitários gerais para formatação, cores e manipulação de dados."""
 from __future__ import annotations
 
+import argparse
+import csv
+import json
 import logging
 import os
+import shlex
 import sys
 import threading
 import time
+from collections.abc import Callable, Mapping
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -129,7 +134,7 @@ def fetch(
     timeout: float = 5.0,
     method: str = "GET",
     allow_redirects: bool = False,
-) -> tuple[int, dict[str, str], bytes]:
+) -> tuple[int, Mapping[str, str], bytes]:
     """Realiza uma requisicao HTTP e retorna status, headers e corpo."""
     logger.debug("request %s %s (timeout=%.1f)", method, url, timeout)
     try:
@@ -159,10 +164,14 @@ def status_color(status: int) -> str:
     return Cyber.GRAY
 
 
-def header_get(headers: dict[str, str], name: str) -> str:
+def header_get(headers: Mapping[str, str], name: str) -> str:
     """Obtém o valor de um header HTTP, ignorando maiúsculas/minúsculas."""
+    value = headers.get(name)
+    if value is not None:
+        return value
+    lower_name = name.lower()
     for key, value in headers.items():
-        if key.lower() == name.lower():
+        if key.lower() == lower_name:
             return value
     return ""
 
@@ -175,3 +184,71 @@ def extract_title(text: str) -> str:
     if start == -1 or end == -1:
         return ""
     return " ".join(text[start + 7:end].strip().split())[:100]
+
+
+def show_banner(art: str, subtitle: str) -> None:
+    """Exibe banner ASCII art colorido com subtitle."""
+    print(color(art.rstrip(), Cyber.CYAN, Cyber.BOLD))
+    print(color(subtitle, Cyber.MAGENTA))
+
+
+def write_output(path: str, data: list[dict], fieldnames: list[str]) -> None:
+    """Salva dados em arquivo JSON ou CSV."""
+    extension = os.path.splitext(path)[1].lower()
+    with open(path, "w", encoding="utf-8", newline="") as file_handle:
+        if extension == ".json":
+            json.dump(data, file_handle, indent=2)
+            file_handle.write("\n")
+        else:
+            writer = csv.DictWriter(file_handle, fieldnames=fieldnames)
+            writer.writeheader()
+            for item in data:
+                writer.writerow(item)
+    print(color("[*]", Cyber.CYAN, Cyber.BOLD), f"Resultado salvo em {color(path, Cyber.GREEN)}")
+
+
+def run_interactive_shell(
+    parser: argparse.ArgumentParser,
+    prompt: str,
+    run_fn: Callable,
+    description: str = "",
+    example: str = "",
+    validate_fn: Callable | None = None,
+    banner_fn: Callable | None = None,
+) -> int:
+    """Inicia shell interativo generico com loop de comandos."""
+    if banner_fn:
+        banner_fn()
+    print(color(description, Cyber.WHITE, Cyber.BOLD), "Digite 'help', 'clear' ou 'exit'.")
+    if example:
+        print(color("Ex:", Cyber.CYAN), example)
+
+    while True:
+        try:
+            raw = input(color(prompt, Cyber.GREEN, Cyber.BOLD)).strip()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return 0
+
+        if not raw:
+            continue
+        if raw in {"exit", "quit"}:
+            return 0
+        if raw == "clear":
+            clear_console()
+            continue
+        if raw == "help":
+            parser.print_help()
+            continue
+
+        try:
+            args = parser.parse_args(shlex.split(raw))
+            if validate_fn:
+                validate_fn(args)
+            run_fn(args)
+        except ValueError as error:
+            print(color(f"Erro: {error}", Cyber.RED))
+        except SystemExit:
+            continue
+        except Exception as error:
+            print(color(f"Erro: {error}", Cyber.RED))

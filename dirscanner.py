@@ -3,10 +3,7 @@ from __future__ import annotations
 
 import argparse
 import base64
-import csv
-import json
 import os
-import shlex
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -16,13 +13,15 @@ from urllib.parse import urljoin, urlparse
 from utils import (
     Cyber,
     RateLimiter,
-    clear_console,
     color,
     create_session,
     extract_title,
     fetch,
+    run_interactive_shell,
     setup_logging,
+    show_banner,
     status_color,
+    write_output,
 )
 
 import logging
@@ -65,10 +64,9 @@ def banner() -> None:
    / __ \(_)____/ ___/_________ _____  ____  ___  _____
   / / / / / ___/\__ \/ ___/ __ `/ __ \/ __ \/ _ \/ ___/
  / /_/ / / /  ___/ / /__/ /_/ / / / / / / /  __/ /
-/_____/_/_/  /____/\___/\__,_/_/ /_/_/ /_/\___/_/
+/_/  /_/_/  /____/\___/\__,_/_/ /_/_/ /_/\___/_/
 """
-    print(color(art.rstrip(), Cyber.CYAN, Cyber.BOLD))
-    print(color("   HTTP directory scanner | use apenas em alvos autorizados\n", Cyber.MAGENTA))
+    show_banner(art, "   HTTP directory scanner | use apenas em alvos autorizados")
 
 
 def normalize_base_url(url: str) -> str:
@@ -349,23 +347,6 @@ def print_table(findings: list[Finding]) -> None:
         )
 
 
-def write_output(path: str, findings: list[Finding]) -> None:
-    """Salva os achados em formato JSON ou CSV."""
-    extension = os.path.splitext(path)[1].lower()
-    with open(path, "w", encoding="utf-8", newline="") as file_handle:
-        if extension == ".json":
-            json.dump([asdict(item) for item in findings], file_handle, indent=2)
-            file_handle.write("\n")
-        else:
-            writer = csv.DictWriter(
-                file_handle,
-                fieldnames=["url", "path", "status", "size", "words", "title", "location", "method"],
-            )
-            writer.writeheader()
-            for item in findings:
-                writer.writerow(asdict(item))
-    print(color("[*]", Cyber.CYAN, Cyber.BOLD), f"Resultado salvo em {color(path, Cyber.GREEN)}")
-
 
 def build_parser() -> argparse.ArgumentParser:
     """Constrói o parser de argumentos da linha de comandos."""
@@ -498,41 +479,12 @@ def run_once(args: argparse.Namespace) -> int:
     )
     print_table(findings)
     if args.output:
-        write_output(args.output, findings)
+        write_output(
+            args.output,
+            [asdict(f) for f in findings],
+            ["url", "path", "status", "size", "words", "title", "location", "method"],
+        )
     return 0
-
-
-def interactive_shell(parser: argparse.ArgumentParser) -> int:
-    """Modo interativo com loop de comandos até exit."""
-    banner()
-    print(color("DirScanner interativo.", Cyber.WHITE, Cyber.BOLD), "Digite 'help', 'clear' ou 'exit'.")
-    print(color("Ex:", Cyber.CYAN), "http://localhost:8000 -x php,txt,bak -s 200,301,403")
-
-    while True:
-        try:
-            raw = input(color("dirscan> ", Cyber.GREEN, Cyber.BOLD)).strip()
-        except (EOFError, KeyboardInterrupt):
-            print()
-            return 0
-
-        if not raw:
-            continue
-        if raw in {"exit", "quit"}:
-            return 0
-        if raw == "clear":
-            clear_console()
-            continue
-        if raw == "help":
-            parser.print_help()
-            continue
-
-        try:
-            args = parser.parse_args(shlex.split(raw))
-            run_once(args)
-        except SystemExit:
-            continue
-        except Exception as error:
-            print(color(f"Erro: {error}", Cyber.RED))
 
 
 def main() -> int:
@@ -540,7 +492,12 @@ def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
     if not args.url:
-        return interactive_shell(parser)
+        return run_interactive_shell(
+            parser, "dirscan> ", run_once,
+            description="DirScanner interativo.",
+            example="http://localhost:8000 -x php,txt,bak -s 200,301,403",
+            banner_fn=banner,
+        )
 
     try:
         banner()

@@ -5,7 +5,7 @@ import attackaudit
 import dirscanner
 import portscanner
 import webrecon
-from utils import Cyber, clear_console, color
+from utils import Cyber, clear_console, color, run_interactive_shell, show_banner
 
 """Módulo principal que integra as ferramentas de segurança: port scanner, dir scanner, web recon e attack audit."""
 
@@ -20,8 +20,7 @@ def banner() -> None:
 /_/  /_/\__, /   /_/  \____/\____/_/____/  
        /____/                               
 """
-    print(color(art.rstrip(), Cyber.CYAN, Cyber.BOLD))
-    print(color("   port scanner + dir scanner + web recon + attack audit", Cyber.MAGENTA))
+    show_banner(art, "   port scanner + dir scanner + web recon + attack audit")
     print(color("   by Default\n", Cyber.GRAY))
 
 
@@ -60,25 +59,51 @@ def help_screen() -> None:
 def launch_portscanner() -> None:
     """Inicia o módulo PortScanner em modo interativo."""
     parser = portscanner.build_parser()
-    portscanner.interactive_shell(parser)
+
+    def _validate(args):
+        if not args.targets:
+            raise ValueError("Informe pelo menos um alvo.")
+
+    run_interactive_shell(
+        parser, "scanner> ", portscanner.run_once,
+        description="PortScanner interativo.",
+        example="192.168.0.10 -p 1-1024 -b",
+        validate_fn=_validate,
+        banner_fn=portscanner.banner,
+    )
 
 
 def launch_dirscanner() -> None:
     """Inicia o módulo DirScanner em modo interativo."""
     parser = dirscanner.build_parser()
-    dirscanner.interactive_shell(parser)
+    run_interactive_shell(
+        parser, "dirscan> ", dirscanner.run_once,
+        description="DirScanner interativo.",
+        example="http://localhost:8000 -x php,txt,bak -s 200,301,403",
+        banner_fn=dirscanner.banner,
+    )
 
 
 def launch_webrecon() -> None:
     """Inicia o módulo WebRecon em modo interativo."""
     parser = webrecon.build_parser()
-    webrecon.interactive_shell(parser)
+    run_interactive_shell(
+        parser, "webrecon> ", webrecon.run_once,
+        description="WebRecon interativo.",
+        example="https://example.com -o recon.json",
+        banner_fn=webrecon.banner,
+    )
 
 
 def launch_attackaudit() -> None:
     """Inicia o módulo AttackAudit em modo interativo."""
     parser = attackaudit.build_parser()
-    attackaudit.interactive_shell(parser)
+    run_interactive_shell(
+        parser, "audit> ", attackaudit.run_once,
+        description="AttackAudit interativo.",
+        example="https://example.com --deep --test-vulns -o audit.json",
+        banner_fn=attackaudit.banner,
+    )
 
 
 def main() -> int:

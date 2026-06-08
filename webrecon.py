@@ -5,7 +5,6 @@ import argparse
 import json
 import os
 import re
-import shlex
 import sys
 import time
 from dataclasses import asdict, dataclass
@@ -14,13 +13,14 @@ from urllib.parse import urljoin, urlparse
 from utils import (
     Cyber,
     RateLimiter,
-    clear_console,
     color,
     create_session,
     extract_title,
     fetch,
     header_get,
+    run_interactive_shell,
     setup_logging,
+    show_banner,
     status_color,
 )
 
@@ -261,8 +261,7 @@ def banner() -> None:
 | |/ |/ /  __/ /_/ / _, _/  __/ /__/ /_/ / / / /
 |__/|__/\___/_.___/_/ |_|\___/\___/\____/_/ /_/ 
 """
-    print(color(art.rstrip(), Cyber.CYAN, Cyber.BOLD))
-    print(color("   HTTP recon | headers + robots + security checks\n", Cyber.MAGENTA))
+    show_banner(art, "   HTTP recon | headers + robots + security checks")
 
 
 def normalize_url(url: str) -> str:
@@ -475,45 +474,17 @@ def run_once(args: argparse.Namespace) -> int:
     return 0
 
 
-def interactive_shell(parser: argparse.ArgumentParser) -> int:
-    """Inicia o shell interativo para múltiplas operações de reconhecimento."""
-    banner()
-    print(color("WebRecon interativo.", Cyber.WHITE, Cyber.BOLD), "Digite 'help', 'clear' ou 'exit'.")
-    print(color("Ex:", Cyber.CYAN), "https://example.com -o recon.json")
-
-    while True:
-        try:
-            raw = input(color("webrecon> ", Cyber.GREEN, Cyber.BOLD)).strip()
-        except (EOFError, KeyboardInterrupt):
-            print()
-            return 0
-
-        if not raw:
-            continue
-        if raw in {"exit", "quit"}:
-            return 0
-        if raw == "clear":
-            clear_console()
-            continue
-        if raw == "help":
-            parser.print_help()
-            continue
-
-        try:
-            args = parser.parse_args(shlex.split(raw))
-            run_once(args)
-        except SystemExit:
-            continue
-        except Exception as error:
-            print(color(f"Erro: {error}", Cyber.RED))
-
-
 def main() -> int:
     """Ponto de entrada principal da ferramenta."""
     parser = build_parser()
     args = parser.parse_args()
     if not args.url:
-        return interactive_shell(parser)
+        return run_interactive_shell(
+            parser, "webrecon> ", run_once,
+            description="WebRecon interativo.",
+            example="https://example.com -o recon.json",
+            banner_fn=banner,
+        )
 
     try:
         banner()

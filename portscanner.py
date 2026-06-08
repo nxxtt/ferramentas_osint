@@ -3,11 +3,8 @@
 from __future__ import annotations
 
 import argparse
-import csv
 import ipaddress
-import json
 import os
-import shlex
 import socket
 import sys
 import time
@@ -15,7 +12,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict, dataclass
 from typing import Iterable
 
-from utils import Cyber, clear_console, color, setup_logging
+from utils import Cyber, color, setup_logging, show_banner, write_output, run_interactive_shell
 
 import logging
 
@@ -50,8 +47,7 @@ def banner() -> None:
  / ____/ /_/ / /  / /_ ___/ / /__/ /_/ / / / / / / /  __/ /
 /_/    \____/_/   \__//____/\___/\__,_/_/ /_/_/ /_/\___/_/
 """
-    print(color(art.rstrip(), Cyber.CYAN, Cyber.BOLD))
-    print(color("   TCP scanner | use apenas em alvos autorizados\n", Cyber.MAGENTA))
+    show_banner(art, "   TCP scanner | use apenas em alvos autorizados")
 
 
 @dataclass(frozen=True)
@@ -285,24 +281,6 @@ def print_table(findings: list[Finding]) -> None:
         )
 
 
-def write_output(path: str, findings: list[Finding]) -> None:
-    """Salva os findings em arquivo JSON ou CSV."""
-    extension = os.path.splitext(path)[1].lower()
-    with open(path, "w", encoding="utf-8", newline="") as file_handle:
-        if extension == ".json":
-            json.dump([asdict(item) for item in findings], file_handle, indent=2)
-            file_handle.write("\n")
-        else:
-            writer = csv.DictWriter(
-                file_handle,
-                fieldnames=["host", "address", "port", "state", "service", "banner"],
-            )
-            writer.writeheader()
-            for item in findings:
-                writer.writerow(asdict(item))
-    print(color("[*]", Cyber.CYAN, Cyber.BOLD), f"Resultado salvo em {color(path, Cyber.GREEN)}")
-
-
 def build_parser() -> argparse.ArgumentParser:
     """Constrói e retorna o parser de argumentos da linha de comandos."""
     parser = argparse.ArgumentParser(
@@ -368,44 +346,12 @@ def run_once(args: argparse.Namespace) -> int:
     )
     print_table(findings)
     if args.output:
-        write_output(args.output, findings)
+        write_output(
+            args.output,
+            [asdict(f) for f in findings],
+            ["host", "address", "port", "state", "service", "banner"],
+        )
     return 0
-
-
-def interactive_shell(parser: argparse.ArgumentParser) -> int:
-    """Inicia o modo interativo com loop de comandos."""
-    banner()
-    print(color("PortScanner interativo.", Cyber.WHITE, Cyber.BOLD), "Digite 'help', 'clear' ou 'exit'.")
-    print(color("Ex:", Cyber.CYAN), "192.168.0.10 -p 1-1024 -b")
-
-    while True:
-        try:
-            raw = input(color("scanner> ", Cyber.GREEN, Cyber.BOLD)).strip()
-        except (EOFError, KeyboardInterrupt):
-            print()
-            return 0
-
-        if not raw:
-            continue
-        if raw in {"exit", "quit"}:
-            return 0
-        if raw == "clear":
-            clear_console()
-            continue
-        if raw == "help":
-            parser.print_help()
-            continue
-
-        try:
-            args = parser.parse_args(shlex.split(raw))
-            if not args.targets:
-                print(color("Informe pelo menos um alvo.", Cyber.RED))
-                continue
-            run_once(args)
-        except SystemExit:
-            continue
-        except Exception as error:
-            print(f"Erro: {error}")
 
 
 def main() -> int:
@@ -413,7 +359,18 @@ def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
     if not args.targets:
-        return interactive_shell(parser)
+
+        def _validate(args):
+            if not args.targets:
+                raise ValueError("Informe pelo menos um alvo.")
+
+        return run_interactive_shell(
+            parser, "scanner> ", run_once,
+            description="PortScanner interativo.",
+            example="192.168.0.10 -p 1-1024 -b",
+            validate_fn=_validate,
+            banner_fn=banner,
+        )
 
     try:
         banner()

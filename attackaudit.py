@@ -7,7 +7,6 @@ import json
 import os
 import re
 import secrets
-import shlex
 import socket
 import ssl
 import sys
@@ -21,12 +20,13 @@ from urllib.parse import urljoin, urlparse
 from utils import (
     Cyber,
     RateLimiter,
-    clear_console,
     color,
     create_session,
     fetch,
     header_get,
+    run_interactive_shell,
     setup_logging,
+    show_banner,
     status_color,
 )
 
@@ -126,7 +126,6 @@ class PageParser(HTMLParser):
         self.comments: list[str] = []
         self._title = False
         self.title_parts: list[str] = []
-        self._in_form = False
         self.form_has_csrf: list[bool] = []
         self._current_form_has_csrf = False
         self._hidden_inputs: list[tuple[str, str]] = []
@@ -137,7 +136,6 @@ class PageParser(HTMLParser):
             self._title = True
         if tag.lower() == "form":
             self.forms += 1
-            self._in_form = True
             self._current_form_has_csrf = False
         if tag.lower() == "input":
             input_type = attrs_dict.get("type", "").lower()
@@ -155,7 +153,6 @@ class PageParser(HTMLParser):
         if tag.lower() == "title":
             self._title = False
         if tag.lower() == "form":
-            self._in_form = False
             self.form_has_csrf.append(self._current_form_has_csrf)
 
     def handle_data(self, data: str) -> None:
@@ -243,8 +240,7 @@ def banner() -> None:
  / ___ / /_/ /_/ /_/ / /__/ ,<    / ___ / /_/ / /_/ / / /_  
 /_/  |_\__/\__/\__,_/\___/_/|_|  /_/  |_\__,_/\__,_/_/\__/  
 """
-    print(color(art.rstrip(), Cyber.CYAN, Cyber.BOLD))
-    print(color("   red/blue web audit | ofensivo autorizado + hardening defensivo\n", Cyber.MAGENTA))
+    show_banner(art, "   red/blue web audit | ofensivo autorizado + hardening defensivo")
 
 
 def normalize_url(url: str) -> str:
@@ -352,11 +348,10 @@ def check_xss_reflection(session, base_url: str, timeout: float) -> tuple[bool, 
     if marker in text:
         lower_text = text.lower()
         marker_lower = marker.lower()
-        if marker_lower in lower_text:
-            context = "html_body"
-            idx = lower_text.find(marker_lower)
-            snippet = text[max(0, idx - 30):idx + len(marker) + 30]
-            return True, f"refletido em {context}: ...{snippet}..."
+        context = "html_body"
+        idx = lower_text.find(marker_lower)
+        snippet = text[max(0, idx - 30):idx + len(marker) + 30]
+        return True, f"refletido em {context}: ...{snippet}..."
     return False, ""
 
 
@@ -796,45 +791,17 @@ def run_once(args: argparse.Namespace) -> int:
     return 0
 
 
-def interactive_shell(parser: argparse.ArgumentParser) -> int:
-    """Inicia shell interativo para execucao de auditorias."""
-    banner()
-    print(color("AttackAudit interativo.", Cyber.WHITE, Cyber.BOLD), "Digite 'help', 'clear' ou 'exit'.")
-    print(color("Ex:", Cyber.CYAN), "https://example.com --deep --test-vulns -o audit.json")
-
-    while True:
-        try:
-            raw = input(color("audit> ", Cyber.GREEN, Cyber.BOLD)).strip()
-        except (EOFError, KeyboardInterrupt):
-            print()
-            return 0
-
-        if not raw:
-            continue
-        if raw in {"exit", "quit"}:
-            return 0
-        if raw == "clear":
-            clear_console()
-            continue
-        if raw == "help":
-            parser.print_help()
-            continue
-
-        try:
-            args = parser.parse_args(shlex.split(raw))
-            run_once(args)
-        except SystemExit:
-            continue
-        except Exception as error:
-            print(color(f"Erro: {error}", Cyber.RED))
-
-
 def main() -> int:
     """Ponto de entrada principal do AttackAudit."""
     parser = build_parser()
     args = parser.parse_args()
     if not args.url:
-        return interactive_shell(parser)
+        return run_interactive_shell(
+            parser, "audit> ", run_once,
+            description="AttackAudit interativo.",
+            example="https://example.com --deep --test-vulns -o audit.json",
+            banner_fn=banner,
+        )
 
     try:
         banner()
