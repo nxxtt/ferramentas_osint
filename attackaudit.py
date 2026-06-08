@@ -340,7 +340,7 @@ def check_xss_reflection(session, base_url: str, timeout: float) -> tuple[bool, 
     test_url = base_url + separator + "q=" + marker
 
     try:
-        _, headers, body = fetch(session, test_url, timeout=timeout)
+        _, headers, body, _ = fetch(session, test_url, timeout=timeout)
     except ValueError:
         return False, ""
 
@@ -367,7 +367,7 @@ def check_sqli_errors(session, base_url: str, timeout: float) -> list[str]:
             test_url = base_url + "?id=" + payload
 
         try:
-            _, _, body = fetch(session, test_url, timeout=timeout)
+            _, _, body, _ = fetch(session, test_url, timeout=timeout)
         except ValueError:
             continue
 
@@ -385,7 +385,7 @@ def check_sqli_errors(session, base_url: str, timeout: float) -> list[str]:
 def parse_allowed_methods(session, url: str, timeout: float) -> list[str]:
     """Obtem metodos HTTP permitidos via requisicao OPTIONS."""
     try:
-        _, headers, _ = fetch(session, url, timeout=timeout, method="OPTIONS")
+        _, headers, _, _ = fetch(session, url, timeout=timeout, method="OPTIONS")
     except ValueError:
         return []
     allow = header_get(headers, "allow") or header_get(headers, "access-control-allow-methods")
@@ -397,7 +397,7 @@ def probe_path(session, rate_limiter: RateLimiter, base_url: str, path: str, tim
     url = urljoin(base_url.rstrip("/") + "/", path)
     rate_limiter.wait()
     try:
-        status, headers, body = fetch(session, url, timeout=timeout)
+        status, headers, body, _ = fetch(session, url, timeout=timeout)
     except ValueError:
         return None
     if status in {200, 204, 301, 302, 307, 308, 401, 403}:
@@ -447,6 +447,7 @@ def build_findings(
     xss_reflected: bool = False,
     xss_evidence: str = "",
     sqli_databases: list[str] | None = None,
+    raw_headers: dict[str, list[str]] | None = None,
 ) -> list[Finding]:
     """Gera lista de findings de seguranca baseado nos dados coletados."""
     findings: list[Finding] = []
@@ -498,7 +499,7 @@ def build_findings(
             "Restrinja origens permitidas e revise credenciais CORS.",
         ))
 
-    cookies = [value for key, value in headers.items() if key.lower() == "set-cookie"]
+    cookies = (raw_headers or {}).get("set-cookie", [])
     for cookie in cookies:
         lowered = cookie.lower()
         missing = [flag for flag in ("httponly", "secure", "samesite") if flag not in lowered]
@@ -622,7 +623,7 @@ def run_audit(
     if ip:
         print(color("[*]", Cyber.CYAN, Cyber.BOLD), f"IP: {color(ip, Cyber.YELLOW)}")
 
-    status, headers, body = fetch(session, target, timeout=timeout)
+    status, headers, body, raw_headers = fetch(session, target, timeout=timeout)
     content_type = header_get(headers, "content-type")
     text = body.decode("utf-8", errors="replace") if "text/html" in content_type.lower() else ""
     parser = PageParser()
@@ -651,6 +652,7 @@ def run_audit(
         target, status, headers, parser, methods, probes, tls_subject,
         tls_versions=tls_versions, xss_reflected=xss_reflected,
         xss_evidence=xss_evidence, sqli_databases=sqli_databases,
+        raw_headers=raw_headers,
     )
 
     return AuditResult(

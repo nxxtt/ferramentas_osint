@@ -1,26 +1,7 @@
 MyTools - Known Issues
 ======================
 
-1. Headers duplicados (Set-Cookie)
-   Severo: Baixo
-   Arquivo: utils.py (fetch), attackaudit.py (audit de cookies)
-
-   A lib requests do Python converte headers HTTP em CaseInsensitiveDict,
-   que so mantem o ultimo valor por nome de header. Quando um servidor envia
-   multiplos headers com o mesmo nome (comum com Set-Cookie), apenas o
-   ultimo e preservado.
-
-   Impacto: O audit de cookies em attackaudit.py analisa apenas o ultimo
-   Set-Cookie recebido. Se o servidor envia cookies de sessao e analytics
-   em headers separados, o audit pode nao analisar todos.
-
-   Workaround: Para auditoria completa de cookies, use ferramentas como
-   curl -v ou browser DevTools para inspecionar todos os Set-Cookie headers.
-
-   Status: Limitacao conhecida da lib requests. Correcao requereria uso
-   de response.raw.headers.get_all(), que quebra a interface atual de fetch().
-
-2. TLS versions depreciadas
+1. TLS versions depreciadas
    Severo: Nenhum (suprimido)
    Arquivo: attackaudit.py (check_tls_versions)
 
@@ -29,7 +10,7 @@ MyTools - Known Issues
    warnings.catch_warnings() pois o objetivo e detectar se o alvo aceita
    versoes inseguras de TLS.
 
-3. Fingerprinting por assinaturas hardcoded
+2. Fingerprinting por assinaturas hardcoded
    Severo: Baixo
    Arquivo: webrecon.py (detect_technologies)
 

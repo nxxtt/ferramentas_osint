@@ -263,7 +263,7 @@ def candidate_urls(url: str) -> list[str]:
 def probe_status(session, url: str, timeout: float) -> int | None:
     """Verifica o status HTTP de uma URL, retornando None em caso de falha."""
     try:
-        status, _, _ = fetch(session, url, timeout=timeout)
+        status, _, _, _ = fetch(session, url, timeout=timeout)
         return status
     except ValueError:
         return None
@@ -284,7 +284,7 @@ def run_recon(
 
     for target in candidate_urls(url):
         try:
-            status, headers, body = fetch(session, target, timeout=timeout)
+            status, headers, body, raw_headers = fetch(session, target, timeout=timeout)
             break
         except ValueError as error:
             errors.append(str(error))
@@ -303,8 +303,7 @@ def run_recon(
     robots_url = urljoin(target.rstrip("/") + "/", "robots.txt")
     sitemap_url = urljoin(target.rstrip("/") + "/", "sitemap.xml")
 
-    cookie_header = header_get(headers, "set-cookie")
-    cookie_list = [cookie_header] if cookie_header else []
+    cookie_list = raw_headers.get("set-cookie", [])
 
     technologies = detect_technologies(
         headers=headers,

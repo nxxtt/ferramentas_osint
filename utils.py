@@ -138,14 +138,30 @@ def create_session(
     return session
 
 
+def _extract_raw_headers(response: requests.Response) -> dict[str, list[str]]:
+    """Extrai todos os valores de headers (incluindo duplicados como Set-Cookie)."""
+    raw: dict[str, list[str]] = {}
+    try:
+        msg = response.raw._original_response.msg  # type: ignore[union-attr]
+        for key in dict.fromkeys(msg.keys()):
+            raw[key.lower()] = msg.get_all(key)  # type: ignore[union-attr]
+    except (AttributeError, TypeError):
+        pass
+    return raw
+
+
 def fetch(
     session: requests.Session,
     url: str,
     timeout: float = 5.0,
     method: str = "GET",
     allow_redirects: bool = False,
-) -> tuple[int, Mapping[str, str], bytes]:
-    """Realiza uma requisicao HTTP e retorna status, headers e corpo."""
+) -> tuple[int, Mapping[str, str], bytes, dict[str, list[str]]]:
+    """Realiza uma requisicao HTTP e retorna status, headers, corpo e raw_headers.
+
+    raw_headers e um dict mapeando nomes de headers (lowercase) para listas de
+    todos os valores, preservando headers duplicados como Set-Cookie.
+    """
     logger.debug("request %s %s (timeout=%.1f)", method, url, timeout)
     try:
         response = session.request(
@@ -155,7 +171,7 @@ def fetch(
             allow_redirects=allow_redirects,
         )
         logger.debug("response %d %s (%d bytes)", response.status_code, url, len(response.content))
-        return response.status_code, response.headers, response.content
+        return response.status_code, response.headers, response.content, _extract_raw_headers(response)
     except requests.exceptions.RequestException as error:
         logger.debug("error %s: %s", url, error)
         raise ValueError(f"falha ao acessar {url}: {error}") from error

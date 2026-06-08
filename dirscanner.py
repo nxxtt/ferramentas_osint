@@ -210,7 +210,7 @@ def scan_path(
     rate_limiter.wait()
 
     try:
-        status, headers, content = fetch(session, full_url, timeout=timeout, method=method)
+        status, headers, content, _ = fetch(session, full_url, timeout=timeout, method=method)
     except ValueError:
         return None
 

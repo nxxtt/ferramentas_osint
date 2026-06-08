@@ -300,7 +300,8 @@ class TestBuildFindings:
     def test_cookie_missing_flags(self):
         parser = PageParser()
         headers = {"Set-Cookie": "session=abc123"}
-        findings = build_findings("https://example.com", 200, headers, parser, [], [], "example.com")
+        raw_headers = {"set-cookie": ["session=abc123"]}
+        findings = build_findings("https://example.com", 200, headers, parser, [], [], "example.com", raw_headers=raw_headers)
         cookie_findings = [f for f in findings if f.category == "cookies"]
         assert len(cookie_findings) == 1
         assert "httponly" in cookie_findings[0].evidence.lower()
@@ -308,9 +309,18 @@ class TestBuildFindings:
     def test_cookie_all_flags_present(self):
         parser = PageParser()
         headers = {"Set-Cookie": "session=abc123; Secure; HttpOnly; SameSite=Strict"}
-        findings = build_findings("https://example.com", 200, headers, parser, [], [], "example.com")
+        raw_headers = {"set-cookie": ["session=abc123; Secure; HttpOnly; SameSite=Strict"]}
+        findings = build_findings("https://example.com", 200, headers, parser, [], [], "example.com", raw_headers=raw_headers)
         cookie_findings = [f for f in findings if f.category == "cookies"]
         assert len(cookie_findings) == 0
+
+    def test_cookie_multiple_set_cookie(self):
+        parser = PageParser()
+        headers = {"Set-Cookie": "session=abc123"}
+        raw_headers = {"set-cookie": ["session=abc123", "analytics=xyz"]}
+        findings = build_findings("https://example.com", 200, headers, parser, [], [], "example.com", raw_headers=raw_headers)
+        cookie_findings = [f for f in findings if f.category == "cookies"]
+        assert len(cookie_findings) == 2
 
     def test_no_tls_subject(self):
         parser = PageParser()
