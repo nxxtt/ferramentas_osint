@@ -10,8 +10,12 @@ from dirscanner import (
     Finding,
     build_parser,
     load_paths,
+    matches_filter,
     normalize_base_url,
+    parse_auth,
     parse_extensions,
+    parse_extra_headers,
+    parse_range,
     parse_statuses,
     scan_path,
 )
@@ -112,6 +116,98 @@ class TestParseExtensions:
         assert parse_extensions(" php , txt ") == ["php", "txt"]
 
 
+class TestParseRange:
+    def test_valid_range(self):
+        assert parse_range("100-5000") == (100, 5000)
+
+    def test_reversed_range(self):
+        assert parse_range("5000-100") == (100, 5000)
+
+    def test_empty_returns_none(self):
+        assert parse_range("") is None
+
+    def test_none_returns_none(self):
+        assert parse_range(None) is None
+
+    def test_invalid_format_raises(self):
+        try:
+            parse_range("abc")
+            assert False, "Should have raised"
+        except argparse.ArgumentTypeError:
+            pass
+
+    def test_non_numeric_raises(self):
+        try:
+            parse_range("abc-200")
+            assert False, "Should have raised"
+        except argparse.ArgumentTypeError:
+            pass
+
+
+class TestParseAuth:
+    def test_valid_auth(self):
+        result = parse_auth("admin:secret")
+        assert "Authorization" in result
+        assert result["Authorization"].startswith("Basic ")
+
+    def test_password_with_colon(self):
+        result = parse_auth("user:pass:word")
+        assert "Authorization" in result
+
+    def test_no_colon_raises(self):
+        try:
+            parse_auth("nocolon")
+            assert False, "Should have raised"
+        except argparse.ArgumentTypeError:
+            pass
+
+
+class TestParseExtraHeaders:
+    def test_single_header(self):
+        result = parse_extra_headers(["X-Token: abc123"])
+        assert result == {"X-Token": "abc123"}
+
+    def test_multiple_headers(self):
+        result = parse_extra_headers(["X-Token: abc", "X-Custom: xyz"])
+        assert len(result) == 2
+        assert result["X-Token"] == "abc"
+        assert result["X-Custom"] == "xyz"
+
+    def test_no_colon_raises(self):
+        try:
+            parse_extra_headers(["InvalidHeader"])
+            assert False, "Should have raised"
+        except ValueError:
+            pass
+
+
+class TestMatchesFilter:
+    def test_no_filter_passes(self):
+        f = Finding(url="http://x.com/a", path="/a", status=200, size=100, words=10, title="")
+        assert matches_filter(f, None, None) is True
+
+    def test_size_within_range(self):
+        f = Finding(url="http://x.com/a", path="/a", status=200, size=500, words=10, title="")
+        assert matches_filter(f, (100, 1000), None) is True
+
+    def test_size_outside_range(self):
+        f = Finding(url="http://x.com/a", path="/a", status=200, size=50, words=10, title="")
+        assert matches_filter(f, (100, 1000), None) is False
+
+    def test_words_within_range(self):
+        f = Finding(url="http://x.com/a", path="/a", status=200, size=100, words=50, title="")
+        assert matches_filter(f, None, (10, 100)) is True
+
+    def test_words_outside_range(self):
+        f = Finding(url="http://x.com/a", path="/a", status=200, size=100, words=5, title="")
+        assert matches_filter(f, None, (10, 100)) is False
+
+    def test_both_filters(self):
+        f = Finding(url="http://x.com/a", path="/a", status=200, size=500, words=50, title="")
+        assert matches_filter(f, (100, 1000), (10, 100)) is True
+        assert matches_filter(f, (100, 1000), (60, 100)) is False
+
+
 class TestLoadPaths:
     def test_default_paths_no_extensions(self):
         paths = load_paths(None, [])
@@ -178,6 +274,7 @@ class TestFindingDataclass:
         f = Finding(url="http://x.com/a", path="/a", status=200, size=100, words=5, title="T")
         assert f.status == 200
         assert f.location == ""
+        assert f.method == "GET"
 
     def test_frozen(self):
         f = Finding(url="http://x.com/a", path="/a", status=200, size=100, words=5, title="T")
@@ -186,6 +283,10 @@ class TestFindingDataclass:
             assert False, "Should be frozen"
         except AttributeError:
             pass
+
+    def test_custom_method(self):
+        f = Finding(url="http://x.com/a", path="/a", status=200, size=100, words=5, title="T", method="POST")
+        assert f.method == "POST"
 
 
 class TestScanPath:
@@ -215,6 +316,15 @@ class TestScanPath:
         limiter = RateLimiter()
         result = scan_path(session, limiter, "http://example.com/", "admin", 5.0, {200})
         assert result is None
+
+    @responses.activate
+    def test_custom_method(self):
+        responses.add(responses.POST, "http://example.com/api", json={"ok": True}, status=200)
+        session = create_session(user_agent="TestAgent/1.0")
+        limiter = RateLimiter()
+        result = scan_path(session, limiter, "http://example.com/", "api", 5.0, {200}, method="POST")
+        assert result is not None
+        assert result.method == "POST"
 
 
 class TestBuildParser:
@@ -246,3 +356,39 @@ class TestBuildParser:
         parser = build_parser()
         args = parser.parse_args(["http://example.com", "--delay", "10"])
         assert args.delay == 10.0
+
+    def test_has_method_argument(self):
+        parser = build_parser()
+        args = parser.parse_args(["http://example.com", "-M", "POST"])
+        assert args.method == "POST"
+
+    def test_default_method_is_get(self):
+        parser = build_parser()
+        args = parser.parse_args(["http://example.com"])
+        assert args.method == "GET"
+
+    def test_has_auth_argument(self):
+        parser = build_parser()
+        args = parser.parse_args(["http://example.com", "--auth", "admin:secret"])
+        assert args.auth is not None
+        assert "Authorization" in args.auth
+
+    def test_has_cookie_argument(self):
+        parser = build_parser()
+        args = parser.parse_args(["http://example.com", "--cookie", "session=abc"])
+        assert args.cookie == "session=abc"
+
+    def test_has_header_argument(self):
+        parser = build_parser()
+        args = parser.parse_args(["http://example.com", "--header", "X-Token: abc", "--header", "X-Custom: xyz"])
+        assert args.header == ["X-Token: abc", "X-Custom: xyz"]
+
+    def test_has_filter_size_argument(self):
+        parser = build_parser()
+        args = parser.parse_args(["http://example.com", "--filter-size", "100-5000"])
+        assert args.filter_size == (100, 5000)
+
+    def test_has_filter_words_argument(self):
+        parser = build_parser()
+        args = parser.parse_args(["http://example.com", "--filter-words", "10-100"])
+        assert args.filter_words == (10, 100)

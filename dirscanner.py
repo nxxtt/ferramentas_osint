@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import csv
 import json
 import os
@@ -37,6 +38,7 @@ DEFAULT_STATUSES = {200, 204, 301, 302, 307, 308, 401, 403}
 
 """Scanner HTTP de diretórios e arquivos para alvos autorizados."""
 
+
 @dataclass(frozen=True)
 class Finding:
     """Representa um caminho encontrado durante o scan."""
@@ -48,6 +50,7 @@ class Finding:
     words: int
     title: str
     location: str = ""
+    method: str = "GET"
 
 
 def banner() -> None:
@@ -120,6 +123,31 @@ def parse_extensions(value: str) -> list[str]:
     return extensions
 
 
+def parse_range(value: str) -> tuple[int, int] | None:
+    """Converte string de range 'min-max' em tupla (min, max). None se vazio."""
+    if not value:
+        return None
+    parts = value.split("-")
+    if len(parts) != 2:
+        raise argparse.ArgumentTypeError(f"formato invalido: {value!r} (use min-max)")
+    try:
+        min_val, max_val = int(parts[0]), int(parts[1])
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"valores nao numericos: {value!r}")
+    if min_val > max_val:
+        min_val, max_val = max_val, min_val
+    return (min_val, max_val)
+
+
+def parse_auth(value: str) -> dict[str, str]:
+    """Converte string 'user:pass' em headers de autenticacao Basic."""
+    if ":" not in value:
+        raise argparse.ArgumentTypeError(f"formato invalido: {value!r} (use user:pass)")
+    user, password = value.split(":", 1)
+    token = base64.b64encode(f"{user}:{password}".encode()).decode()
+    return {"Authorization": f"Basic {token}"}
+
+
 def load_paths(wordlist: str | None, extensions: list[str]) -> list[str]:
     """Carrega caminhos da wordlist ou lista padrão e aplica extensões."""
     if wordlist:
@@ -150,6 +178,21 @@ def load_paths(wordlist: str | None, extensions: list[str]) -> list[str]:
     return sorted(paths)
 
 
+def matches_filter(
+    finding: Finding,
+    size_range: tuple[int, int] | None,
+    words_range: tuple[int, int] | None,
+) -> bool:
+    """Verifica se o finding atende aos filtros de tamanho e palavras."""
+    if size_range:
+        if not (size_range[0] <= finding.size <= size_range[1]):
+            return False
+    if words_range:
+        if not (words_range[0] <= finding.words <= words_range[1]):
+            return False
+    return True
+
+
 def scan_path(
     session,
     rate_limiter: RateLimiter,
@@ -157,13 +200,14 @@ def scan_path(
     path: str,
     timeout: float,
     statuses: set[int],
+    method: str = "GET",
 ) -> Finding | None:
     """Realiza request HTTP para um caminho específico e retorna Finding."""
     full_url = urljoin(base_url, path)
     rate_limiter.wait()
 
     try:
-        status, headers, content = fetch(session, full_url, timeout=timeout)
+        status, headers, content = fetch(session, full_url, timeout=timeout, method=method)
     except ValueError:
         return None
 
@@ -180,6 +224,7 @@ def scan_path(
         words=len(text.split()),
         title=extract_title(text),
         location=headers.get("location", ""),
+        method=method,
     )
 
 
@@ -192,6 +237,11 @@ def scan_target(
     user_agent: str,
     proxy: str | None = None,
     requests_per_second: float = 0.0,
+    method: str = "GET",
+    auth_headers: dict[str, str] | None = None,
+    extra_headers: dict[str, str] | None = None,
+    size_range: tuple[int, int] | None = None,
+    words_range: tuple[int, int] | None = None,
 ) -> list[Finding]:
     """Executa scan paralelo de todos os caminhos contra o alvo."""
     started = time.monotonic()
@@ -199,17 +249,23 @@ def scan_target(
     rate_limiter = RateLimiter(requests_per_second)
     session = create_session(user_agent=user_agent, proxy=proxy)
 
+    if auth_headers:
+        session.headers.update(auth_headers)
+    if extra_headers:
+        session.headers.update(extra_headers)
+
     print(color("[*]", Cyber.CYAN, Cyber.BOLD), f"Alvo: {color(base_url, Cyber.WHITE, Cyber.BOLD)}")
     print(
         color("[*]", Cyber.CYAN, Cyber.BOLD),
         f"Paths: {color(str(len(paths)), Cyber.WHITE, Cyber.BOLD)} | "
         f"Status: {color(','.join(map(str, sorted(statuses))), Cyber.YELLOW)} | "
+        f"Method: {color(method, Cyber.WHITE, Cyber.BOLD)} | "
         f"Threads: {color(str(workers), Cyber.YELLOW)}",
     )
 
     with ThreadPoolExecutor(max_workers=workers) as executor:
         futures = [
-            executor.submit(scan_path, session, rate_limiter, base_url, path, timeout, statuses)
+            executor.submit(scan_path, session, rate_limiter, base_url, path, timeout, statuses, method)
             for path in paths
         ]
 
@@ -219,6 +275,8 @@ def scan_target(
             except Exception:
                 continue
             if not finding:
+                continue
+            if not matches_filter(finding, size_range, words_range):
                 continue
 
             findings.append(finding)
@@ -253,11 +311,11 @@ def print_table(findings: list[Finding]) -> None:
         print(color("Nenhum diretorio/arquivo encontrado com os filtros atuais.", Cyber.RED))
         return
 
-    headers = ("STATUS", "SIZE", "WORDS", "PATH", "TITLE/LOCATION")
+    headers = ("STATUS", "SIZE", "WORDS", "METHOD", "PATH", "TITLE/LOCATION")
     rows = []
     for item in findings:
         extra = item.location or item.title
-        rows.append((str(item.status), str(item.size), str(item.words), item.path, extra))
+        rows.append((str(item.status), str(item.size), str(item.words), item.method, item.path, extra))
 
     widths = [
         max(len(headers[index]), *(len(row[index]) for row in rows))
@@ -268,15 +326,16 @@ def print_table(findings: list[Finding]) -> None:
     print(color("  ".join(header.ljust(widths[index]) for index, header in enumerate(headers)), Cyber.CYAN, Cyber.BOLD))
     print(color("  ".join("-" * width for width in widths), Cyber.BLUE))
     for row in rows:
-        status, size, words, path, extra = row
+        status, size, words, method, path, extra = row
         print(
             "  ".join(
                 (
                     color(status.ljust(widths[0]), status_color(int(status)), Cyber.BOLD),
                     color(size.rjust(widths[1]), Cyber.YELLOW),
                     color(words.rjust(widths[2]), Cyber.WHITE),
-                    color(path.ljust(widths[3]), Cyber.CYAN),
-                    color(extra.ljust(widths[4]), Cyber.GRAY),
+                    color(method.ljust(widths[3]), Cyber.MAGENTA),
+                    color(path.ljust(widths[4]), Cyber.CYAN),
+                    color(extra.ljust(widths[5]), Cyber.GRAY),
                 )
             )
         )
@@ -292,7 +351,7 @@ def write_output(path: str, findings: list[Finding]) -> None:
         else:
             writer = csv.DictWriter(
                 file_handle,
-                fieldnames=["url", "path", "status", "size", "words", "title", "location"],
+                fieldnames=["url", "path", "status", "size", "words", "title", "location", "method"],
             )
             writer.writeheader()
             for item in findings:
@@ -350,8 +409,51 @@ def build_parser() -> argparse.ArgumentParser:
         default=0.0,
         help="Delay entre requests (requests por segundo). 0 = sem limite. Padrao: 0",
     )
+    parser.add_argument(
+        "-M",
+        "--method",
+        default="GET",
+        choices=["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"],
+        help="Metodo HTTP para as requests. Padrao: GET",
+    )
+    parser.add_argument(
+        "--auth",
+        type=parse_auth,
+        help="Autenticacao Basic (user:pass). Envia header Authorization.",
+    )
+    parser.add_argument(
+        "--cookie",
+        help="Cookie para as requests. Ex: 'session=abc123; token=xyz'",
+    )
+    parser.add_argument(
+        "--header",
+        action="append",
+        default=[],
+        help="Header customizado (pode usar mais de um). Ex: 'X-Token: abc'",
+    )
+    parser.add_argument(
+        "--filter-size",
+        type=parse_range,
+        help="Filtrar por tamanho em bytes. Ex: 100-5000",
+    )
+    parser.add_argument(
+        "--filter-words",
+        type=parse_range,
+        help="Filtrar por numero de palavras. Ex: 10-100",
+    )
     parser.add_argument("-o", "--output", help="Salva resultado em .json ou .csv.")
     return parser
+
+
+def parse_extra_headers(raw_headers: list[str]) -> dict[str, str]:
+    """Converte lista de strings 'Name: Value' em dict de headers."""
+    headers: dict[str, str] = {}
+    for raw in raw_headers:
+        if ":" not in raw:
+            raise ValueError(f"header invalido: {raw!r} (use 'Name: Value')")
+        name, value = raw.split(":", 1)
+        headers[name.strip()] = value.strip()
+    return headers
 
 
 def run_once(args: argparse.Namespace) -> int:
@@ -362,6 +464,9 @@ def run_once(args: argparse.Namespace) -> int:
         raise ValueError("timeout precisa ser maior que zero")
     if args.threads < 1:
         raise ValueError("threads precisa ser maior que zero")
+
+    extra_headers = parse_extra_headers(args.header) if args.header else None
+    cookie_headers = {"Cookie": args.cookie} if args.cookie else None
 
     base_url = normalize_base_url(args.url)
     paths = load_paths(args.wordlist, args.extensions)
@@ -374,6 +479,11 @@ def run_once(args: argparse.Namespace) -> int:
         user_agent=args.user_agent,
         proxy=args.proxy,
         requests_per_second=args.delay,
+        method=args.method,
+        auth_headers=args.auth,
+        extra_headers={**cookie_headers, **extra_headers} if cookie_headers or extra_headers else None,
+        size_range=args.filter_size,
+        words_range=args.filter_words,
     )
     print_table(findings)
     if args.output:
