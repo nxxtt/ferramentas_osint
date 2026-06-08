@@ -188,3 +188,35 @@ class TestBuildParser:
         parser = build_parser()
         args = parser.parse_args(["127.0.0.1", "--log-file", "scan.log"])
         assert args.log_file == "scan.log"
+
+
+class TestBuildParserV3:
+    def test_has_list_argument(self):
+        parser = build_parser()
+        args = parser.parse_args(["-l", "targets.txt"])
+        assert args.target_list == "targets.txt"
+
+    def test_has_quiet_flag(self):
+        parser = build_parser()
+        args = parser.parse_args(["127.0.0.1", "-q"])
+        assert args.quiet is True
+
+    def test_default_quiet_false(self):
+        parser = build_parser()
+        args = parser.parse_args(["127.0.0.1"])
+        assert args.quiet is False
+
+    def test_has_threads_alias(self):
+        parser = build_parser()
+        args = parser.parse_args(["127.0.0.1", "--threads", "100"])
+        assert args.threads == 100
+
+    def test_default_threads_none(self):
+        parser = build_parser()
+        args = parser.parse_args(["127.0.0.1"])
+        assert args.threads is None
+
+    def test_default_workers(self):
+        parser = build_parser()
+        args = parser.parse_args(["127.0.0.1"])
+        assert args.workers == 200

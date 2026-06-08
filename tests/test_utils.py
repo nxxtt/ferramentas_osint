@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import logging
 import os
 import threading
@@ -8,11 +9,17 @@ import time
 from utils import (
     Cyber,
     RateLimiter,
+    __version__,
+    add_common_args,
+    apply_session_auth,
     color,
     create_session,
+    extract_hostname,
     extract_title,
     fetch,
     header_get,
+    parse_auth,
+    parse_extra_headers,
     setup_logging,
     status_color,
 )
@@ -189,3 +196,193 @@ class TestSetupLogging:
         setup_logging(verbose=True, log_file=log_file)
         root = logging.getLogger("mytools")
         assert root.level == logging.DEBUG
+
+
+class TestVersion:
+    def test_version_is_string(self):
+        assert isinstance(__version__, str)
+
+    def test_version_format(self):
+        parts = __version__.split(".")
+        assert len(parts) == 3
+        assert all(p.isdigit() for p in parts)
+
+    def test_version_is_3_0_0(self):
+        assert __version__ == "3.0.0"
+
+
+class TestParseAuthUtils:
+    def test_valid_auth(self):
+        result = parse_auth("admin:secret")
+        assert "Authorization" in result
+        assert result["Authorization"].startswith("Basic ")
+
+    def test_password_with_colon(self):
+        result = parse_auth("user:pass:word")
+        assert "Authorization" in result
+
+    def test_no_colon_raises(self):
+        try:
+            parse_auth("nocolon")
+            assert False, "Should have raised"
+        except argparse.ArgumentTypeError:
+            pass
+
+
+class TestParseExtraHeadersUtils:
+    def test_single_header(self):
+        result = parse_extra_headers(["X-Token: abc123"])
+        assert result == {"X-Token": "abc123"}
+
+    def test_multiple_headers(self):
+        result = parse_extra_headers(["X-Token: abc", "X-Custom: xyz"])
+        assert len(result) == 2
+
+    def test_no_colon_raises(self):
+        try:
+            parse_extra_headers(["InvalidHeader"])
+            assert False, "Should have raised"
+        except ValueError:
+            pass
+
+
+class TestAddCommonArgs:
+    def test_adds_timeout(self):
+        import argparse
+        parser = argparse.ArgumentParser()
+        add_common_args(parser)
+        args = parser.parse_args(["-t", "10"])
+        assert args.timeout == 10.0
+
+    def test_adds_output(self):
+        import argparse
+        parser = argparse.ArgumentParser()
+        add_common_args(parser)
+        args = parser.parse_args(["-o", "out.json"])
+        assert args.output == "out.json"
+
+    def test_adds_verbose(self):
+        import argparse
+        parser = argparse.ArgumentParser()
+        add_common_args(parser)
+        args = parser.parse_args(["-v"])
+        assert args.verbose is True
+
+    def test_adds_quiet(self):
+        import argparse
+        parser = argparse.ArgumentParser()
+        add_common_args(parser)
+        args = parser.parse_args(["-q"])
+        assert args.quiet is True
+
+    def test_adds_auth(self):
+        import argparse
+        parser = argparse.ArgumentParser()
+        add_common_args(parser)
+        args = parser.parse_args(["--auth", "user:pass"])
+        assert args.auth is not None
+        assert "Authorization" in args.auth
+
+    def test_adds_bearer_token(self):
+        import argparse
+        parser = argparse.ArgumentParser()
+        add_common_args(parser)
+        args = parser.parse_args(["--bearer-token", "tok123"])
+        assert args.bearer_token == "tok123"
+
+    def test_adds_cookie(self):
+        import argparse
+        parser = argparse.ArgumentParser()
+        add_common_args(parser)
+        args = parser.parse_args(["--cookie", "session=abc"])
+        assert args.cookie == "session=abc"
+
+    def test_adds_header(self):
+        import argparse
+        parser = argparse.ArgumentParser()
+        add_common_args(parser)
+        args = parser.parse_args(["--header", "X-Token: abc", "--header", "X-Custom: xyz"])
+        assert args.header == ["X-Token: abc", "X-Custom: xyz"]
+
+    def test_adds_proxy(self):
+        import argparse
+        parser = argparse.ArgumentParser()
+        add_common_args(parser)
+        args = parser.parse_args(["--proxy", "http://proxy:8080"])
+        assert args.proxy == "http://proxy:8080"
+
+    def test_adds_delay(self):
+        import argparse
+        parser = argparse.ArgumentParser()
+        add_common_args(parser)
+        args = parser.parse_args(["--delay", "5"])
+        assert args.delay == 5.0
+
+    def test_adds_log_file(self):
+        import argparse
+        parser = argparse.ArgumentParser()
+        add_common_args(parser)
+        args = parser.parse_args(["--log-file", "test.log"])
+        assert args.log_file == "test.log"
+
+    def test_default_timeout(self):
+        import argparse
+        parser = argparse.ArgumentParser()
+        add_common_args(parser)
+        args = parser.parse_args([])
+        assert args.timeout == 5.0
+
+    def test_default_quiet_false(self):
+        import argparse
+        parser = argparse.ArgumentParser()
+        add_common_args(parser)
+        args = parser.parse_args([])
+        assert args.quiet is False
+
+
+class TestApplySessionAuth:
+    def test_auth_applied(self):
+        session = create_session(user_agent="Test/1.0")
+        apply_session_auth(session, auth={"Authorization": "Basic abc"})
+        assert session.headers["Authorization"] == "Basic abc"
+
+    def test_bearer_token_applied(self):
+        session = create_session(user_agent="Test/1.0")
+        apply_session_auth(session, bearer_token="tok123")
+        assert session.headers["Authorization"] == "Bearer tok123"
+
+    def test_cookie_applied(self):
+        session = create_session(user_agent="Test/1.0")
+        apply_session_auth(session, cookie="session=abc")
+        assert session.headers["Cookie"] == "session=abc"
+
+    def test_extra_headers_applied(self):
+        session = create_session(user_agent="Test/1.0")
+        apply_session_auth(session, extra_headers=["X-Token: abc"])
+        assert session.headers["X-Token"] == "abc"
+
+    def test_no_auth_no_change(self):
+        session = create_session(user_agent="Test/1.0")
+        apply_session_auth(session)
+        assert "Authorization" not in session.headers
+        assert "Cookie" not in session.headers
+
+
+class TestExtractHostname:
+    def test_simple_url(self):
+        assert extract_hostname("https://example.com") == "example.com"
+
+    def test_with_port(self):
+        assert extract_hostname("https://example.com:8080") == "example.com"
+
+    def test_with_path(self):
+        assert extract_hostname("https://example.com/path/to/page") == "example.com"
+
+    def test_http(self):
+        assert extract_hostname("http://test.example.com") == "test.example.com"
+
+
+class TestCreateSessionDefaultUA:
+    def test_default_user_agent(self):
+        session = create_session()
+        assert session.headers["User-Agent"] == "MyTools/3.0"

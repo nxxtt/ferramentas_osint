@@ -12,14 +12,12 @@ from dirscanner import (
     load_paths,
     matches_filter,
     normalize_base_url,
-    parse_auth,
     parse_extensions,
-    parse_extra_headers,
     parse_range,
     parse_statuses,
     scan_path,
 )
-from utils import RateLimiter, create_session
+from utils import RateLimiter, create_session, parse_auth, parse_extra_headers
 
 
 class TestNormalizeBaseUrl:

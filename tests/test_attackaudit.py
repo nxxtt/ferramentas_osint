@@ -569,3 +569,46 @@ class TestRiskWeightsConstant:
 
     def test_ordering(self):
         assert RISK_WEIGHTS["critical"] > RISK_WEIGHTS["high"] > RISK_WEIGHTS["medium"] > RISK_WEIGHTS["low"] > RISK_WEIGHTS["info"]
+
+
+class TestBuildParserV3:
+    def test_has_list_argument(self):
+        parser = build_parser()
+        args = parser.parse_args(["-l", "targets.txt"])
+        assert args.target_list == "targets.txt"
+
+    def test_has_output_dir_argument(self):
+        parser = build_parser()
+        args = parser.parse_args(["--output-dir", "results/"])
+        assert args.output_dir == "results/"
+
+    def test_has_quiet_flag(self):
+        parser = build_parser()
+        args = parser.parse_args(["https://example.com", "-q"])
+        assert args.quiet is True
+
+    def test_default_quiet_false(self):
+        parser = build_parser()
+        args = parser.parse_args(["https://example.com"])
+        assert args.quiet is False
+
+    def test_has_auth_argument(self):
+        parser = build_parser()
+        args = parser.parse_args(["https://example.com", "--auth", "admin:secret"])
+        assert args.auth is not None
+        assert "Authorization" in args.auth
+
+    def test_has_bearer_token_argument(self):
+        parser = build_parser()
+        args = parser.parse_args(["https://example.com", "--bearer-token", "tok123"])
+        assert args.bearer_token == "tok123"
+
+    def test_has_cookie_argument(self):
+        parser = build_parser()
+        args = parser.parse_args(["https://example.com", "--cookie", "session=abc"])
+        assert args.cookie == "session=abc"
+
+    def test_has_header_argument(self):
+        parser = build_parser()
+        args = parser.parse_args(["https://example.com", "--header", "X-Token: abc"])
+        assert args.header == ["X-Token: abc"]

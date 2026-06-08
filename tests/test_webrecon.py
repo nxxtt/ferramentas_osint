@@ -302,3 +302,61 @@ class TestBuildParser:
         parser = build_parser()
         args = parser.parse_args(["https://example.com", "--log-file", "out.log"])
         assert args.log_file == "out.log"
+
+
+class TestBuildParserV3:
+    def test_has_list_argument(self):
+        parser = build_parser()
+        args = parser.parse_args(["-l", "targets.txt"])
+        assert args.target_list == "targets.txt"
+
+    def test_has_output_dir_argument(self):
+        parser = build_parser()
+        args = parser.parse_args(["--output-dir", "results/"])
+        assert args.output_dir == "results/"
+
+    def test_has_quiet_flag(self):
+        parser = build_parser()
+        args = parser.parse_args(["https://example.com", "-q"])
+        assert args.quiet is True
+
+    def test_default_quiet_false(self):
+        parser = build_parser()
+        args = parser.parse_args(["https://example.com"])
+        assert args.quiet is False
+
+    def test_has_auth_argument(self):
+        parser = build_parser()
+        args = parser.parse_args(["https://example.com", "--auth", "admin:secret"])
+        assert args.auth is not None
+        assert "Authorization" in args.auth
+
+    def test_has_bearer_token_argument(self):
+        parser = build_parser()
+        args = parser.parse_args(["https://example.com", "--bearer-token", "tok123"])
+        assert args.bearer_token == "tok123"
+
+    def test_has_cookie_argument(self):
+        parser = build_parser()
+        args = parser.parse_args(["https://example.com", "--cookie", "session=abc"])
+        assert args.cookie == "session=abc"
+
+    def test_has_header_argument(self):
+        parser = build_parser()
+        args = parser.parse_args(["https://example.com", "--header", "X-Token: abc"])
+        assert args.header == ["X-Token: abc"]
+
+    def test_has_delay_argument(self):
+        parser = build_parser()
+        args = parser.parse_args(["https://example.com", "--delay", "5"])
+        assert args.delay == 5.0
+
+    def test_has_user_agent_argument(self):
+        parser = build_parser()
+        args = parser.parse_args(["https://example.com", "-A", "CustomAgent/1.0"])
+        assert args.user_agent == "CustomAgent/1.0"
+
+    def test_default_user_agent(self):
+        parser = build_parser()
+        args = parser.parse_args(["https://example.com"])
+        assert "WebRecon/3.0" in args.user_agent

@@ -20,6 +20,8 @@ from urllib3.util.retry import Retry
 
 logger = logging.getLogger("mytools")
 
+__version__ = "3.0.0"
+
 SECURITY_HEADERS = [
     "strict-transport-security",
     "content-security-policy",
@@ -112,7 +114,7 @@ class RateLimiter:
 
 
 def create_session(
-    user_agent: str = "MyTools/2.0",
+    user_agent: str = "MyTools/3.0",
     proxy: str | None = None,
     max_retries: int = 3,
     backoff_factor: float = 0.5,
@@ -223,6 +225,7 @@ def write_output(
     data: Any,
     fieldnames: list[str] | None = None,
     csv_rows: list[dict] | None = None,
+    quiet: bool = False,
 ) -> None:
     """Salva dados em arquivo JSON ou CSV."""
     extension = os.path.splitext(path)[1].lower()
@@ -238,7 +241,76 @@ def write_output(
             writer.writeheader()
             for item in rows:
                 writer.writerow(item)
-    print(color("[*]", Cyber.CYAN, Cyber.BOLD), f"Resultado salvo em {color(path, Cyber.GREEN)}")
+    if not quiet:
+        print(color("[*]", Cyber.CYAN, Cyber.BOLD), f"Resultado salvo em {color(path, Cyber.GREEN)}")
+
+
+def parse_auth(value: str) -> dict[str, str]:
+    """Converte string 'user:pass' em headers de autenticacao Basic."""
+    if ":" not in value:
+        raise argparse.ArgumentTypeError(f"formato invalido: {value!r} (use user:pass)")
+    user, password = value.split(":", 1)
+    import base64
+    token = base64.b64encode(f"{user}:{password}".encode()).decode()
+    return {"Authorization": f"Basic {token}"}
+
+
+def parse_extra_headers(raw_headers: list[str]) -> dict[str, str]:
+    """Converte lista de strings 'Name: Value' em dict de headers."""
+    headers: dict[str, str] = {}
+    for raw in raw_headers:
+        if ":" not in raw:
+            raise ValueError(f"header invalido: {raw!r} (use 'Name: Value')")
+        name, value = raw.split(":", 1)
+        headers[name.strip()] = value.strip()
+    return headers
+
+
+def add_common_args(parser: argparse.ArgumentParser) -> None:
+    """Adiciona argumentos compartilhados a um parser."""
+    parser.add_argument("-t", "--timeout", type=float, default=5.0, help="Timeout em segundos. Padrao: 5")
+    parser.add_argument("-o", "--output", help="Salva resultado em .json ou .csv.")
+    parser.add_argument("-v", "--verbose", action="store_true", help="Mostra mensagens de debug no terminal.")
+    parser.add_argument("--log-file", help="Salva logs em arquivo.")
+    parser.add_argument("-A", "--user-agent", help="User-Agent usado nas requests.")
+    parser.add_argument("--proxy", help="Proxy para as requests. Ex: http://proxy:8080")
+    parser.add_argument("--delay", type=float, default=0.0, help="Delay entre requests (req/s). 0 = sem limite.")
+    parser.add_argument("-q", "--quiet", action="store_true", help="Modo silencioso: sem banner/progresso. Requer -o.")
+    parser.add_argument(
+        "--auth",
+        type=parse_auth,
+        help="Autenticacao Basic (user:pass). Envia header Authorization.",
+    )
+    parser.add_argument("--bearer-token", dest="bearer_token", help="Token Bearer para autenticacao.")
+    parser.add_argument("--cookie", help="Cookie para as requests. Ex: 'session=abc123; token=xyz'")
+    parser.add_argument("--header", action="append", default=[], help="Header customizado (pode usar mais de um). Ex: 'X-Token: abc'")
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
+
+
+def apply_session_auth(
+    session: requests.Session,
+    auth: dict[str, str] | None = None,
+    bearer_token: str | None = None,
+    cookie: str | None = None,
+    extra_headers: list[str] | None = None,
+) -> None:
+    """Aplica headers de autenticacao e personalizados a uma sessao."""
+    if auth:
+        session.headers.update(auth)
+    if bearer_token:
+        session.headers["Authorization"] = f"Bearer {bearer_token}"
+    if cookie:
+        session.headers["Cookie"] = cookie
+    if extra_headers:
+        session.headers.update(parse_extra_headers(extra_headers))
+
+
+def extract_hostname(url: str) -> str:
+    """Extrai hostname de uma URL para uso em nomes de arquivo."""
+    from urllib.parse import urlparse
+    parsed = urlparse(url)
+    host = parsed.hostname or url
+    return host.replace("/", "_").replace(":", "_")
 
 
 def run_interactive_shell(

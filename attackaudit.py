@@ -19,8 +19,11 @@ from utils import (
     Cyber,
     RateLimiter,
     SECURITY_HEADERS,
+    add_common_args,
+    apply_session_auth,
     color,
     create_session,
+    extract_hostname,
     fetch,
     header_get,
     run_interactive_shell,
@@ -607,6 +610,10 @@ def run_audit(
     proxy: str | None = None,
     requests_per_second: float = 0.0,
     test_vulns: bool = False,
+    auth: dict[str, str] | None = None,
+    bearer_token: str | None = None,
+    cookie: str | None = None,
+    extra_headers: list[str] | None = None,
 ) -> AuditResult:
     """Executa auditoria completa em uma URL alvo."""
     started = time.monotonic()
@@ -615,6 +622,7 @@ def run_audit(
     ip = resolve_ip(parsed.hostname or "")
     rate_limiter = RateLimiter(requests_per_second)
     session = create_session(user_agent=user_agent, proxy=proxy)
+    apply_session_auth(session, auth=auth, bearer_token=bearer_token, cookie=cookie, extra_headers=extra_headers)
 
     logger.info("audit iniciado: %s", target)
     logger.debug("threads=%d, deep=%s, test_vulns=%s", threads, deep, test_vulns)
@@ -717,7 +725,7 @@ def print_result(result: AuditResult) -> None:
         print(f"         defesa:    {color(finding.recommendation, Cyber.GREEN)}")
 
 
-def _save_audit_output(path: str, result: AuditResult) -> None:
+def _save_audit_output(path: str, result: AuditResult, quiet: bool = False) -> None:
     """Salva resultado da auditoria em arquivo JSON ou CSV."""
     data = asdict(result)
     write_output(
@@ -725,6 +733,7 @@ def _save_audit_output(path: str, result: AuditResult) -> None:
         data,
         fieldnames=["severity", "category", "item", "evidence", "recommendation"],
         csv_rows=data["findings"],
+        quiet=quiet,
     )
 
 
@@ -733,8 +742,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Auditoria web red/blue para laboratorios e alvos autorizados."
     )
+    add_common_args(parser)
     parser.add_argument("url", nargs="?", help="URL alvo. Ex: https://example.com")
-    parser.add_argument("-t", "--timeout", type=float, default=5.0, help="Timeout em segundos. Padrao: 5")
+    parser.add_argument("-l", "--list", dest="target_list", help="Arquivo com URLs alvo (uma por linha).")
+    parser.add_argument("--output-dir", dest="output_dir", help="Diretorio para salvos individuais (hostname.json).")
     parser.add_argument("--threads", type=int, default=20, help="Threads para probes de paths. Padrao: 20")
     parser.add_argument("--deep", action="store_true", help="Ativa probes de arquivos/endpoints comuns.")
     parser.add_argument(
@@ -742,46 +753,70 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Ativa testes de vulnerabilidade (XSS reflection, SQLi error-based).",
     )
-    parser.add_argument(
-        "-A",
-        "--user-agent",
-        default="Mozilla/5.0 (X11; Linux x86_64) AttackAudit/1.0",
-        help="User-Agent usado nas requests.",
-    )
-    parser.add_argument(
-        "--proxy",
-        help="Proxy para as requests. Ex: http://proxy:8080",
-    )
-    parser.add_argument(
-        "--delay",
-        type=float,
-        default=0.0,
-        help="Delay entre requests (requests por segundo). 0 = sem limite. Padrao: 0",
-    )
-    parser.add_argument("-o", "--output", help="Salva resultado em .json ou .csv.")
-    parser.add_argument("-v", "--verbose", action="store_true", help="Mostra mensagens de debug no terminal.")
-    parser.add_argument("--log-file", help="Salva logs em arquivo.")
+    parser.set_defaults(user_agent="Mozilla/5.0 (X11; Linux x86_64) AttackAudit/3.0")
     return parser
+
+
+def _run_single(url: str, args: argparse.Namespace, quiet: bool = False) -> AuditResult:
+    """Executa auditoria em uma unica URL."""
+    result = run_audit(
+        url, args.timeout, args.user_agent, args.threads, args.deep,
+        proxy=args.proxy, requests_per_second=args.delay,
+        test_vulns=args.test_vulns,
+        auth=getattr(args, "auth", None),
+        bearer_token=getattr(args, "bearer_token", None),
+        cookie=getattr(args, "cookie", None),
+        extra_headers=getattr(args, "header", None),
+    )
+    if not quiet:
+        print_result(result)
+    return result
 
 
 def run_once(args: argparse.Namespace) -> int:
     """Executa uma unica auditoria com os argumentos fornecidos."""
     setup_logging(verbose=args.verbose, log_file=args.log_file)
-    if not args.url:
-        raise ValueError("informe uma URL alvo")
-    if args.timeout <= 0:
-        raise ValueError("timeout precisa ser maior que zero")
+    quiet = getattr(args, "quiet", False)
     if args.threads < 1:
         raise ValueError("threads precisa ser maior que zero")
 
-    result = run_audit(
-        args.url, args.timeout, args.user_agent, args.threads, args.deep,
-        proxy=args.proxy, requests_per_second=args.delay,
-        test_vulns=args.test_vulns,
-    )
-    print_result(result)
+    urls: list[str] = []
+    if getattr(args, "target_list", None):
+        try:
+            with open(args.target_list, "r", encoding="utf-8", errors="replace") as fh:
+                urls = [line.strip() for line in fh if line.strip() and not line.startswith("#")]
+        except FileNotFoundError:
+            raise ValueError(f"arquivo nao encontrado: {args.target_list}")
+    if args.url:
+        urls.append(args.url)
+    if not urls:
+        raise ValueError("informe uma URL alvo ou use -l/--list")
+
+    output_dir = getattr(args, "output_dir", None)
+    if output_dir and not os.path.isdir(output_dir):
+        os.makedirs(output_dir, exist_ok=True)
+
+    all_results: list[AuditResult] = []
+    for url in urls:
+        result = _run_single(url, args, quiet=quiet)
+        all_results.append(result)
+        if output_dir:
+            hostname = extract_hostname(url)
+            out_path = os.path.join(output_dir, f"{hostname}.json")
+            _save_audit_output(out_path, result, quiet=quiet)
+
     if args.output:
-        _save_audit_output(args.output, result)
+        if len(all_results) == 1:
+            _save_audit_output(args.output, all_results[0], quiet=quiet)
+        else:
+            import json as _json
+            consolidated = [asdict(r) for r in all_results]
+            _path = args.output
+            with open(_path, "w", encoding="utf-8") as fh:
+                _json.dump(consolidated, fh, indent=2)
+                fh.write("\n")
+            if not quiet:
+                print(color("[*]", Cyber.CYAN, Cyber.BOLD), f"Resultado consolidado salvo em {color(_path, Cyber.GREEN)}")
     return 0
 
 
@@ -789,7 +824,7 @@ def main() -> int:
     """Ponto de entrada principal do AttackAudit."""
     parser = build_parser()
     args = parser.parse_args()
-    if not args.url:
+    if not args.url and not getattr(args, "target_list", None):
         return run_interactive_shell(
             parser, "audit> ", run_once,
             description="AttackAudit interativo.",
@@ -797,8 +832,14 @@ def main() -> int:
             banner_fn=banner,
         )
 
+    quiet = getattr(args, "quiet", False)
+    if quiet and not args.output:
+        print(color("Erro: modo quiet requer -o/--output", Cyber.RED), file=sys.stderr)
+        return 1
+
     try:
-        banner()
+        if not quiet:
+            banner()
         return run_once(args)
     except Exception as error:
         print(color(f"Erro: {error}", Cyber.RED), file=sys.stderr)

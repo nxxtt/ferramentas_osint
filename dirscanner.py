@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import argparse
-import base64
 import os
 import sys
 import time
@@ -13,10 +12,15 @@ from urllib.parse import urljoin, urlparse
 from utils import (
     Cyber,
     RateLimiter,
+    add_common_args,
+    apply_session_auth,
     color,
     create_session,
+    extract_hostname,
     extract_title,
     fetch,
+    parse_auth,
+    parse_extra_headers,
     run_interactive_shell,
     setup_logging,
     show_banner,
@@ -140,15 +144,6 @@ def parse_range(value: str) -> tuple[int, int] | None:
     if min_val > max_val:
         min_val, max_val = max_val, min_val
     return (min_val, max_val)
-
-
-def parse_auth(value: str) -> dict[str, str]:
-    """Converte string 'user:pass' em headers de autenticacao Basic."""
-    if ":" not in value:
-        raise argparse.ArgumentTypeError(f"formato invalido: {value!r} (use user:pass)")
-    user, password = value.split(":", 1)
-    token = base64.b64encode(f"{user}:{password}".encode()).decode()
-    return {"Authorization": f"Basic {token}"}
 
 
 def load_paths(wordlist: str | None, extensions: list[str]) -> list[str]:
@@ -353,7 +348,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Directory/file scanner HTTP rapido para laboratorios e hosts autorizados."
     )
+    add_common_args(parser)
     parser.add_argument("url", nargs="?", help="URL alvo. Ex: http://example.com")
+    parser.add_argument("-l", "--list", dest="target_list", help="Arquivo com URLs alvo (uma por linha).")
+    parser.add_argument("--output-dir", dest="output_dir", help="Diretorio para salvos individuais (hostname.json).")
     parser.add_argument("-w", "--wordlist", help="Wordlist customizada, um path por linha.")
     parser.add_argument(
         "-x",
@@ -370,33 +368,10 @@ def build_parser() -> argparse.ArgumentParser:
         help="Status aceitos: default, all, 200,403 ou 200-399. Padrao: default",
     )
     parser.add_argument(
-        "-t",
-        "--timeout",
-        type=float,
-        default=5.0,
-        help="Timeout por request em segundos. Padrao: 5",
-    )
-    parser.add_argument(
         "--threads",
         type=int,
         default=40,
         help="Numero de threads. Padrao: 40",
-    )
-    parser.add_argument(
-        "-A",
-        "--user-agent",
-        default="Mozilla/5.0 (X11; Linux x86_64) DirScanner/2.0",
-        help="User-Agent usado nas requests.",
-    )
-    parser.add_argument(
-        "--proxy",
-        help="Proxy para as requests. Ex: http://proxy:8080",
-    )
-    parser.add_argument(
-        "--delay",
-        type=float,
-        default=0.0,
-        help="Delay entre requests (requests por segundo). 0 = sem limite. Padrao: 0",
     )
     parser.add_argument(
         "-M",
@@ -404,21 +379,6 @@ def build_parser() -> argparse.ArgumentParser:
         default="GET",
         choices=["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"],
         help="Metodo HTTP para as requests. Padrao: GET",
-    )
-    parser.add_argument(
-        "--auth",
-        type=parse_auth,
-        help="Autenticacao Basic (user:pass). Envia header Authorization.",
-    )
-    parser.add_argument(
-        "--cookie",
-        help="Cookie para as requests. Ex: 'session=abc123; token=xyz'",
-    )
-    parser.add_argument(
-        "--header",
-        action="append",
-        default=[],
-        help="Header customizado (pode usar mais de um). Ex: 'X-Token: abc'",
     )
     parser.add_argument(
         "--filter-size",
@@ -430,37 +390,15 @@ def build_parser() -> argparse.ArgumentParser:
         type=parse_range,
         help="Filtrar por numero de palavras. Ex: 10-100",
     )
-    parser.add_argument("-o", "--output", help="Salva resultado em .json ou .csv.")
-    parser.add_argument("-v", "--verbose", action="store_true", help="Mostra mensagens de debug no terminal.")
-    parser.add_argument("--log-file", help="Salva logs em arquivo.")
+    parser.set_defaults(user_agent="Mozilla/5.0 (X11; Linux x86_64) DirScanner/3.0")
     return parser
 
 
-def parse_extra_headers(raw_headers: list[str]) -> dict[str, str]:
-    """Converte lista de strings 'Name: Value' em dict de headers."""
-    headers: dict[str, str] = {}
-    for raw in raw_headers:
-        if ":" not in raw:
-            raise ValueError(f"header invalido: {raw!r} (use 'Name: Value')")
-        name, value = raw.split(":", 1)
-        headers[name.strip()] = value.strip()
-    return headers
-
-
-def run_once(args: argparse.Namespace) -> int:
-    """Executa um único scan com os argumentos fornecidos."""
-    setup_logging(verbose=args.verbose, log_file=args.log_file)
-    if not args.url:
-        raise ValueError("informe uma URL alvo")
-    if args.timeout <= 0:
-        raise ValueError("timeout precisa ser maior que zero")
-    if args.threads < 1:
-        raise ValueError("threads precisa ser maior que zero")
-
+def _run_single(url: str, args: argparse.Namespace, quiet: bool = False) -> list[Finding]:
+    """Executa scan em uma unica URL."""
     extra_headers = parse_extra_headers(args.header) if args.header else None
     cookie_headers = {"Cookie": args.cookie} if args.cookie else None
-
-    base_url = normalize_base_url(args.url)
+    base_url = normalize_base_url(url)
     paths = load_paths(args.wordlist, args.extensions)
     findings = scan_target(
         base_url=base_url,
@@ -477,12 +415,54 @@ def run_once(args: argparse.Namespace) -> int:
         size_range=args.filter_size,
         words_range=args.filter_words,
     )
-    print_table(findings)
+    if not quiet:
+        print_table(findings)
+    return findings
+
+
+def run_once(args: argparse.Namespace) -> int:
+    """Executa um único scan com os argumentos fornecidos."""
+    setup_logging(verbose=args.verbose, log_file=args.log_file)
+    quiet = getattr(args, "quiet", False)
+    if args.threads < 1:
+        raise ValueError("threads precisa ser maior que zero")
+
+    urls: list[str] = []
+    if getattr(args, "target_list", None):
+        try:
+            with open(args.target_list, "r", encoding="utf-8", errors="replace") as fh:
+                urls = [line.strip() for line in fh if line.strip() and not line.startswith("#")]
+        except FileNotFoundError:
+            raise ValueError(f"arquivo nao encontrado: {args.target_list}")
+    if args.url:
+        urls.append(args.url)
+    if not urls:
+        raise ValueError("informe uma URL alvo ou use -l/--list")
+
+    output_dir = getattr(args, "output_dir", None)
+    if output_dir and not os.path.isdir(output_dir):
+        os.makedirs(output_dir, exist_ok=True)
+
+    all_findings: list[Finding] = []
+    for url in urls:
+        findings = _run_single(url, args, quiet=quiet)
+        all_findings.extend(findings)
+        if output_dir:
+            hostname = extract_hostname(url)
+            out_path = os.path.join(output_dir, f"{hostname}.json")
+            write_output(
+                out_path,
+                [asdict(f) for f in findings],
+                ["url", "path", "status", "size", "words", "title", "location", "method"],
+                quiet=quiet,
+            )
+
     if args.output:
         write_output(
             args.output,
-            [asdict(f) for f in findings],
+            [asdict(f) for f in all_findings],
             ["url", "path", "status", "size", "words", "title", "location", "method"],
+            quiet=quiet,
         )
     return 0
 
@@ -491,7 +471,7 @@ def main() -> int:
     """Ponto de entrada principal do DirScanner."""
     parser = build_parser()
     args = parser.parse_args()
-    if not args.url:
+    if not args.url and not getattr(args, "target_list", None):
         return run_interactive_shell(
             parser, "dirscan> ", run_once,
             description="DirScanner interativo.",
@@ -499,8 +479,14 @@ def main() -> int:
             banner_fn=banner,
         )
 
+    quiet = getattr(args, "quiet", False)
+    if quiet and not args.output:
+        print(color("Erro: modo quiet requer -o/--output", Cyber.RED), file=sys.stderr)
+        return 1
+
     try:
-        banner()
+        if not quiet:
+            banner()
         return run_once(args)
     except Exception as error:
         print(color(f"Erro: {error}", Cyber.RED), file=sys.stderr)

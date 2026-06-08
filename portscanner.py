@@ -12,7 +12,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict, dataclass
 from typing import Iterable
 
-from utils import Cyber, color, setup_logging, show_banner, write_output, run_interactive_shell
+from utils import Cyber, color, setup_logging, show_banner, write_output, run_interactive_shell, extract_hostname, __version__
 
 import logging
 
@@ -301,6 +301,7 @@ def build_parser() -> argparse.ArgumentParser:
         nargs="*",
         help="IP, hostname ou CIDR. Ex: 192.168.0.10 scanme.nmap.org 10.0.0.0/30",
     )
+    parser.add_argument("-l", "--list", dest="target_list", help="Arquivo com alvos (um por linha).")
     parser.add_argument(
         "-p",
         "--ports",
@@ -323,6 +324,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Numero de threads. Padrao: 200",
     )
     parser.add_argument(
+        "--threads",
+        type=int,
+        default=None,
+        help="Alias de --workers (deprecated). Use --workers.",
+    )
+    parser.add_argument(
         "-b",
         "--banner",
         action="store_true",
@@ -335,18 +342,41 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("-v", "--verbose", action="store_true", help="Mostra mensagens de debug no terminal.")
     parser.add_argument("--log-file", help="Salva logs em arquivo.")
+    parser.add_argument("-q", "--quiet", action="store_true", help="Modo silencioso: sem banner/progresso. Requer -o.")
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     return parser
 
 
 def run_once(args: argparse.Namespace) -> int:
     """Executa uma única varredura com os argumentos fornecidos."""
     setup_logging(verbose=args.verbose, log_file=args.log_file)
+    quiet = getattr(args, "quiet", False)
+
+    if args.threads is not None:
+        import warnings
+        warnings.warn(
+            "--threads e deprecated, use --workers",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        args.workers = args.threads
+
     if args.timeout <= 0:
         raise ValueError("timeout precisa ser maior que zero")
     if args.workers < 1:
         raise ValueError("workers precisa ser maior que zero")
 
-    targets = resolve_targets(args.targets)
+    all_targets: list[str] = list(args.targets) if args.targets else []
+    if getattr(args, "target_list", None):
+        try:
+            with open(args.target_list, "r", encoding="utf-8", errors="replace") as fh:
+                all_targets.extend(line.strip() for line in fh if line.strip() and not line.startswith("#"))
+        except FileNotFoundError:
+            raise ValueError(f"arquivo nao encontrado: {args.target_list}")
+    if not all_targets:
+        raise ValueError("informe pelo menos um alvo ou use -l/--list")
+
+    targets = resolve_targets(all_targets)
     findings = scan_targets(
         targets=targets,
         ports=args.ports,
@@ -354,12 +384,14 @@ def run_once(args: argparse.Namespace) -> int:
         workers=args.workers,
         with_banner=args.banner,
     )
-    print_table(findings)
+    if not quiet:
+        print_table(findings)
     if args.output:
         write_output(
             args.output,
             [asdict(f) for f in findings],
             ["host", "address", "port", "state", "service", "banner"],
+            quiet=quiet,
         )
     return 0
 
@@ -368,10 +400,11 @@ def main() -> int:
     """Ponto de entrada principal do scanner."""
     parser = build_parser()
     args = parser.parse_args()
-    if not args.targets:
+    has_targets = args.targets or getattr(args, "target_list", None)
+    if not has_targets:
 
         def _validate(args):
-            if not args.targets:
+            if not args.targets and not getattr(args, "target_list", None):
                 raise ValueError("Informe pelo menos um alvo.")
 
         return run_interactive_shell(
@@ -382,8 +415,14 @@ def main() -> int:
             banner_fn=banner,
         )
 
+    quiet = getattr(args, "quiet", False)
+    if quiet and not args.output:
+        print(color("Erro: modo quiet requer -o/--output", Cyber.RED), file=sys.stderr)
+        return 1
+
     try:
-        banner()
+        if not quiet:
+            banner()
         return run_once(args)
     except Exception as error:
         print(color(f"Erro: {error}", Cyber.RED), file=sys.stderr)

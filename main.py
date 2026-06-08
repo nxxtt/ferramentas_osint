@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import sys
+
 import attackaudit
 import dirscanner
 import portscanner
 import webrecon
-from utils import Cyber, clear_console, color, run_interactive_shell, show_banner
+from utils import Cyber, clear_console, color, run_interactive_shell, show_banner, __version__
 
 """Módulo principal que integra as ferramentas de segurança: port scanner, dir scanner, web recon e attack audit."""
 
@@ -108,6 +110,9 @@ def launch_attackaudit() -> None:
 
 def main() -> int:
     """Loop principal do menu interativo. Retorna 0 ao sair."""
+    if "--version" in sys.argv or "-V" in sys.argv:
+        print(f"mytools {__version__}")
+        return 0
     while True:
         banner()
         menu()

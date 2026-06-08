@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import re
 import sys
@@ -14,8 +13,11 @@ from utils import (
     Cyber,
     RateLimiter,
     SECURITY_HEADERS,
+    add_common_args,
+    apply_session_auth,
     color,
     create_session,
+    extract_hostname,
     extract_title,
     fetch,
     header_get,
@@ -23,6 +25,7 @@ from utils import (
     setup_logging,
     show_banner,
     status_color,
+    write_output,
 )
 
 import logging
@@ -274,11 +277,16 @@ def run_recon(
     timeout: float,
     user_agent: str,
     proxy: str | None = None,
+    auth: dict[str, str] | None = None,
+    bearer_token: str | None = None,
+    cookie: str | None = None,
+    extra_headers: list[str] | None = None,
 ) -> ReconResult:
     """Executa reconhecimento completo da URL alvo e retorna o resultado."""
     started = time.monotonic()
     errors = []
     session = create_session(user_agent=user_agent, proxy=proxy)
+    apply_session_auth(session, auth=auth, bearer_token=bearer_token, cookie=cookie, extra_headers=extra_headers)
 
     logger.info("recon iniciado: %s", url)
 
@@ -392,49 +400,68 @@ def status_text(status: int | None) -> str:
     return color(str(status), status_color(status), Cyber.BOLD)
 
 
-def write_output(path: str, result: ReconResult) -> None:
-    """Salva o resultado do reconhecimento em formato JSON."""
-    with open(path, "w", encoding="utf-8") as file_handle:
-        json.dump(asdict(result), file_handle, indent=2)
-        file_handle.write("\n")
-    print(color("[*]", Cyber.CYAN, Cyber.BOLD), f"Resultado salvo em {color(path, Cyber.GREEN)}")
-
-
 def build_parser() -> argparse.ArgumentParser:
     """Constrói o parser de argumentos da linha de comandos."""
     parser = argparse.ArgumentParser(
         description="HTTP recon rapido para laboratorios e hosts autorizados."
     )
+    add_common_args(parser)
     parser.add_argument("url", nargs="?", help="URL alvo. Ex: https://example.com")
-    parser.add_argument("-t", "--timeout", type=float, default=5.0, help="Timeout em segundos. Padrao: 5")
-    parser.add_argument(
-        "-A",
-        "--user-agent",
-        default="Mozilla/5.0 (X11; Linux x86_64) WebRecon/1.0",
-        help="User-Agent usado nas requests.",
-    )
-    parser.add_argument(
-        "--proxy",
-        help="Proxy para as requests. Ex: http://proxy:8080",
-    )
-    parser.add_argument("-o", "--output", help="Salva resultado em JSON.")
-    parser.add_argument("-v", "--verbose", action="store_true", help="Mostra mensagens de debug no terminal.")
-    parser.add_argument("--log-file", help="Salva logs em arquivo.")
+    parser.add_argument("-l", "--list", dest="target_list", help="Arquivo com URLs alvo (uma por linha).")
+    parser.add_argument("--output-dir", dest="output_dir", help="Diretorio para salvos individuais (hostname.json).")
+    parser.set_defaults(user_agent="Mozilla/5.0 (X11; Linux x86_64) WebRecon/3.0")
     return parser
+
+
+def _run_single(url: str, args: argparse.Namespace, quiet: bool = False) -> ReconResult:
+    """Executa recon em uma unica URL."""
+    result = run_recon(
+        url, args.timeout, args.user_agent, proxy=args.proxy,
+        auth=getattr(args, "auth", None),
+        bearer_token=getattr(args, "bearer_token", None),
+        cookie=getattr(args, "cookie", None),
+        extra_headers=getattr(args, "header", None),
+    )
+    if not quiet:
+        print_result(result)
+    return result
 
 
 def run_once(args: argparse.Namespace) -> int:
     """Executa uma única operação de reconhecimento com os argumentos fornecidos."""
     setup_logging(verbose=args.verbose, log_file=args.log_file)
-    if not args.url:
-        raise ValueError("informe uma URL alvo")
-    if args.timeout <= 0:
-        raise ValueError("timeout precisa ser maior que zero")
+    quiet = getattr(args, "quiet", False)
 
-    result = run_recon(args.url, args.timeout, args.user_agent, proxy=args.proxy)
-    print_result(result)
+    urls: list[str] = []
+    if getattr(args, "target_list", None):
+        try:
+            with open(args.target_list, "r", encoding="utf-8", errors="replace") as fh:
+                urls = [line.strip() for line in fh if line.strip() and not line.startswith("#")]
+        except FileNotFoundError:
+            raise ValueError(f"arquivo nao encontrado: {args.target_list}")
+    if args.url:
+        urls.append(args.url)
+    if not urls:
+        raise ValueError("informe uma URL alvo ou use -l/--list")
+
+    output_dir = getattr(args, "output_dir", None)
+    if output_dir and not os.path.isdir(output_dir):
+        os.makedirs(output_dir, exist_ok=True)
+
+    all_results: list[ReconResult] = []
+    for url in urls:
+        result = _run_single(url, args, quiet=quiet)
+        all_results.append(result)
+        if output_dir:
+            hostname = extract_hostname(url)
+            out_path = os.path.join(output_dir, f"{hostname}.json")
+            write_output(out_path, asdict(result), quiet=quiet)
+
     if args.output:
-        write_output(args.output, result)
+        if len(all_results) == 1:
+            write_output(args.output, asdict(all_results[0]), quiet=quiet)
+        else:
+            write_output(args.output, [asdict(r) for r in all_results], quiet=quiet)
     return 0
 
 
@@ -442,7 +469,7 @@ def main() -> int:
     """Ponto de entrada principal da ferramenta."""
     parser = build_parser()
     args = parser.parse_args()
-    if not args.url:
+    if not args.url and not getattr(args, "target_list", None):
         return run_interactive_shell(
             parser, "webrecon> ", run_once,
             description="WebRecon interativo.",
@@ -450,9 +477,15 @@ def main() -> int:
             banner_fn=banner,
         )
 
+    quiet = getattr(args, "quiet", False)
+    if quiet and not args.output:
+        print(color("Erro: modo quiet requer -o/--output", Cyber.RED), file=sys.stderr)
+        return 1
+
     try:
-        banner()
-        sys.stdout.flush()
+        if not quiet:
+            banner()
+            sys.stdout.flush()
         return run_once(args)
     except Exception as error:
         print(color(f"Erro: {error}", Cyber.RED), file=sys.stderr)
