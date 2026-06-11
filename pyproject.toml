@@ -28,7 +28,7 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0", "responses>=0.25", "ruff>=0.15.0"]
+dev = ["pytest>=8.0", "responses>=0.26.1", "ruff>=0.15.0"]
 
 [project.scripts]
 mytools = "main:main"
