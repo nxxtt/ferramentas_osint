@@ -7,13 +7,17 @@ import responses
 from utils import Cyber, create_session
 from webrecon import (
     CMS_SIGNATURES,
+    CVEFinding,
     FRAMEWORK_SIGNATURES,
     LIBRARY_SIGNATURES,
     SERVER_PATTERNS,
     ReconResult,
+    _severity_color,
     build_parser,
     candidate_urls,
     detect_technologies,
+    extract_versions,
+    lookup_cves,
     normalize_url,
     probe_status,
     status_text,
@@ -360,3 +364,159 @@ class TestBuildParserV3:
         parser = build_parser()
         args = parser.parse_args(["https://example.com"])
         assert "WebRecon/3.0" in args.user_agent
+
+
+class TestExtractVersions:
+    def test_apache_from_server_header(self):
+        headers = {"Server": "Apache/2.4.41 (Ubuntu)"}
+        versions = extract_versions(headers, "")
+        assert ("Apache", "2.4.41") in versions
+
+    def test_nginx_from_server_header(self):
+        headers = {"Server": "nginx/1.24.0"}
+        versions = extract_versions(headers, "")
+        assert ("Nginx", "1.24.0") in versions
+
+    def test_php_from_server_header(self):
+        headers = {"Server": "Apache/2.4.41", "X-Powered-By": "PHP/7.4.3"}
+        versions = extract_versions(headers, "")
+        assert ("PHP", "7.4.3") in versions
+
+    def test_wordpress_from_body(self):
+        body = '<meta name="generator" content="WordPress 6.2">'
+        versions = extract_versions({}, body)
+        assert ("WordPress", "6.2") in versions
+
+    def test_angular_from_body(self):
+        body = '<app-root ng-version="15.2.0">'
+        versions = extract_versions({}, body)
+        assert ("Angular", "15.2.0") in versions
+
+    def test_jquery_from_body(self):
+        body = '<script src="jquery-3.6.0.min.js"></script>'
+        versions = extract_versions({}, body)
+        assert ("jQuery", "3.6.0") in versions
+
+    def test_no_versions(self):
+        versions = extract_versions({}, "")
+        assert versions == []
+
+    def test_deduplicates(self):
+        headers = {"Server": "Apache/2.4.41"}
+        versions = extract_versions(headers, "")
+        apache_count = sum(1 for name, _ in versions if name == "Apache")
+        assert apache_count == 1
+
+
+class TestSeverityColor:
+    def test_critical_is_red(self):
+        assert _severity_color("CRITICAL") == Cyber.RED
+
+    def test_high_is_magenta(self):
+        assert _severity_color("HIGH") == Cyber.MAGENTA
+
+    def test_medium_is_yellow(self):
+        assert _severity_color("MEDIUM") == Cyber.YELLOW
+
+    def test_low_is_green(self):
+        assert _severity_color("LOW") == Cyber.GREEN
+
+    def test_unknown_is_gray(self):
+        assert _severity_color("UNKNOWN") == Cyber.GRAY
+
+    def test_case_insensitive(self):
+        assert _severity_color("critical") == Cyber.RED
+
+
+class TestCVEFindingDataclass:
+    def test_creation(self):
+        f = CVEFinding(
+            cve_id="CVE-2021-44228",
+            description="Log4j RCE",
+            score=10.0,
+            severity="CRITICAL",
+            technology="Apache",
+            version="2.14",
+        )
+        assert f.cve_id == "CVE-2021-44228"
+        assert f.score == 10.0
+
+    def test_frozen(self):
+        f = CVEFinding(
+            cve_id="CVE-2021-44228", description="Log4j RCE",
+            score=10.0, severity="CRITICAL", technology="Apache", version="2.14",
+        )
+        try:
+            f.score = 5.0
+            assert False, "Should be frozen"
+        except AttributeError:
+            pass
+
+
+class TestLookupCves:
+    @responses.activate
+    def test_returns_findings(self):
+        mock_response = {
+            "resultsPerPage": 5,
+            "startIndex": 0,
+            "totalResults": 1,
+            "vulnerabilities": [
+                {
+                    "cve": {
+                        "id": "CVE-2021-44228",
+                        "descriptions": [{"lang": "en", "value": "Apache Log4j2 RCE"}],
+                        "metrics": {
+                            "cvssMetricV31": [
+                                {"cvssData": {"baseScore": 10.0, "baseSeverity": "CRITICAL"}}
+                            ]
+                        },
+                    }
+                }
+            ],
+        }
+        responses.add(responses.GET, "https://services.nvd.nist.gov/rest/json/cves/2.0", json=mock_response, status=200)
+        findings = lookup_cves([("Apache", "2.4.41")])
+        assert len(findings) == 1
+        assert findings[0].cve_id == "CVE-2021-44228"
+        assert findings[0].technology == "Apache"
+
+    @responses.activate
+    def test_deduplicates_cves(self):
+        mock_response = {
+            "resultsPerPage": 5,
+            "startIndex": 0,
+            "totalResults": 1,
+            "vulnerabilities": [
+                {
+                    "cve": {
+                        "id": "CVE-2021-44228",
+                        "descriptions": [{"lang": "en", "value": "Log4j RCE"}],
+                        "metrics": {"cvssMetricV31": [{"cvssData": {"baseScore": 10.0, "baseSeverity": "CRITICAL"}}]},
+                    }
+                }
+            ],
+        }
+        responses.add(responses.GET, "https://services.nvd.nist.gov/rest/json/cves/2.0", json=mock_response, status=200)
+        findings = lookup_cves([("Apache", "2.4.41"), ("Apache", "2.4.41")])
+        assert len(findings) == 1
+
+    def test_empty_versions_returns_empty(self):
+        findings = lookup_cves([])
+        assert findings == []
+
+
+class TestBuildParserCVE:
+    def test_has_cve_flag(self):
+        parser = build_parser()
+        args = parser.parse_args(["https://example.com", "--cve"])
+        assert args.cve is True
+
+    def test_default_cve_false(self):
+        parser = build_parser()
+        args = parser.parse_args(["https://example.com"])
+        assert args.cve is False
+
+    def test_has_nvd_api_key(self):
+        parser = build_parser()
+        args = parser.parse_args(["https://example.com", "--nvd-api-key", "mykey123"])
+        assert args.nvd_api_key == "mykey123"

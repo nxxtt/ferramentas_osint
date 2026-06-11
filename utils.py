@@ -313,6 +313,71 @@ def extract_hostname(url: str) -> str:
     return host.replace("/", "_").replace(":", "_")
 
 
+NVD_API_URL = "https://services.nvd.nist.gov/rest/json/cves/2.0"
+
+
+def query_nvd(
+    keyword: str,
+    api_key: str | None = None,
+    limit: int = 10,
+) -> list[dict]:
+    """Consulta a API NIST NVD v2.0 e retorna lista de vulnerabilidades.
+
+    Args:
+        keyword: Termo de busca (ex: "Apache 2.4.41").
+        api_key: Chave da API NVD (opcional, aumenta rate limit de 5 para 50 req/30s).
+        limit: Numero maximo de resultados por query.
+
+    Returns:
+        Lista de dicts com chaves: id, description, score, severity.
+    """
+    headers: dict[str, str] = {}
+    if api_key:
+        headers["apiKey"] = api_key
+
+    params = {"keywordSearch": keyword, "resultsPerPage": limit}
+
+    try:
+        response = requests.get(NVD_API_URL, params=params, headers=headers, timeout=15)
+        if response.status_code == 403:
+            logger.debug("NVD rate limited for keyword: %s", keyword)
+            return []
+        if response.status_code != 200:
+            logger.debug("NVD returned %d for keyword: %s", response.status_code, keyword)
+            return []
+    except requests.exceptions.RequestException as error:
+        logger.debug("NVD request failed: %s", error)
+        return []
+
+    data = response.json()
+    results: list[dict] = []
+    for vuln in data.get("vulnerabilities", []):
+        cve = vuln.get("cve", {})
+        cve_id = cve.get("id", "")
+        descriptions = cve.get("descriptions", [])
+        description = ""
+        for desc in descriptions:
+            if desc.get("lang") == "en":
+                description = desc.get("value", "")
+                break
+        if not description and descriptions:
+            description = descriptions[0].get("value", "")
+
+        score = 0.0
+        severity = "UNKNOWN"
+        metrics = cve.get("metrics", {})
+        for version_key in ("cvssMetricV31", "cvssMetricV30", "cvssMetricV2"):
+            if version_key in metrics:
+                cvss_data = metrics[version_key][0].get("cvssData", {})
+                score = cvss_data.get("baseScore", 0.0)
+                severity = cvss_data.get("baseSeverity", "UNKNOWN")
+                break
+
+        results.append({"id": cve_id, "description": description, "score": score, "severity": severity})
+
+    return results
+
+
 def run_interactive_shell(
     parser: argparse.ArgumentParser,
     prompt: str,

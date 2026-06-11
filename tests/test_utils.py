@@ -6,6 +6,8 @@ import os
 import threading
 import time
 
+import responses
+
 from utils import (
     Cyber,
     RateLimiter,
@@ -20,6 +22,7 @@ from utils import (
     header_get,
     parse_auth,
     parse_extra_headers,
+    query_nvd,
     setup_logging,
     status_color,
 )
@@ -386,3 +389,44 @@ class TestCreateSessionDefaultUA:
     def test_default_user_agent(self):
         session = create_session()
         assert session.headers["User-Agent"] == "MyTools/3.0"
+
+
+class TestQueryNvd:
+    @responses.activate
+    def test_returns_parsed_results(self):
+        mock_response = {
+            "resultsPerPage": 10,
+            "startIndex": 0,
+            "totalResults": 1,
+            "vulnerabilities": [
+                {
+                    "cve": {
+                        "id": "CVE-2021-44228",
+                        "descriptions": [{"lang": "en", "value": "Apache Log4j2 RCE"}],
+                        "metrics": {
+                            "cvssMetricV31": [
+                                {"cvssData": {"baseScore": 10.0, "baseSeverity": "CRITICAL"}}
+                            ]
+                        },
+                    }
+                }
+            ],
+        }
+        responses.add(responses.GET, "https://services.nvd.nist.gov/rest/json/cves/2.0", json=mock_response, status=200)
+        results = query_nvd("Log4j 2.14")
+        assert len(results) == 1
+        assert results[0]["id"] == "CVE-2021-44228"
+        assert results[0]["score"] == 10.0
+        assert results[0]["severity"] == "CRITICAL"
+
+    @responses.activate
+    def test_returns_empty_on_rate_limit(self):
+        responses.add(responses.GET, "https://services.nvd.nist.gov/rest/json/cves/2.0", status=403)
+        results = query_nvd("test")
+        assert results == []
+
+    @responses.activate
+    def test_returns_empty_on_error(self):
+        responses.add(responses.GET, "https://services.nvd.nist.gov/rest/json/cves/2.0", status=500)
+        results = query_nvd("test")
+        assert results == []

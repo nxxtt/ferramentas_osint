@@ -21,6 +21,7 @@ from utils import (
     extract_title,
     fetch,
     header_get,
+    query_nvd,
     run_interactive_shell,
     setup_logging,
     show_banner,
@@ -148,6 +149,52 @@ SERVER_PATTERNS: dict[str, str] = {
     "Node.js": r"Express|Node\.js",
 }
 
+# ---------------------------------------------------------------------------
+# Version extraction patterns (headers + body)
+# ---------------------------------------------------------------------------
+
+VERSION_PATTERNS: dict[str, list[tuple[str, str]]] = {
+    "Apache": [(r"Apache/([\d.]+)", "header")],
+    "Nginx": [(r"nginx/([\d.]+)", "header")],
+    "PHP": [(r"PHP/([\d.]+)", "header")],
+    "IIS": [(r"Microsoft-IIS/([\d.]+)", "header")],
+    "LiteSpeed": [(r"LiteSpeed/([\d.]+)", "header")],
+    "Caddy": [(r"Caddy", "header")],
+    "ASP.NET": [
+        (r"X-AspNet-Version:\s*([\d.]+)", "header"),
+        (r"X-AspNetMvc-Version:\s*([\d.]+)", "header"),
+    ],
+    "WordPress": [(r'content="WordPress\s+([\d.]+)"', "body")],
+    "Joomla": [(r'content="Joomla!\s*([\d.]+)"', "body")],
+    "Drupal": [(r'content="Drupal\s+([\d.]+)"', "body")],
+    "Angular": [(r'ng-version="([\d.]+)"', "body")],
+    "jQuery": [
+        (r"jquery[.-]([\d]+(?:\.[\d]+)*)", "body"),
+        (r"jquery\.min\.js\?v=([\d]+(?:\.[\d]+)*)", "body"),
+    ],
+    "Bootstrap": [
+        (r"bootstrap[.-]([\d]+(?:\.[\d]+)*)", "body"),
+        (r"bootstrap\.min\.css\?v=([\d]+(?:\.[\d]+)*)", "body"),
+    ],
+}
+
+# Maps detected technology name to NVD keyword search term
+CPE_MAP: dict[str, str] = {
+    "Apache": "Apache HTTP Server",
+    "Nginx": "Nginx",
+    "PHP": "PHP",
+    "IIS": "Microsoft IIS",
+    "LiteSpeed": "LiteSpeed",
+    "Caddy": "Caddy",
+    "WordPress": "WordPress",
+    "Joomla": "Joomla",
+    "Drupal": "Drupal",
+    "jQuery": "jQuery",
+    "Bootstrap": "Bootstrap",
+    "Angular": "Angular",
+    "ASP.NET": "ASP.NET",
+}
+
 
 def _match_signature(
     sigs: dict,
@@ -209,6 +256,110 @@ def detect_technologies(
     return result
 
 
+def extract_versions(
+    headers: dict[str, str],
+    body: str,
+) -> list[tuple[str, str]]:
+    """Extrai nomes e versoes de tecnologias a partir de headers e body.
+
+    Returns:
+        Lista de tuplas (nome, versao) ordenada por relevancia.
+    """
+    found: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    lower_headers = {k.lower(): v for k, v in headers.items()}
+    header_blob = " ".join(f"{k}: {v}".lower() for k, v in lower_headers.items())
+    body_lower = body.lower()
+
+    for tech_name, patterns in VERSION_PATTERNS.items():
+        if tech_name in seen:
+            continue
+        for pattern, source in patterns:
+            blob = header_blob if source == "header" else body_lower
+            match = re.search(pattern, blob, re.IGNORECASE)
+            if match:
+                version = match.group(1) if match.lastindex else ""
+                if version:
+                    found.append((tech_name, version))
+                    seen.add(tech_name)
+                break
+
+    return found
+
+
+@dataclass(frozen=True)
+class CVEFinding:
+    """Uma vulnerabilidade CVE encontrada para uma tecnologia."""
+
+    cve_id: str
+    description: str
+    score: float
+    severity: str
+    technology: str
+    version: str
+
+
+def _severity_color(severity: str) -> str:
+    """Retorna a cor ANSI correspondente a severidade CVSS."""
+    severity_upper = severity.upper()
+    if severity_upper == "CRITICAL":
+        return Cyber.RED
+    if severity_upper == "HIGH":
+        return Cyber.MAGENTA
+    if severity_upper == "MEDIUM":
+        return Cyber.YELLOW
+    if severity_upper == "LOW":
+        return Cyber.GREEN
+    return Cyber.GRAY
+
+
+def lookup_cves(
+    versions: list[tuple[str, str]],
+    api_key: str | None = None,
+    limit_per_tech: int = 5,
+) -> list[CVEFinding]:
+    """Consulta CVEs para cada tecnologia detectada na NVD.
+
+    Args:
+        versions: Lista de (nome_tecnologia, versao) de extract_versions().
+        api_key: Chave opcional da API NVD.
+        limit_per_tech: Maximo de CVEs por tecnologia.
+
+    Returns:
+        Lista de CVEFinding ordenada por score decrescente.
+    """
+    findings: list[CVEFinding] = []
+    seen_cves: set[str] = set()
+
+    for tech_name, version in versions:
+        search_term = CPE_MAP.get(tech_name, tech_name)
+        keyword = f"{search_term} {version}"
+        logger.info("NVD lookup: %s", keyword)
+
+        try:
+            results = query_nvd(keyword, api_key=api_key, limit=limit_per_tech)
+        except Exception as error:
+            logger.debug("NVD lookup failed for %s: %s", keyword, error)
+            continue
+
+        for result in results:
+            cve_id = result["id"]
+            if cve_id in seen_cves:
+                continue
+            seen_cves.add(cve_id)
+            findings.append(CVEFinding(
+                cve_id=cve_id,
+                description=result["description"][:200],
+                score=result["score"],
+                severity=result["severity"],
+                technology=tech_name,
+                version=version,
+            ))
+
+    findings.sort(key=lambda f: f.score, reverse=True)
+    return findings
+
+
 @dataclass(frozen=True)
 class ReconResult:
     """Resultado de uma operação de reconhecimento HTTP."""
@@ -228,6 +379,7 @@ class ReconResult:
     sitemap_status: int | None
     elapsed: float
     technologies: dict[str, list[str]] | None = None
+    cve_findings: list[CVEFinding] | None = None
 
 
 def banner() -> None:
@@ -281,6 +433,8 @@ def run_recon(
     bearer_token: str | None = None,
     cookie: str | None = None,
     extra_headers: list[str] | None = None,
+    cve: bool = False,
+    nvd_api_key: str | None = None,
 ) -> ReconResult:
     """Executa reconhecimento completo da URL alvo e retorna o resultado."""
     started = time.monotonic()
@@ -320,6 +474,14 @@ def run_recon(
         cookies=cookie_list,
     )
 
+    cve_findings: list[CVEFinding] | None = None
+    if cve:
+        versions = extract_versions(headers=headers, body=text)
+        if versions:
+            cve_findings = lookup_cves(versions, api_key=nvd_api_key)
+        else:
+            cve_findings = []
+
     return ReconResult(
         url=target,
         status=status,
@@ -336,6 +498,7 @@ def run_recon(
         sitemap_status=probe_status(session, sitemap_url, timeout),
         elapsed=time.monotonic() - started,
         technologies=technologies,
+        cve_findings=cve_findings,
     )
 
 
@@ -369,6 +532,9 @@ def print_result(result: ReconResult) -> None:
     if result.technologies:
         _print_technologies(result.technologies)
 
+    if result.cve_findings is not None:
+        _print_cve_findings(result.cve_findings)
+
     print(color("\nArquivos comuns", Cyber.CYAN, Cyber.BOLD))
     print(f"{color('[*]', Cyber.CYAN, Cyber.BOLD)} robots.txt  {status_text(result.robots_status)}")
     print(f"{color('[*]', Cyber.CYAN, Cyber.BOLD)} sitemap.xml  {status_text(result.sitemap_status)}")
@@ -393,6 +559,29 @@ def _print_technologies(tech: dict[str, list[str]]) -> None:
             print(f"  {color('[+]', style, Cyber.BOLD)} {label}: {', '.join(items)}")
 
 
+def _print_cve_findings(findings: list[CVEFinding]) -> None:
+    """Exibe os CVEs encontrados no terminal."""
+    if not findings:
+        print(color("\nCVEs", Cyber.CYAN, Cyber.BOLD))
+        print(f"  {color('[-]', Cyber.GREEN, Cyber.BOLD)} Nenhuma vulnerabilidade encontrada")
+        return
+
+    print(color(f"\nCVEs ({len(findings)} encontrados)", Cyber.CYAN, Cyber.BOLD))
+    for finding in findings[:20]:
+        sev_color = _severity_color(finding.severity)
+        print(
+            f"  {color('[!]', sev_color, Cyber.BOLD)} "
+            f"{color(finding.cve_id, sev_color, Cyber.BOLD)} "
+            f"({finding.technology} {finding.version}) "
+            f"Score: {color(f'{finding.score:.1f}', sev_color, Cyber.BOLD)} "
+            f"[{finding.severity.upper()}]"
+        )
+        print(f"    {color(finding.description[:120], Cyber.GRAY)}")
+
+    if len(findings) > 20:
+        print(f"  {color(f'... e mais {len(findings) - 20} CVEs', Cyber.GRAY)}")
+
+
 def status_text(status: int | None) -> str:
     """Retorna representação colorida do código de status HTTP."""
     if status is None:
@@ -409,6 +598,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("url", nargs="?", help="URL alvo. Ex: https://example.com")
     parser.add_argument("-l", "--list", dest="target_list", help="Arquivo com URLs alvo (uma por linha).")
     parser.add_argument("--output-dir", dest="output_dir", help="Diretorio para salvos individuais (hostname.json).")
+    parser.add_argument("--cve", action="store_true", help="Busca CVEs para versoes detectadas (via NIST NVD).")
+    parser.add_argument("--nvd-api-key", dest="nvd_api_key", help="Chave da API NVD (aumenta rate limit de 5 para 50 req/30s).")
     parser.set_defaults(user_agent="Mozilla/5.0 (X11; Linux x86_64) WebRecon/3.0")
     return parser
 
@@ -421,6 +612,8 @@ def _run_single(url: str, args: argparse.Namespace, quiet: bool = False) -> Reco
         bearer_token=getattr(args, "bearer_token", None),
         cookie=getattr(args, "cookie", None),
         extra_headers=getattr(args, "header", None),
+        cve=getattr(args, "cve", False),
+        nvd_api_key=getattr(args, "nvd_api_key", None),
     )
     if not quiet:
         print_result(result)
