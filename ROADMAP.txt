@@ -1,21 +1,26 @@
 # MyTools Roadmap
 # Itens futuros identificados na auditoria de otimizacoes
 
-## 1. INTERESTING_PATHS configuravel via CLI (Original #13)
-# Atualmente INTERESTING_PATHS em webrecon.py e hardcodeado.
-# Adicionar --paths-file/--paths para carregar paths customizados de arquivo.
-# Ex: mytools-recon http://target -p meus_paths.txt
+# === RESOLVIDOS (v3.1.5, commit beb28c3) ===
 
-## 2. print_table() DRY entre portscanner e dirscanner (Original #5)
-# Colunas sao levemente diferentes (~8 linhas de diferenca).
-# Poderia extrair uma funcao generica com columns como parametro.
+## 1. INTERESTING_PATHS configuravel via CLI (Original #13) -- RESOLVIDO
+# attackaudit.py: --paths-file carrega paths customizados de arquivo.
+# --paths-file implica --deep automaticamente.
 
-## 3. normalize_url() inconsistente (Original #6)
-# Cada modulo tem sua propria normalizacao de URL.
-# Extrair para utils.py com protocolo padrao.
+## 2. print_table() DRY entre portscanner e dirscanner (Original #5) -- RESOLVIDO
+# utils.py: print_table() generica com column_styles e alignments.
+# portscanner.py: usa print_port_table() wrapper com print_table() de utils.
+# dirscanner.py: mantem print_dir_table() local (precisa de status_color por row).
 
-## 4. BANNER_PROBES como frozenset (Original #10)
-# Melhoria menor, ja e frozenset mas pode ser refinado.
+## 3. normalize_url() inconsistente (Original #6) -- RESOLVIDO
+# utils.py: normalize_url() unificada (strip, auto-add https, validate, strip slash).
+# attackaudit.py e webrecon.py: importam de utils.
 
-## 5. USE_COLOR em import time (Original #14)
-# Por design, mas pode ser tornavel dinamico com --color/--no-color.
+## 4. BANNER_PROBES como frozenset (Original #10) -- RESOLVIDO
+# portscanner.py: BANNER_PROBES agora e MappingProxyType (imutavel).
+# attackaudit.py: CSRF_FIELD_NAMES e CSRF_FIELD_NAMES_LOWER agora sao frozenset.
+# dirscanner.py: DEFAULT_STATUSES agora e frozenset.
+
+## 5. USE_COLOR em import time (Original #14) -- RESOLVIDO
+# utils.py: _USE_COLOR (privado), set_color(enabled), --color/--no-color em add_common_args.
+# Todos os 4 tools + portscanner suportam --color/--no-color.
