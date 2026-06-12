@@ -15,10 +15,8 @@ Suite de ferramentas de auditoria e reconhecimento web/network para ambientes de
 ```bash
 git clone https://github.com/nxxtt/ferramentas_osint.git
 cd MyTools-main
-python -m venv venv
-venv\Scripts\activate        # Windows
-# source venv/bin/activate   # Linux/Mac
-pip install -e ".[dev]"
+pip install poetry
+poetry install --with dev
 ```
 
 Isso instala os comandos CLI globalmente:
@@ -245,12 +243,12 @@ MyTools-main/
 
 ### Rodar testes
 ```bash
-python -m pytest tests/ -v
+poetry run pytest tests/ -v
 ```
 
 ### Adicionar dependências de dev
 ```bash
-pip install -e ".[dev]"
+poetry install --with dev
 ```
 
 ---

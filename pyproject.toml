@@ -1,44 +1,31 @@
-[build-system]
-requires = ["setuptools>=82.0.1"]
-build-backend = "setuptools.build_meta"
-
-[project]
+[tool.poetry]
 name = "mytools"
-version = "3.1.5"
+version = "3.2.0"
 description = "Suite de ferramentas de auditoria e reconhecimento web/network"
-requires-python = ">=3.10"
+authors = ["nxt"]
 readme = "README.MD"
-authors = [{ name = "nxt" }]
-dependencies = [
-    "requests>=2.34.2",
-    "beautifulsoup4>=4.15.0",
-]
-classifiers = [
-    "Development Status :: 4 - Beta",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
-    "Programming Language :: Python :: 3.13",
-    "Programming Language :: Python :: 3.14",
-    "Topic :: Security",
-    "Topic :: System :: Networking",
-    "Intended Audience :: Information Technology",
-    "Operating System :: OS Independent",
-]
+packages = [{include = "*.py"}]
 
-[project.optional-dependencies]
-dev = ["pytest>=9.0.3", "responses>=0.26.1", "ruff>=0.15.17"]
+[tool.poetry.dependencies]
+python = ">=3.10,<3.15"
+requests = ">=2.34.2"
+beautifulsoup4 = ">=4.15.0"
 
-[project.scripts]
+[tool.poetry.group.dev.dependencies]
+pytest = ">=9.0.3"
+responses = ">=0.26.1"
+ruff = ">=0.15.17"
+
+[tool.poetry.scripts]
 mytools = "main:main"
 mytools-port = "portscanner:main"
 mytools-dir = "dirscanner:main"
 mytools-recon = "webrecon:main"
 mytools-audit = "attackaudit:main"
 
-[tool.setuptools]
-py-modules = ["main", "attackaudit", "dirscanner", "portscanner", "webrecon", "utils"]
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

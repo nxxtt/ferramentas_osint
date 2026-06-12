@@ -22,7 +22,7 @@ from urllib3.util.retry import Retry
 
 logger = logging.getLogger("mytools")
 
-__version__ = "3.1.5"
+__version__ = "3.2.0"
 
 SECURITY_HEADERS = [
     "strict-transport-security",

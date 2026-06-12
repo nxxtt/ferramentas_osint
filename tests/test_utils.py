@@ -216,7 +216,7 @@ class TestVersion:
         assert all(p.isdigit() for p in parts)
 
     def test_version_is_3_1_5(self):
-        assert __version__ == "3.1.5"
+        assert __version__ == "3.2.0"
 
 
 class TestParseAuthUtils:
@@ -393,7 +393,7 @@ class TestExtractHostname:
 class TestCreateSessionDefaultUA:
     def test_default_user_agent(self):
         session = create_session()
-        assert session.headers["User-Agent"] == "MyTools/3.1.5"
+        assert session.headers["User-Agent"] == "MyTools/3.2.0"
 
 
 class TestQueryNvd:

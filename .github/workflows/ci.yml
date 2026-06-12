@@ -17,9 +17,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+      - name: Install Poetry
+        run: pip install poetry
       - name: Install dependencies
-        run: pip install -e ".[dev]"
+        run: poetry install --with dev
       - name: Lint
-        run: ruff check .
+        run: poetry run ruff check .
       - name: Tests
-        run: pytest tests/ -v
+        run: poetry run pytest tests/ -v
