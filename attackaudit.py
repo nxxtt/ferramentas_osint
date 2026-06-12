@@ -135,7 +135,6 @@ class PageParser(HTMLParser):
         self.title_parts: list[str] = []
         self.form_has_csrf: list[bool] = []
         self._current_form_has_csrf = False
-        self._hidden_inputs: list[tuple[str, str]] = []
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         attrs_dict = {key.lower(): value or "" for key, value in attrs}
@@ -151,8 +150,6 @@ class PageParser(HTMLParser):
                 self.password_inputs += 1
             if input_type == "hidden" and input_name in CSRF_FIELD_NAMES_LOWER:
                 self._current_form_has_csrf = True
-            if input_type == "hidden" and input_name:
-                self._hidden_inputs.append((input_name, attrs_dict.get("value", "")))
         if tag.lower() == "script" and attrs_dict.get("src"):
             self.external_scripts.add(attrs_dict["src"])
 
@@ -309,14 +306,14 @@ def check_tls_versions(url: str, timeout: float) -> list[TLSVersionResult]:
     results: list[TLSVersionResult] = []
 
     version_configs = [
-        ("SSLv3", ssl.PROTOCOL_TLS, ssl.TLSVersion.SSLv3 if hasattr(ssl.TLSVersion, 'SSLv3') else None),
-        ("TLS 1.0", ssl.PROTOCOL_TLS, ssl.TLSVersion.TLSv1 if hasattr(ssl.TLSVersion, 'TLSv1') else None),
-        ("TLS 1.1", ssl.PROTOCOL_TLS, ssl.TLSVersion.TLSv1_1 if hasattr(ssl.TLSVersion, 'TLSv1_1') else None),
-        ("TLS 1.2", ssl.PROTOCOL_TLS, ssl.TLSVersion.TLSv1_2),
-        ("TLS 1.3", ssl.PROTOCOL_TLS, ssl.TLSVersion.TLSv1_3),
+        ("SSLv3", ssl.TLSVersion.SSLv3 if hasattr(ssl.TLSVersion, 'SSLv3') else None),
+        ("TLS 1.0", ssl.TLSVersion.TLSv1 if hasattr(ssl.TLSVersion, 'TLSv1') else None),
+        ("TLS 1.1", ssl.TLSVersion.TLSv1_1 if hasattr(ssl.TLSVersion, 'TLSv1_1') else None),
+        ("TLS 1.2", ssl.TLSVersion.TLSv1_2),
+        ("TLS 1.3", ssl.TLSVersion.TLSv1_3),
     ]
 
-    for protocol_name, _, tls_version in version_configs:
+    for protocol_name, tls_version in version_configs:
         if tls_version is None:
             results.append(TLSVersionResult(protocol=protocol_name, supported=False, reason="nao disponivel no Python"))
             continue
