@@ -25,6 +25,9 @@ poetry.toml
 # pytest
 .pytest_cache/
 
+# Ruff
+.ruff_cache/
+
 # OS
 Thumbs.db
 Desktop.ini
