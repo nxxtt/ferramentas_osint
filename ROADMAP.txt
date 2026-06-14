@@ -1,65 +1,39 @@
 # MyTools Roadmap
 # Itens futuros identificados na auditoria de otimizacoes
 
-# === RESOLVIDOS (v3.1.5, commit beb28c3) ===
-
-## 1. INTERESTING_PATHS configuravel via CLI (Original #13) -- RESOLVIDO
-# attackaudit.py: --paths-file carrega paths customizados de arquivo.
-# --paths-file implica --deep automaticamente.
-
-## 2. print_table() DRY entre portscanner e dirscanner (Original #5) -- RESOLVIDO
-# utils.py: print_table() generica com column_styles e alignments.
-# portscanner.py: usa print_port_table() wrapper com print_table() de utils.
-# dirscanner.py: mantem print_dir_table() local (precisa de status_color por row).
-
-## 3. normalize_url() inconsistente (Original #6) -- RESOLVIDO
-# utils.py: normalize_url() unificada (strip, auto-add https, validate, strip slash).
-# attackaudit.py e webrecon.py: importam de utils.
-
-## 4. BANNER_PROBES como frozenset (Original #10) -- RESOLVIDO
-# portscanner.py: BANNER_PROBES agora e MappingProxyType (imutavel).
-# attackaudit.py: CSRF_FIELD_NAMES e CSRF_FIELD_NAMES_LOWER agora sao frozenset.
-# dirscanner.py: DEFAULT_STATUSES agora e frozenset.
-
-## 5. USE_COLOR em import time (Original #14) -- RESOLVIDO
-# utils.py: _USE_COLOR (privado), set_color(enabled), --color/--no-color em add_common_args.
-# Todos os 4 tools + portscanner suportam --color/--no-color.
-
-# === FUTUROS ===
-
-## 6. WHOIS lookup
+## 1. WHOIS lookup
 # Modulo ou extensao do webrecon.
 # Consulta WHOIS de dominios/IPs: proprietario, registrar, DNS, datas.
 # Lib: python-whois ou consulta direta WHOIS protocol.
 
-## 7. Subdomain enumeration
+## 2. Subdomain enumeration
 # Enumeracao de subdominios via wordlist DNS brute-force.
 # Lib: dns.resolver (dnspython) + wordlist de subdominios.
 # Pode ser modulo novo ou extensao do webrecon.
 
-## 8. WAF detection
+## 3. WAF detection
 # Detectar Web Application Firewall (Cloudflare, Akamai, AWS WAF, etc.).
 # Analise de headers (cf-ray, x-sucuri-id, server: cloudflare) e respostas 403/503.
 # Integrar no webrecon.
 
-## 9. Email harvesting
+## 4. Email harvesting
 # Coletar emails expostos no site: robots.txt, HTML source, contact pages, meta tags.
 # Regex para emails + crawl basico de links internos.
 # Integrar no webrecon.
 
-## 10. HTTP methods scan
+## 5. HTTP methods scan
 # Testar PUT/DELETE/PATCH/OPTIONS/TRACE em endpoints descobertos.
 # Detectar metodos perigosos (PUT para upload, TRACE para XST).
 # Integrar no attackaudit.
 
-## 11. DNS zone transfer
+## 6. DNS zone transfer
 # Testar se zone transfer (AXFR) e possivel contra nameservers do dominio.
 # Vulnerabilidade real que revela todos os registros DNS.
 # Lib: dns.resolver + dns.query.zone_in (dnspython).
 # Modulo novo ou extensao do portscanner.
 
-## 12. Async HTTP
+## 7. Async HTTP
 # Migrar de requests (sync) para httpx (async) ou aiohttp.
 # Ganho significativo de performance em multi-target e multi-path.
-# AFeta: webrecon, attackaudit, dirscanner.
+# Afeta: webrecon, attackaudit, dirscanner.
 # Requer refatoracao do create_session() e fetch().
