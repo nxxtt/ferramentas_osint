@@ -15,12 +15,12 @@
 # webrecon.py: WAF_SIGNATURES (12 WAFs), detect_waf(), ReconResult.waf_detected, print_result() secao WAF.
 # Cloudflare, Akamai, Sucuri, Imperva, F5 BIG-IP, AWS WAF, ModSecurity, Fortinet, Barracuda, Radware, Varnish, NAXSI.
 
-## 4. Email harvesting
+## 4. Email harvesting -- RESOLVIDO
 # Coletar emails expostos no site: robots.txt, HTML source, contact pages, meta tags.
 # Regex para emails + crawl basico de links internos.
 # Integrar no webrecon.
 
-## 5. HTTP methods scan
+## 5. HTTP methods scan -- RESOLVIDO
 # Testar PUT/DELETE/PATCH/OPTIONS/TRACE em endpoints descobertos.
 # Detectar metodos perigosos (PUT para upload, TRACE para XST).
 # Integrar no attackaudit.

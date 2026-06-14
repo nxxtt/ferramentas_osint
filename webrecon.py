@@ -267,6 +267,14 @@ VERSION_PATTERNS: dict[str, list[tuple[re.Pattern[str], str]]] = {
     ],
 }
 
+# ---------------------------------------------------------------------------
+# Email harvesting patterns
+# ---------------------------------------------------------------------------
+
+EMAIL_PATTERN: re.Pattern[str] = re.compile(
+    r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}",
+)
+
 # Maps detected technology name to NVD keyword search term
 CPE_MAP: dict[str, str] = {
     "Apache": "Apache HTTP Server",
@@ -402,6 +410,66 @@ def extract_versions(
     return found
 
 
+def harvest_emails(text: str) -> list[str]:
+    """Extrai enderecos de email de um texto via regex."""
+    return sorted(set(EMAIL_PATTERN.findall(text)))
+
+
+def _fetch_file(session, url: str, timeout: float) -> str:
+    """Busca o conteudo de um arquivo (robots.txt, sitemap.xml) como string."""
+    try:
+        _, _, body, _ = fetch(session, url, timeout=timeout)
+        return body.decode("utf-8", errors="replace")
+    except ValueError:
+        return ""
+
+
+def crawl_internal_links(
+    session,
+    url: str,
+    body_text: str,
+    timeout: float,
+    max_links: int = 10,
+) -> list[str]:
+    """Crawl links internos para coletar emails adicionais."""
+    from bs4 import BeautifulSoup
+
+    parsed_base = urlparse(url)
+    base_netloc = parsed_base.netloc.lower()
+
+    soup = BeautifulSoup(body_text, "html.parser")
+    seen_urls: set[str] = set()
+    internal_urls: list[str] = []
+
+    for tag in soup.find_all("a", href=True):
+        href = tag["href"].strip()
+        if not href or href.startswith(("#", "javascript:", "mailto:", "tel:")):
+            continue
+        if href.startswith("/"):
+            href = f"{parsed_base.scheme}://{base_netloc}{href}"
+        parsed = urlparse(href)
+        if parsed.netloc.lower() != base_netloc:
+            continue
+        clean = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
+        if clean in seen_urls:
+            continue
+        seen_urls.add(clean)
+        internal_urls.append(clean)
+        if len(internal_urls) >= max_links:
+            break
+
+    emails: list[str] = []
+    for link in internal_urls:
+        try:
+            _, _, link_body, _ = fetch(session, link, timeout=timeout)
+            link_text = link_body.decode("utf-8", errors="replace")
+            emails.extend(harvest_emails(link_text))
+        except ValueError:
+            continue
+
+    return emails
+
+
 @dataclass(frozen=True)
 class CVEFinding:
     """Uma vulnerabilidade CVE encontrada para uma tecnologia."""
@@ -496,6 +564,7 @@ class ReconResult:
     technologies: dict[str, list[str]] | None = None
     cve_findings: list[CVEFinding] | None = None
     waf_detected: list[str] | None = None
+    emails: list[str] | None = None
 
 
 def banner() -> None:
@@ -543,6 +612,8 @@ def run_recon(
     extra_headers: list[str] | None = None,
     cve: bool = False,
     nvd_api_key: str | None = None,
+    deep: bool = False,
+    crawl_limit: int = 10,
 ) -> ReconResult:
     """Executa reconhecimento completo da URL alvo e retorna o resultado."""
     started = time.monotonic()
@@ -599,6 +670,15 @@ def run_recon(
         else:
             cve_findings = []
 
+    emails = harvest_emails(text)
+    robots_text = _fetch_file(session, robots_url, timeout)
+    emails.extend(harvest_emails(robots_text))
+    sitemap_text = _fetch_file(session, sitemap_url, timeout)
+    emails.extend(harvest_emails(sitemap_text))
+    if deep:
+        emails.extend(crawl_internal_links(session, target, text, timeout, max_links=crawl_limit))
+    emails = sorted(set(emails))
+
     return ReconResult(
         url=target,
         status=status,
@@ -617,6 +697,7 @@ def run_recon(
         technologies=technologies,
         cve_findings=cve_findings,
         waf_detected=waf_detected,
+        emails=emails,
     )
 
 
@@ -656,6 +737,13 @@ def print_result(result: ReconResult) -> None:
     if result.waf_detected:
         print(color("\nWAF detectado", Cyber.CYAN, Cyber.BOLD))
         print(f"  {color('[+]', Cyber.GREEN, Cyber.BOLD)} {', '.join(result.waf_detected)}")
+
+    if result.emails:
+        print(color(f"\nEmails encontrados ({len(result.emails)})", Cyber.CYAN, Cyber.BOLD))
+        for email in result.emails[:30]:
+            print(f"  {color('[+]', Cyber.GREEN, Cyber.BOLD)} {color(email, Cyber.GREEN)}")
+        if len(result.emails) > 30:
+            print(f"  {color(f'... e mais {len(result.emails) - 30} emails', Cyber.GRAY)}")
 
     print(color("\nArquivos comuns", Cyber.CYAN, Cyber.BOLD))
     print(f"{color('[*]', Cyber.CYAN, Cyber.BOLD)} robots.txt  {status_text(result.robots_status)}")
@@ -722,6 +810,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output-dir", dest="output_dir", help="Diretorio para salvos individuais (hostname.json).")
     parser.add_argument("--cve", action="store_true", help="Busca CVEs para versoes detectadas (via NIST NVD).")
     parser.add_argument("--nvd-api-key", dest="nvd_api_key", help="Chave da API NVD (aumenta rate limit de 5 para 50 req/30s).")
+    parser.add_argument("--crawl-limit", dest="crawl_limit", type=int, default=10, help="Limite de links internos para crawl de emails. Padrao: 10. Requer --deep.")
+    parser.add_argument("--deep", action="store_true", help="Ativa crawl de links internos para coleta de emails.")
     parser.set_defaults(user_agent=f"Mozilla/5.0 (X11; Linux x86_64) WebRecon/{__version__}")
     return parser
 
@@ -736,6 +826,8 @@ def _run_single(url: str, args: argparse.Namespace, quiet: bool = False) -> Reco
         extra_headers=getattr(args, "header", None),
         cve=getattr(args, "cve", False),
         nvd_api_key=getattr(args, "nvd_api_key", None),
+        deep=getattr(args, "deep", False),
+        crawl_limit=getattr(args, "crawl_limit", 10),
     )
     if not quiet:
         print_result(result)

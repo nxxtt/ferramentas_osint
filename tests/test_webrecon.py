@@ -9,6 +9,7 @@ from utils import Cyber, create_session
 from webrecon import (
     CMS_SIGNATURES,
     CVEFinding,
+    EMAIL_PATTERN,
     FRAMEWORK_SIGNATURES,
     LIBRARY_SIGNATURES,
     SERVER_PATTERNS,
@@ -17,9 +18,11 @@ from webrecon import (
     _severity_color,
     build_parser,
     candidate_urls,
+    crawl_internal_links,
     detect_technologies,
     detect_waf,
     extract_versions,
+    harvest_emails,
     lookup_cves,
     normalize_url,
     probe_status,
@@ -598,3 +601,152 @@ class TestWafSignatures:
             assert isinstance(name, str)
             assert isinstance(sigs, dict)
             assert any(k in sigs for k in ("headers", "body", "cookies", "urls"))
+
+
+class TestEmailPattern:
+    def test_pattern_is_compiled(self):
+        assert isinstance(EMAIL_PATTERN, re.Pattern)
+
+    def test_matches_basic_email(self):
+        assert EMAIL_PATTERN.search("user@example.com").group() == "user@example.com"
+
+    def test_matches_email_with_dots(self):
+        assert EMAIL_PATTERN.search("first.last@example.com").group() == "first.last@example.com"
+
+    def test_matches_email_with_plus(self):
+        assert EMAIL_PATTERN.search("user+tag@example.com").group() == "user+tag@example.com"
+
+    def test_matches_email_with_subdomain(self):
+        assert EMAIL_PATTERN.search("user@mail.example.com").group() == "user@mail.example.com"
+
+    def test_no_match_invalid(self):
+        assert EMAIL_PATTERN.search("notanemail") is None
+
+    def test_no_match_at_only(self):
+        assert EMAIL_PATTERN.search("user@") is None
+
+
+class TestHarvestEmails:
+    def test_extracts_from_html(self):
+        html = '<a href="mailto:contact@example.com">Contact</a><p>admin@test.org</p>'
+        emails = harvest_emails(html)
+        assert "admin@test.org" in emails
+        assert "contact@example.com" in emails
+
+    def test_deduplicates(self):
+        text = "user@example.com and user@example.com"
+        emails = harvest_emails(text)
+        assert emails.count("user@example.com") == 1
+
+    def test_sorted_output(self):
+        text = "z@test.com a@test.com m@test.com"
+        emails = harvest_emails(text)
+        assert emails == sorted(emails)
+
+    def test_empty_text(self):
+        assert harvest_emails("") == []
+
+    def test_no_emails(self):
+        assert harvest_emails("<html><body>Hello world</body></html>") == []
+
+    def test_extracts_from_robots(self):
+        robots = "# Comment\nUser-agent: *\nDisallow: /admin/\nContact: admin@example.com"
+        emails = harvest_emails(robots)
+        assert "admin@example.com" in emails
+
+    def test_extracts_multiple(self):
+        text = "Contact: a@b.com, support@b.com, info@b.com"
+        emails = harvest_emails(text)
+        assert len(emails) == 3
+
+
+class TestCrawlInternalLinks:
+    @responses.activate
+    def test_crawls_internal_links(self):
+        responses.add(
+            responses.GET, "http://example.com/contact",
+            body=b'<html><p>Email: info@example.com</p></html>',
+            status=200,
+        )
+        responses.add(
+            responses.GET, "http://example.com/about",
+            body=b'<html><p>No emails here</p></html>',
+            status=200,
+        )
+        session = create_session(user_agent="TestAgent/1.0")
+        body = '<html><a href="/contact">Contact</a> <a href="/about">About</a></html>'
+        emails = crawl_internal_links(session, "http://example.com", body, 5.0, max_links=2)
+        assert "info@example.com" in emails
+
+    @responses.activate
+    def test_skips_external_links(self):
+        body = '<html><a href="https://external.com/mail">Ext</a></html>'
+        session = create_session(user_agent="TestAgent/1.0")
+        emails = crawl_internal_links(session, "http://example.com", body, 5.0)
+        assert emails == []
+
+    @responses.activate
+    def test_respects_max_links(self):
+        responses.add(
+            responses.GET, "http://example.com/a",
+            body=b'<html><p>a@test.com</p></html>',
+            status=200,
+        )
+        body = '<html><a href="/a">A</a> <a href="/b">B</a> <a href="/c">C</a></html>'
+        session = create_session(user_agent="TestAgent/1.0")
+        emails = crawl_internal_links(session, "http://example.com", body, 5.0, max_links=1)
+        assert len(responses.calls) == 1
+        assert "a@test.com" in emails
+
+    @responses.activate
+    def test_handles_fetch_error(self):
+        import requests as _requests
+        responses.add(
+            responses.GET, "http://example.com/broken",
+            body=_requests.exceptions.ConnectionError("refused"),
+        )
+        body = '<html><a href="/broken">Broken</a></html>'
+        session = create_session(user_agent="TestAgent/1.0")
+        emails = crawl_internal_links(session, "http://example.com", body, 5.0)
+        assert emails == []
+
+    def test_skips_anchors_and_javascript(self):
+        body = '<html><a href="#section">S</a> <a href="javascript:void(0)">JS</a></html>'
+        session = create_session(user_agent="TestAgent/1.0")
+        emails = crawl_internal_links(session, "http://example.com", body, 5.0)
+        assert emails == []
+
+    @responses.activate
+    def test_deduplicates_urls(self):
+        responses.add(
+            responses.GET, "http://example.com/page",
+            body=b'<html><p>x@y.com</p></html>',
+            status=200,
+        )
+        body = '<html><a href="/page">P1</a> <a href="/page">P2</a></html>'
+        session = create_session(user_agent="TestAgent/1.0")
+        emails = crawl_internal_links(session, "http://example.com", body, 5.0)
+        assert len(responses.calls) == 1
+        assert "x@y.com" in emails
+
+
+class TestBuildParserEmailHarvesting:
+    def test_has_deep_flag(self):
+        parser = build_parser()
+        args = parser.parse_args(["https://example.com", "--deep"])
+        assert args.deep is True
+
+    def test_default_deep_false(self):
+        parser = build_parser()
+        args = parser.parse_args(["https://example.com"])
+        assert args.deep is False
+
+    def test_has_crawl_limit(self):
+        parser = build_parser()
+        args = parser.parse_args(["https://example.com", "--crawl-limit", "20"])
+        assert args.crawl_limit == 20
+
+    def test_default_crawl_limit(self):
+        parser = build_parser()
+        args = parser.parse_args(["https://example.com"])
+        assert args.crawl_limit == 10
