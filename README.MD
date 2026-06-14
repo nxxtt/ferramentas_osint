@@ -1,4 +1,4 @@
-# MyTools v3.1.5
+# MyTools v3.2.0
 
 Suite de ferramentas de auditoria e reconhecimento web/network para ambientes de laboratório e alvos autorizados.
 
@@ -14,7 +14,7 @@ Suite de ferramentas de auditoria e reconhecimento web/network para ambientes de
 ### Instalação (desenvolvimento)
 ```bash
 git clone https://github.com/nxxtt/ferramentas_osint.git
-cd MyTools-main
+cd ferramentas_osint
 pip install poetry
 poetry install --with dev
 ```
@@ -28,6 +28,8 @@ Isso instala os comandos CLI globalmente:
 | `mytools-recon` | Reconhecimento passivo |
 | `mytools-port` | Scanner de portas TCP |
 | `mytools-dir` | Scanner de diretórios HTTP |
+| `mytools-dnsxfer` | DNS Zone Transfer |
+| `mytools-subenum` | Enumeração de subdomínios |
 
 > **Nota:** Após instalar, abra um novo terminal. Se o comando não for encontrado, adicione o diretório `Scripts` do Python ao PATH.
 
@@ -70,7 +72,7 @@ mytools-dir -l urls.txt --output-dir results/
 ```
 
 ### 4. Web Passive Recon (`mytools-recon`)
-Reconhecimento passivo: headers de segurança, fingerprinting, robots.txt, sitemap.xml e lookup de CVEs.
+Reconhecimento passivo: headers de segurança, fingerprinting, robots.txt, sitemap.xml, WAF detection, email harvesting, WHOIS e lookup de CVEs.
 
 ```bash
 mytools-recon https://example.com
@@ -78,11 +80,13 @@ mytools-recon https://example.com -o recon.json
 mytools-recon https://example.com --proxy http://proxy:8080
 mytools-recon -l targets.txt --output-dir results/
 mytools-recon https://example.com --cve                    # Lookup de CVEs
-mytools-recon https://example.com --cve --nvd-api-key KEY  # Com API key (mais requests)
+mytools-recon https://example.com --cve --nvd-api-key KEY  # Com API key
+mytools-recon https://example.com --deep                   # Email harvesting + crawl
+mytools-recon https://example.com --deep --crawl-limit 20  # Limite de páginas crawleadas
 ```
 
 ### 5. Deep Attack & Vulnerability Audit (`mytools-audit`)
-Auditoria red/blue com verificação de CORS, TLS, cookies, métodos HTTP perigosos e deep scan de arquivos sensíveis.
+Auditoria red/blue com verificação de CORS, TLS, cookies, XSS, SQLi, CSRF, métodos HTTP perigosos e deep scan de arquivos sensíveis.
 
 ```bash
 mytools-audit https://example.com --deep
@@ -90,11 +94,32 @@ mytools-audit https://example.com --deep -o audit.json
 mytools-audit https://example.com --deep --proxy http://proxy:8080 --delay 5
 mytools-audit -l targets.txt --output-dir results/
 mytools-audit https://example.com --paths-file sensitive.txt  # Paths customizados
+mytools-audit https://example.com --test-methods              # Scan de métodos HTTP
+```
+
+### 6. DNS Zone Transfer (`mytools-dnsxfer`)
+Tenta zone transfer (AXFR) em nameservers de um domínio para enumerar registros DNS.
+
+```bash
+mytools-dnsxfer example.com
+mytools-dnsxfer example.com -o xfr.json
+mytools-dnsxfer example.com --concurrency 5
+```
+
+### 7. Subdomain Enumeration (`mytools-subenum`)
+Brute-force DNS de subdomínios com wordlist embutida ou customizada.
+
+```bash
+mytools-subenum example.com
+mytools-subenum example.com -o subs.json
+mytools-subenum example.com -w wordlist.txt
+mytools-subenum example.com --concurrency 50
+mytools-subenum -l domains.txt --output-dir results/
 ```
 
 ---
 
-## Features v3.1.5
+## Features v3.2.0
 
 ### Multi-target
 Execute qualquer ferramenta em múltiplos alvos a partir de um arquivo:
@@ -105,6 +130,7 @@ mytools-recon -l targets.txt --output-dir results/
 mytools-audit -l targets.txt --output-dir results/
 mytools-dir -l urls.txt --output-dir results/
 mytools-port -l hosts.txt -p 80,443
+mytools-subenum -l domains.txt --output-dir results/
 ```
 
 Cada alvo gera um arquivo individual (`hostname.json`) no `--output-dir`. Com `-o`, gera saída consolidada.
@@ -134,6 +160,9 @@ mytools-dir http://app.local --cookie "session=abc123; token=xyz"
 mytools-recon https://target.com --header "X-Token: abc" --header "Authorization: Bearer xyz"
 ```
 
+### Async HTTP (httpx)
+Todos os módulos HTTP utilizam `httpx.AsyncClient` com `asyncio.gather()` para concorrência nativa, substituindo `requests` + `ThreadPoolExecutor`.
+
 ### CVE Lookup (NIST NVD)
 Detecta versões de frameworks/servidores e busca CVEs associadas:
 
@@ -145,6 +174,31 @@ mytools-recon https://example.com --cve --nvd-api-key YOUR_KEY
 - Sem API key: 5 requests/30s
 - Com API key: 50 requests/30s (solicite em https://nvd.nist.gov/developers/request-an-api-key)
 - Fonte: NIST NVD API v2.0
+
+### WHOIS Lookup
+Consulta WHOIS automatica para domínios (retorna None para IPs):
+
+```bash
+mytools-recon https://example.com  # WHOIS sempre executado
+```
+
+### Email Harvesting
+Coleta emails do alvo com crawl recursivo:
+
+```bash
+mytools-recon https://example.com --deep                # Ativa crawl
+mytools-recon https://example.com --deep --crawl-limit 20  # Limite de páginas
+```
+
+### WAF Detection
+Detecta Web Application Firewalls (Cloudflare, Akamai, AWS WAF, etc.) na resposta HTTP.
+
+### HTTP Methods Scan
+Testa métodos HTTP perigosos (PUT, DELETE, OPTIONS, TRACE, etc.):
+
+```bash
+mytools-audit https://example.com --test-methods
+```
 
 ### Paths Customizados (attackaudit)
 Carregue seus próprios paths para deep scan:
@@ -169,6 +223,8 @@ mytools-recon --version
 mytools-audit --version
 mytools-port --version
 mytools-dir --version
+mytools-dnsxfer --version
+mytools-subenum --version
 ```
 
 ---
@@ -195,8 +251,12 @@ Use `help` para ver a ajuda, `exit` para voltar ao menu.
 | `mytools-dir http://testphp.vulnweb.com -x php` | Busca por arquivos .php |
 | `mytools-recon https://google.com` | Recon passivo rápido |
 | `mytools-recon https://example.com --cve` | Recon com lookup de CVEs |
+| `mytools-recon https://example.com --deep` | Recon com email harvesting + crawl |
 | `mytools-audit https://example.com --deep` | Auditoria completa com deep scan |
 | `mytools-audit https://example.com -q -o audit.json` | Audit silencioso com saída em arquivo |
+| `mytools-audit https://example.com --test-methods` | Scan de métodos HTTP |
+| `mytools-dnsxfer example.com` | DNS Zone Transfer scan |
+| `mytools-subenum example.com` | Enumeração de subdomínios |
 
 ### Proxy e Rate Limiting
 Todos os módulos HTTP suportam proxy e rate limiting:
@@ -227,12 +287,14 @@ MyTools-main/
 ├── main.py            # Painel central
 ├── portscanner.py     # Scanner de portas TCP
 ├── dirscanner.py      # Scanner de diretórios HTTP
-├── webrecon.py        # Reconhecimento passivo + CVE
-├── attackaudit.py     # Auditoria ofensiva/defensiva
-├── utils.py           # Código compartilhado (cores, helpers, sessões HTTP)
+├── webrecon.py        # Reconhecimento passivo + CVE + WHOIS + emails
+├── attackaudit.py     # Auditoria ofensiva/defensiva + métodos HTTP
+├── dnstransfer.py     # DNS Zone Transfer
+├── subdomainenum.py   # Enumeração de subdomínios
+├── utils.py           # Código compartilhado (cores, helpers, HTTP async)
 ├── KNOW_ISSUES.txt    # Problemas conhecidos
 ├── ROADMAP.txt        # Roadmap de otimizações
-├── tests/             # Testes unitários (380 testes)
+├── tests/             # Testes unitários (570 testes)
 ├── pyproject.toml     # Configuração do projeto
 └── README.MD
 ```
@@ -246,6 +308,11 @@ MyTools-main/
 poetry run pytest tests/ -v
 ```
 
+### Lint
+```bash
+poetry run ruff check .
+```
+
 ### Adicionar dependências de dev
 ```bash
 poetry install --with dev
@@ -256,12 +323,16 @@ poetry install --with dev
 ## Dependências
 
 ### Runtime
-- `requests>=2.34.2` — HTTP client com sessions, proxy, retry
+- `httpx>=0.28.0` — HTTP client async com sessions, proxy, retry
 - `beautifulsoup4>=4.15.0` — Parser HTML avançado
+- `python-whois>=0.9.6` — Consulta WHOIS
+- `dnspython>=2.8.0` — Resolução DNS, zone transfer e enumeração de subdomínios
 
 ### Dev
-- `pytest>=8.0` — Framework de testes
-- `responses>=0.25` — Mock de requests para testes
+- `pytest>=9.1.0` — Framework de testes
+- `pytest-asyncio>=0.25.0` — Testes async
+- `respx>=0.25.0` — Mock de httpx para testes
+- `ruff>=0.15.17` — Linter/formatter
 
 ---
 
