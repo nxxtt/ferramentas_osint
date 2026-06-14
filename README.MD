@@ -11,7 +11,22 @@ Suite de ferramentas de auditoria e reconhecimento web/network para ambientes de
 ### Pré-requisitos
 - **Python 3.10+**
 
-### Instalação (desenvolvimento)
+### Instalacao rapida (recomendado)
+```bash
+git clone https://github.com/nxxtt/ferramentas_osint.git
+cd ferramentas_osint
+
+# Windows
+.\setup.ps1
+
+# Linux/Mac
+chmod +x setup.sh
+./setup.sh
+```
+
+O script instala Poetry, dependencias e adiciona os comandos CLI ao PATH.
+
+### Instalacao manual
 ```bash
 git clone https://github.com/nxxtt/ferramentas_osint.git
 cd ferramentas_osint
@@ -19,7 +34,9 @@ pip install poetry
 poetry install --with dev
 ```
 
-Isso instala os comandos CLI globalmente:
+> **Nota:** Apos instalar manualmente, use `poetry run mytools` ou ative o venv com `poetry env activate`.
+
+Isso instala os comandos CLI:
 
 | Comando | Módulo |
 |---------|--------|
