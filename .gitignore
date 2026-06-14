@@ -36,3 +36,4 @@ Desktop.ini
 # Output files (gerados pelo scanner)
 *.json
 *.csv
+results/
