@@ -7,10 +7,12 @@ import responses
 
 from attackaudit import (
     CSRF_FIELD_NAMES_LOWER,
+    METHODS_TO_TEST,
     SQL_ERROR_PATTERNS,
     SQLI_PAYLOADS,
     AuditResult,
     Finding,
+    MethodResult,
     PageParser,
     Probe,
     RISK_WEIGHTS,
@@ -614,3 +616,123 @@ class TestBuildParserV3:
         parser = build_parser()
         args = parser.parse_args(["https://example.com", "--header", "X-Token: abc"])
         assert args.header == ["X-Token: abc"]
+
+    def test_has_test_methods_flag(self):
+        parser = build_parser()
+        args = parser.parse_args(["https://example.com", "--test-methods"])
+        assert args.test_methods is True
+
+    def test_default_test_methods_false(self):
+        parser = build_parser()
+        args = parser.parse_args(["https://example.com"])
+        assert args.test_methods is False
+
+
+class TestMethodResultDataclass:
+    def test_creation(self):
+        r = MethodResult(url="https://example.com/api", method="PUT", status=200, size=150)
+        assert r.method == "PUT"
+        assert r.status == 200
+
+    def test_frozen(self):
+        r = MethodResult(url="https://example.com/api", method="DELETE", status=204, size=0)
+        try:
+            r.status = 404
+            assert False, "Should be frozen"
+        except AttributeError:
+            pass
+
+
+class TestMethodsToTest:
+    def test_contains_dangerous_methods(self):
+        assert "PUT" in METHODS_TO_TEST
+        assert "DELETE" in METHODS_TO_TEST
+        assert "TRACE" in METHODS_TO_TEST
+
+    def test_contains_standard_methods(self):
+        assert "OPTIONS" in METHODS_TO_TEST
+        assert "HEAD" in METHODS_TO_TEST
+        assert "PATCH" in METHODS_TO_TEST
+
+    def test_all_strings(self):
+        assert all(isinstance(m, str) for m in METHODS_TO_TEST)
+
+
+class TestBuildFindingsMethodResults:
+    def test_put_200_high_finding(self):
+        parser = PageParser()
+        mr = [MethodResult("https://example.com/upload", "PUT", 200, 500)]
+        findings = build_findings("https://example.com", 200, {}, parser, [], [], "example.com", method_results=mr)
+        method_findings = [f for f in findings if f.category == "methods" and "PUT" in f.item]
+        assert len(method_findings) == 1
+        assert method_findings[0].severity == "high"
+
+    def test_delete_200_high_finding(self):
+        parser = PageParser()
+        mr = [MethodResult("https://example.com/api", "DELETE", 200, 0)]
+        findings = build_findings("https://example.com", 200, {}, parser, [], [], "example.com", method_results=mr)
+        method_findings = [f for f in findings if f.category == "methods" and "DELETE" in f.item]
+        assert len(method_findings) == 1
+        assert method_findings[0].severity == "high"
+
+    def test_trace_200_high_finding(self):
+        parser = PageParser()
+        mr = [MethodResult("https://example.com/", "TRACE", 200, 100)]
+        findings = build_findings("https://example.com", 200, {}, parser, [], [], "example.com", method_results=mr)
+        method_findings = [f for f in findings if f.category == "methods" and "TRACE" in f.item]
+        assert len(method_findings) == 1
+
+    def test_patch_200_medium_finding(self):
+        parser = PageParser()
+        mr = [MethodResult("https://example.com/api", "PATCH", 200, 200)]
+        findings = build_findings("https://example.com", 200, {}, parser, [], [], "example.com", method_results=mr)
+        method_findings = [f for f in findings if f.category == "methods" and "PATCH" in f.item]
+        assert len(method_findings) == 1
+        assert method_findings[0].severity == "medium"
+
+    def test_no_method_results_no_findings(self):
+        parser = PageParser()
+        findings = build_findings("https://example.com", 200, {}, parser, [], [], "example.com")
+        method_findings = [f for f in findings if f.category == "methods" and "aceito" in f.item]
+        assert len(method_findings) == 0
+
+    def test_method_403_no_finding(self):
+        parser = PageParser()
+        mr = [MethodResult("https://example.com/admin", "PUT", 403, 0)]
+        findings = build_findings("https://example.com", 200, {}, parser, [], [], "example.com", method_results=mr)
+        method_findings = [f for f in findings if f.category == "methods" and "PUT" in f.item]
+        assert len(method_findings) == 0
+
+    def test_multiple_method_results(self):
+        parser = PageParser()
+        mr = [
+            MethodResult("https://example.com/api", "PUT", 200, 500),
+            MethodResult("https://example.com/api", "DELETE", 200, 0),
+            MethodResult("https://example.com/api", "TRACE", 200, 100),
+        ]
+        findings = build_findings("https://example.com", 200, {}, parser, [], [], "example.com", method_results=mr)
+        method_findings = [f for f in findings if f.category == "methods"]
+        assert len(method_findings) == 3
+
+
+class TestAuditResultMethodResults:
+    def test_default_none(self):
+        r = AuditResult(
+            target="https://example.com", final_url="https://example.com", status=200,
+            title="", ip="", tls_subject="", tls_issuer="",
+            tls_not_after="", allowed_methods=[], forms=0, password_inputs=0,
+            probes=[], findings=[], risk_score=0, elapsed=1.0,
+        )
+        assert r.method_results is None
+
+    def test_with_method_results(self):
+        mr = [MethodResult("https://example.com/api", "PUT", 200, 500)]
+        r = AuditResult(
+            target="https://example.com", final_url="https://example.com", status=200,
+            title="", ip="", tls_subject="", tls_issuer="",
+            tls_not_after="", allowed_methods=[], forms=0, password_inputs=0,
+            probes=[], findings=[], risk_score=0, elapsed=1.0,
+            method_results=mr,
+        )
+        assert r.method_results is not None
+        assert len(r.method_results) == 1

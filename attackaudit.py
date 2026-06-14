@@ -58,6 +58,8 @@ INTERESTING_PATHS = [
     "sitemap.xml", "admin", "login", "wp-admin", "phpmyadmin",
 ]
 
+METHODS_TO_TEST = ["PUT", "DELETE", "PATCH", "TRACE", "OPTIONS", "HEAD"]
+
 RISK_WEIGHTS = {
     "critical": 10,
     "high": 7,
@@ -210,6 +212,16 @@ class TLSVersionResult:
 
 
 @dataclass(frozen=True)
+class MethodResult:
+    """Resultado de teste de metodo HTTP em um endpoint."""
+
+    url: str
+    method: str
+    status: int
+    size: int
+
+
+@dataclass(frozen=True)
 class AuditResult:
     """Resultado completo de uma auditoria web."""
 
@@ -232,6 +244,7 @@ class AuditResult:
     xss_reflected: bool = False
     sqli_errors: list[str] | None = None
     csrf_missing: int = 0
+    method_results: list[MethodResult] | None = None
 
 
 def banner() -> None:
@@ -453,6 +466,43 @@ def scan_paths(
     return sorted(probes, key=lambda item: (item.status, item.url))
 
 
+def test_http_methods(
+    session,
+    probes: list[Probe],
+    timeout: float,
+    rate_limiter: RateLimiter,
+    methods: list[str] | None = None,
+) -> list[MethodResult]:
+    """Testa metodos HTTP perigosos nos endpoints descobertos."""
+    to_test = methods or METHODS_TO_TEST
+    results: list[MethodResult] = []
+    seen: set[tuple[str, str]] = set()
+
+    for probe in probes:
+        if probe.status not in {200, 401, 403}:
+            continue
+        for method in to_test:
+            key = (probe.url, method)
+            if key in seen:
+                continue
+            seen.add(key)
+            rate_limiter.wait()
+            try:
+                status, _, body, _ = fetch(session, probe.url, timeout=timeout, method=method)
+            except ValueError:
+                continue
+            if status not in {0, 404, 405}:
+                results.append(MethodResult(probe.url, method, status, len(body)))
+                if status in {200, 201, 204}:
+                    print(
+                        f"  {color('[+]', Cyber.GREEN, Cyber.BOLD)} "
+                        f"{color(method.ljust(7), Cyber.YELLOW, Cyber.BOLD)} "
+                        f"{color(str(status).ljust(3), status_color(status), Cyber.BOLD)} "
+                        f"{color(probe.url, Cyber.CYAN)}"
+                    )
+    return results
+
+
 def build_findings(
     url: str,
     status: int,
@@ -466,6 +516,7 @@ def build_findings(
     xss_evidence: str = "",
     sqli_databases: list[str] | None = None,
     raw_headers: dict[str, list[str]] | None = None,
+    method_results: list[MethodResult] | None = None,
 ) -> list[Finding]:
     """Gera lista de findings de seguranca baseado nos dados coletados."""
     findings: list[Finding] = []
@@ -597,6 +648,29 @@ def build_findings(
             "Adicione tokens CSRF em todos os formularios que modificam estado.",
         ))
 
+    if method_results:
+        high_methods = [mr for mr in method_results if mr.status in {200, 201, 204} and mr.method in {"PUT", "DELETE", "TRACE"}]
+        for mr in high_methods:
+            severity = "high" if mr.method in {"PUT", "DELETE"} else "high"
+            recommendation = (
+                "Restrinja metodos HTTP nao utilizados via servidor/proxy/WAF."
+                if mr.method == "TRACE"
+                else "Verifique autenticacao/autorizacao e restrinja metodos nao utilizados."
+            )
+            findings.append(Finding(
+                severity, "methods", f"Metodo {mr.method} aceito",
+                f"{mr.status} {mr.url}",
+                recommendation,
+            ))
+
+        medium_methods = [mr for mr in method_results if mr.status in {200, 201, 204} and mr.method == "PATCH"]
+        for mr in medium_methods:
+            findings.append(Finding(
+                "medium", "methods", "Metodo PATCH aceito",
+                f"{mr.status} {mr.url}",
+                "Verifique autenticacao/autorizacao e restrinja metodos nao utilizados.",
+            ))
+
     return findings
 
 
@@ -625,6 +699,7 @@ def run_audit(
     proxy: str | None = None,
     requests_per_second: float = 0.0,
     test_vulns: bool = False,
+    test_methods: bool = False,
     auth: dict[str, str] | None = None,
     bearer_token: str | None = None,
     cookie: str | None = None,
@@ -641,7 +716,7 @@ def run_audit(
     apply_session_auth(session, auth=auth, bearer_token=bearer_token, cookie=cookie, extra_headers=extra_headers)
 
     logger.info("audit iniciado: %s", target)
-    logger.debug("threads=%d, deep=%s, test_vulns=%s", threads, deep, test_vulns)
+    logger.debug("threads=%d, deep=%s, test_vulns=%s, test_methods=%s", threads, deep, test_vulns, test_methods)
 
     print(color("[*]", Cyber.CYAN, Cyber.BOLD), f"Alvo: {color(target, Cyber.WHITE, Cyber.BOLD)}")
     if ip:
@@ -672,11 +747,18 @@ def run_audit(
         if sqli_databases:
             print(color("[!]", Cyber.RED, Cyber.BOLD), f"Erros SQL detectados: {', '.join(sqli_databases)}")
 
+    method_results: list[MethodResult] | None = None
+    if test_methods and probes:
+        print(color("[*]", Cyber.CYAN, Cyber.BOLD), "Testando metodos HTTP...")
+        method_results = test_http_methods(session, probes, timeout, rate_limiter)
+        if not method_results:
+            print(color("[*]", Cyber.CYAN, Cyber.BOLD), "Nenhum metodo perigoso aceito.")
+
     findings = build_findings(
         target, status, headers, parser, methods, probes, tls_subject,
         tls_versions=tls_versions, xss_reflected=xss_reflected,
         xss_evidence=xss_evidence, sqli_databases=sqli_databases,
-        raw_headers=raw_headers,
+        raw_headers=raw_headers, method_results=method_results,
     )
 
     return AuditResult(
@@ -699,6 +781,7 @@ def run_audit(
         xss_reflected=xss_reflected,
         sqli_errors=sqli_databases,
         csrf_missing=parser.forms_missing_csrf,
+        method_results=method_results,
     )
 
 
@@ -728,6 +811,16 @@ def print_result(result: AuditResult) -> None:
         print(f"{color('[!]', Cyber.RED, Cyber.BOLD)} SQLi erros: {color(', '.join(result.sqli_errors), Cyber.RED, Cyber.BOLD)}")
     if result.csrf_missing:
         print(f"{color('[!]', Cyber.YELLOW, Cyber.BOLD)} CSRF ausente: {color(str(result.csrf_missing), Cyber.YELLOW)} formulario(s)")
+    if result.method_results:
+        print(color("\nHTTP Methods scan", Cyber.CYAN, Cyber.BOLD))
+        for mr in result.method_results:
+            marker = color("[+]", Cyber.GREEN, Cyber.BOLD) if mr.status in {200, 201, 204} else color("[-]", Cyber.YELLOW)
+            print(
+                f"  {marker} "
+                f"{color(mr.method.ljust(7), Cyber.YELLOW, Cyber.BOLD)} "
+                f"{color(str(mr.status).ljust(3), status_color(mr.status), Cyber.BOLD)} "
+                f"{color(mr.url, Cyber.CYAN)}"
+            )
 
     print(color("\nFindings red/blue", Cyber.CYAN, Cyber.BOLD))
     if not result.findings:
@@ -770,6 +863,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Ativa testes de vulnerabilidade (XSS reflection, SQLi error-based).",
     )
+    parser.add_argument(
+        "--test-methods",
+        action="store_true",
+        help="Testa metodos HTTP perigosos (PUT, DELETE, PATCH, TRACE) nos endpoints.",
+    )
     parser.set_defaults(user_agent=f"Mozilla/5.0 (X11; Linux x86_64) AttackAudit/{__version__}")
     return parser
 
@@ -783,6 +881,7 @@ def _run_single(url: str, args: argparse.Namespace, quiet: bool = False) -> Audi
         url, args.timeout, args.user_agent, args.threads, args.deep,
         proxy=args.proxy, requests_per_second=args.delay,
         test_vulns=args.test_vulns,
+        test_methods=getattr(args, "test_methods", False),
         auth=getattr(args, "auth", None),
         bearer_token=getattr(args, "bearer_token", None),
         cookie=getattr(args, "cookie", None),
