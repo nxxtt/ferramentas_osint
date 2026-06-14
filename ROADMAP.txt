@@ -24,3 +24,42 @@
 ## 5. USE_COLOR em import time (Original #14) -- RESOLVIDO
 # utils.py: _USE_COLOR (privado), set_color(enabled), --color/--no-color em add_common_args.
 # Todos os 4 tools + portscanner suportam --color/--no-color.
+
+# === FUTUROS ===
+
+## 6. WHOIS lookup
+# Modulo ou extensao do webrecon.
+# Consulta WHOIS de dominios/IPs: proprietario, registrar, DNS, datas.
+# Lib: python-whois ou consulta direta WHOIS protocol.
+
+## 7. Subdomain enumeration
+# Enumeracao de subdominios via wordlist DNS brute-force.
+# Lib: dns.resolver (dnspython) + wordlist de subdominios.
+# Pode ser modulo novo ou extensao do webrecon.
+
+## 8. WAF detection
+# Detectar Web Application Firewall (Cloudflare, Akamai, AWS WAF, etc.).
+# Analise de headers (cf-ray, x-sucuri-id, server: cloudflare) e respostas 403/503.
+# Integrar no webrecon.
+
+## 9. Email harvesting
+# Coletar emails expostos no site: robots.txt, HTML source, contact pages, meta tags.
+# Regex para emails + crawl basico de links internos.
+# Integrar no webrecon.
+
+## 10. HTTP methods scan
+# Testar PUT/DELETE/PATCH/OPTIONS/TRACE em endpoints descobertos.
+# Detectar metodos perigosos (PUT para upload, TRACE para XST).
+# Integrar no attackaudit.
+
+## 11. DNS zone transfer
+# Testar se zone transfer (AXFR) e possivel contra nameservers do dominio.
+# Vulnerabilidade real que revela todos os registros DNS.
+# Lib: dns.resolver + dns.query.zone_in (dnspython).
+# Modulo novo ou extensao do portscanner.
+
+## 12. Async HTTP
+# Migrar de requests (sync) para httpx (async) ou aiohttp.
+# Ganho significativo de performance em multi-target e multi-path.
+# AFeta: webrecon, attackaudit, dirscanner.
+# Requer refatoracao do create_session() e fetch().
