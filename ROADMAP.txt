@@ -25,11 +25,11 @@
 # Detectar metodos perigosos (PUT para upload, TRACE para XST).
 # Integrar no attackaudit.
 
-## 6. DNS zone transfer
-# Testar se zone transfer (AXFR) e possivel contra nameservers do dominio.
-# Vulnerabilidade real que revela todos os registros DNS.
-# Lib: dns.resolver + dns.query.zone_in (dnspython).
-# Modulo novo ou extensao do portscanner.
+## 6. DNS zone transfer -- RESOLVIDO
+# dnstransfer.py: modulo standalone com mytools-dnsxfer CLI.
+# XfrResult, get_nameservers(), resolve_ns_to_ip(), try_zone_transfer(), run_xfr_scan().
+# AXFR via dns.query.inbound_xfr() (dnspython).
+# 24 testes unitarios em tests/test_dnstransfer.py.
 
 ## 7. Async HTTP
 # Migrar de requests (sync) para httpx (async) ou aiohttp.
