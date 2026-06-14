@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import json
 import os
 import re
@@ -11,7 +12,6 @@ import ssl
 import sys
 import warnings
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict, dataclass
 from html.parser import HTMLParser
 from urllib.parse import urljoin, urlparse
@@ -22,7 +22,7 @@ from utils import (
     add_common_args,
     apply_session_auth,
     color,
-    create_session,
+    create_async_client,
     extract_hostname,
     fetch,
     header_get,
@@ -347,14 +347,14 @@ def check_tls_versions(url: str, timeout: float) -> list[TLSVersionResult]:
     return results
 
 
-def check_xss_reflection(session, base_url: str, timeout: float) -> tuple[bool, str]:
+async def check_xss_reflection(client, base_url: str, timeout: float) -> tuple[bool, str]:
     """Testa se a URL reflete entrada sem sanitizacao basica de XSS."""
     marker = "xss" + secrets.token_hex(4)
     separator = "&" if "?" in base_url else "?"
     test_url = base_url + separator + "q=" + marker
 
     try:
-        _, headers, body, _ = fetch(session, test_url, timeout=timeout)
+        _, headers, body, _ = await fetch(client, test_url, timeout=timeout)
     except ValueError:
         return False, ""
 
@@ -369,7 +369,7 @@ def check_xss_reflection(session, base_url: str, timeout: float) -> tuple[bool, 
     return False, ""
 
 
-def check_sqli_errors(session, base_url: str, timeout: float) -> list[str]:
+async def check_sqli_errors(client, base_url: str, timeout: float) -> list[str]:
     """Testa se a aplicacao retorna erros SQL em payloads de injecao."""
     detected_databases: list[str] = []
     parsed = urlparse(base_url)
@@ -381,7 +381,7 @@ def check_sqli_errors(session, base_url: str, timeout: float) -> list[str]:
             test_url = base_url + "?id=" + payload
 
         try:
-            _, _, body, _ = fetch(session, test_url, timeout=timeout)
+            _, _, body, _ = await fetch(client, test_url, timeout=timeout)
         except ValueError:
             continue
 
@@ -396,22 +396,22 @@ def check_sqli_errors(session, base_url: str, timeout: float) -> list[str]:
     return detected_databases
 
 
-def parse_allowed_methods(session, url: str, timeout: float) -> list[str]:
+async def parse_allowed_methods(client, url: str, timeout: float) -> list[str]:
     """Obtem metodos HTTP permitidos via requisicao OPTIONS."""
     try:
-        _, headers, _, _ = fetch(session, url, timeout=timeout, method="OPTIONS")
+        _, headers, _, _ = await fetch(client, url, timeout=timeout, method="OPTIONS")
     except ValueError:
         return []
     allow = header_get(headers, "allow") or header_get(headers, "access-control-allow-methods")
     return sorted({item.strip().upper() for item in allow.split(",") if item.strip()})
 
 
-def probe_path(session, rate_limiter: RateLimiter, base_url: str, path: str, timeout: float) -> Probe | None:
+async def probe_path(client, rate_limiter: RateLimiter, base_url: str, path: str, timeout: float) -> Probe | None:
     """Faz probing de um path especifico, retornando Probe se acessivel."""
     url = urljoin(base_url.rstrip("/") + "/", path)
-    rate_limiter.wait()
+    await rate_limiter.wait()
     try:
-        status, headers, body, _ = fetch(session, url, timeout=timeout)
+        status, headers, body, _ = await fetch(client, url, timeout=timeout)
     except ValueError:
         return None
     if status in {200, 204, 301, 302, 307, 308, 401, 403}:
@@ -419,55 +419,41 @@ def probe_path(session, rate_limiter: RateLimiter, base_url: str, path: str, tim
     return None
 
 
-def scan_paths(
-    session,
+async def scan_paths(
+    client,
     rate_limiter: RateLimiter,
     base_url: str,
     timeout: float,
-    threads: int,
+    concurrency: int,
     paths: list[str] | None = None,
 ) -> list[Probe]:
-    """Escaneia paths interessantes em paralelo usando ThreadPoolExecutor."""
-    probes: list[Probe] = []
+    """Escaneia paths interessantes em paralelo usando asyncio.gather."""
     target_paths = paths if paths is not None else INTERESTING_PATHS
-    with ThreadPoolExecutor(max_workers=threads) as executor:
-        batch_size = threads * 2
-        pending = []
-        for path in target_paths:
-            pending.append(executor.submit(probe_path, session, rate_limiter, base_url, path, timeout))
-            if len(pending) >= batch_size:
-                for future in as_completed(pending):
-                    try:
-                        probe = future.result()
-                    except Exception:
-                        continue
-                    if probe:
-                        probes.append(probe)
-                        print(
-                            f"{color('[+]', Cyber.GREEN, Cyber.BOLD)} "
-                            f"{color(str(probe.status).ljust(3), status_color(probe.status), Cyber.BOLD)} "
-                            f"{color(str(probe.size).rjust(7), Cyber.YELLOW)}B "
-                            f"{color(probe.url, Cyber.CYAN)}"
-                        )
-                pending.clear()
-        for future in as_completed(pending):
-            try:
-                probe = future.result()
-            except Exception:
-                continue
-            if probe:
-                probes.append(probe)
-                print(
-                    f"{color('[+]', Cyber.GREEN, Cyber.BOLD)} "
-                    f"{color(str(probe.status).ljust(3), status_color(probe.status), Cyber.BOLD)} "
-                    f"{color(str(probe.size).rjust(7), Cyber.YELLOW)}B "
-                    f"{color(probe.url, Cyber.CYAN)}"
-                )
+    sem = asyncio.Semaphore(concurrency)
+
+    async def _limited_probe(path: str) -> Probe | None:
+        async with sem:
+            return await probe_path(client, rate_limiter, base_url, path, timeout)
+
+    tasks = [_limited_probe(path) for path in target_paths]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    probes: list[Probe] = []
+    for result in results:
+        if isinstance(result, Exception):
+            continue
+        if result:
+            probes.append(result)
+            print(
+                f"{color('[+]', Cyber.GREEN, Cyber.BOLD)} "
+                f"{color(str(result.status).ljust(3), status_color(result.status), Cyber.BOLD)} "
+                f"{color(str(result.size).rjust(7), Cyber.YELLOW)}B "
+                f"{color(result.url, Cyber.CYAN)}"
+            )
     return sorted(probes, key=lambda item: (item.status, item.url))
 
 
-def test_http_methods(
-    session,
+async def test_http_methods(
+    client,
     probes: list[Probe],
     timeout: float,
     rate_limiter: RateLimiter,
@@ -486,9 +472,9 @@ def test_http_methods(
             if key in seen:
                 continue
             seen.add(key)
-            rate_limiter.wait()
+            await rate_limiter.wait()
             try:
-                status, _, body, _ = fetch(session, probe.url, timeout=timeout, method=method)
+                status, _, body, _ = await fetch(client, probe.url, timeout=timeout, method=method)
             except ValueError:
                 continue
             if status not in {0, 404, 405}:
@@ -690,7 +676,7 @@ def severity_color(severity: str) -> str:
     }.get(severity, Cyber.WHITE)
 
 
-def run_audit(
+async def run_audit(
     url: str,
     timeout: float,
     user_agent: str,
@@ -712,47 +698,50 @@ def run_audit(
     parsed = urlparse(target)
     ip = resolve_ip(parsed.hostname or "")
     rate_limiter = RateLimiter(requests_per_second)
-    session = create_session(user_agent=user_agent, proxy=proxy)
-    apply_session_auth(session, auth=auth, bearer_token=bearer_token, cookie=cookie, extra_headers=extra_headers)
+    client = create_async_client(user_agent=user_agent, proxy=proxy)
+    apply_session_auth(client, auth=auth, bearer_token=bearer_token, cookie=cookie, extra_headers=extra_headers)
 
     logger.info("audit iniciado: %s", target)
     logger.debug("threads=%d, deep=%s, test_vulns=%s, test_methods=%s", threads, deep, test_vulns, test_methods)
 
-    print(color("[*]", Cyber.CYAN, Cyber.BOLD), f"Alvo: {color(target, Cyber.WHITE, Cyber.BOLD)}")
-    if ip:
-        print(color("[*]", Cyber.CYAN, Cyber.BOLD), f"IP: {color(ip, Cyber.YELLOW)}")
+    try:
+        print(color("[*]", Cyber.CYAN, Cyber.BOLD), f"Alvo: {color(target, Cyber.WHITE, Cyber.BOLD)}")
+        if ip:
+            print(color("[*]", Cyber.CYAN, Cyber.BOLD), f"IP: {color(ip, Cyber.YELLOW)}")
 
-    status, headers, body, raw_headers = fetch(session, target, timeout=timeout)
-    content_type = header_get(headers, "content-type")
-    text = body.decode("utf-8", errors="replace") if "text/html" in content_type.lower() else ""
-    parser = PageParser()
-    if text:
-        parser.feed(text)
+        status, headers, body, raw_headers = await fetch(client, target, timeout=timeout)
+        content_type = header_get(headers, "content-type")
+        text = body.decode("utf-8", errors="replace") if "text/html" in content_type.lower() else ""
+        parser = PageParser()
+        if text:
+            parser.feed(text)
 
-    tls_subject, tls_issuer, tls_not_after = tls_info(target, timeout)
-    tls_versions = check_tls_versions(target, timeout) if parsed.scheme == "https" else None
-    methods = parse_allowed_methods(session, target, timeout)
-    probes = scan_paths(session, rate_limiter, target, timeout, threads, paths=paths) if deep else []
+        tls_subject, tls_issuer, tls_not_after = tls_info(target, timeout)
+        tls_versions = check_tls_versions(target, timeout) if parsed.scheme == "https" else None
+        methods = await parse_allowed_methods(client, target, timeout)
+        probes = await scan_paths(client, rate_limiter, target, timeout, threads, paths=paths) if deep else []
 
-    xss_reflected, xss_evidence = False, ""
-    sqli_databases: list[str] | None = None
-    if test_vulns:
-        print(color("[*]", Cyber.CYAN, Cyber.BOLD), "Testando XSS reflection...")
-        xss_reflected, xss_evidence = check_xss_reflection(session, target, timeout)
-        if xss_reflected:
-            print(color("[!]", Cyber.RED, Cyber.BOLD), "XSS refletido detectado!")
+        xss_reflected, xss_evidence = False, ""
+        sqli_databases: list[str] | None = None
+        if test_vulns:
+            print(color("[*]", Cyber.CYAN, Cyber.BOLD), "Testando XSS reflection...")
+            xss_reflected, xss_evidence = await check_xss_reflection(client, target, timeout)
+            if xss_reflected:
+                print(color("[!]", Cyber.RED, Cyber.BOLD), "XSS refletido detectado!")
 
-        print(color("[*]", Cyber.CYAN, Cyber.BOLD), "Testando SQLi error-based...")
-        sqli_databases = check_sqli_errors(session, target, timeout)
-        if sqli_databases:
-            print(color("[!]", Cyber.RED, Cyber.BOLD), f"Erros SQL detectados: {', '.join(sqli_databases)}")
+            print(color("[*]", Cyber.CYAN, Cyber.BOLD), "Testando SQLi error-based...")
+            sqli_databases = await check_sqli_errors(client, target, timeout)
+            if sqli_databases:
+                print(color("[!]", Cyber.RED, Cyber.BOLD), f"Erros SQL detectados: {', '.join(sqli_databases)}")
 
-    method_results: list[MethodResult] | None = None
-    if test_methods and probes:
-        print(color("[*]", Cyber.CYAN, Cyber.BOLD), "Testando metodos HTTP...")
-        method_results = test_http_methods(session, probes, timeout, rate_limiter)
-        if not method_results:
-            print(color("[*]", Cyber.CYAN, Cyber.BOLD), "Nenhum metodo perigoso aceito.")
+        method_results: list[MethodResult] | None = None
+        if test_methods and probes:
+            print(color("[*]", Cyber.CYAN, Cyber.BOLD), "Testando metodos HTTP...")
+            method_results = await test_http_methods(client, probes, timeout, rate_limiter)
+            if not method_results:
+                print(color("[*]", Cyber.CYAN, Cyber.BOLD), "Nenhum metodo perigoso aceito.")
+    finally:
+        await client.aclose()
 
     findings = build_findings(
         target, status, headers, parser, methods, probes, tls_subject,
@@ -872,12 +861,12 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _run_single(url: str, args: argparse.Namespace, quiet: bool = False) -> AuditResult:
+async def _run_single(url: str, args: argparse.Namespace, quiet: bool = False) -> AuditResult:
     """Executa auditoria em uma unica URL."""
     custom_paths = None
     if getattr(args, "paths_file", None):
         custom_paths = load_paths_from_file(args.paths_file)
-    result = run_audit(
+    result = await run_audit(
         url, args.timeout, args.user_agent, args.threads, args.deep,
         proxy=args.proxy, requests_per_second=args.delay,
         test_vulns=args.test_vulns,
@@ -893,8 +882,8 @@ def _run_single(url: str, args: argparse.Namespace, quiet: bool = False) -> Audi
     return result
 
 
-def run_once(args: argparse.Namespace) -> int:
-    """Executa uma unica auditoria com os argumentos fornecidos."""
+async def _async_run_once(args: argparse.Namespace) -> int:
+    """Executa uma unica auditoria (async)."""
     setup_logging(verbose=args.verbose, log_file=args.log_file)
     quiet = getattr(args, "quiet", False)
     if getattr(args, "color", None) is not None:
@@ -922,7 +911,7 @@ def run_once(args: argparse.Namespace) -> int:
 
     all_results: list[AuditResult] = []
     for url in urls:
-        result = _run_single(url, args, quiet=quiet)
+        result = await _run_single(url, args, quiet=quiet)
         all_results.append(result)
         if output_dir:
             hostname = extract_hostname(url)
@@ -941,6 +930,11 @@ def run_once(args: argparse.Namespace) -> int:
             if not quiet:
                 print(color("[*]", Cyber.CYAN, Cyber.BOLD), f"Resultado consolidado salvo em {color(_path, Cyber.GREEN)}")
     return 0
+
+
+def run_once(args: argparse.Namespace) -> int:
+    """Executa uma unica auditoria com os argumentos fornecidos."""
+    return asyncio.run(_async_run_once(args))
 
 
 def main() -> int:

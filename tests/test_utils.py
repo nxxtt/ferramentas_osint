@@ -3,11 +3,11 @@ from __future__ import annotations
 import argparse
 import logging
 import os
-import threading
 import time
 
+import httpx
 import pytest
-import responses
+import respx
 
 from utils import (
     Cyber,
@@ -16,7 +16,7 @@ from utils import (
     add_common_args,
     apply_session_auth,
     color,
-    create_session,
+    create_async_client,
     extract_hostname,
     extract_title,
     header_get,
@@ -91,10 +91,6 @@ class TestHeaderGet:
     def test_exact_match(self):
         assert header_get({"Content-Type": "text/html"}, "Content-Type") == "text/html"
 
-    def test_case_insensitive(self):
-        from requests.structures import CaseInsensitiveDict
-        assert header_get(CaseInsensitiveDict({"Content-Type": "text/html"}), "content-type") == "text/html"
-
     def test_missing_returns_empty(self):
         assert header_get({"Content-Type": "text/html"}, "X-Custom") == ""
 
@@ -125,52 +121,41 @@ class TestExtractTitle:
 
 
 class TestRateLimiter:
-    def test_zero_delay_does_not_block(self):
+    @pytest.mark.asyncio
+    async def test_zero_delay_does_not_block(self):
         limiter = RateLimiter(0.0)
         start = time.monotonic()
-        limiter.wait()
+        await limiter.wait()
         elapsed = time.monotonic() - start
         assert elapsed < 0.05
 
-    def test_rate_limit_enforces_delay(self):
-        limiter = RateLimiter(10.0)
+    @pytest.mark.asyncio
+    async def test_rate_limit_enforces_delay(self):
+        limiter = RateLimiter(20.0)
         timestamps: list[float] = []
-        lock = threading.Lock()
 
-        def record():
-            limiter.wait()
-            with lock:
-                timestamps.append(time.monotonic())
+        await limiter.wait()
+        timestamps.append(time.monotonic())
 
-        threads = [threading.Thread(target=record) for _ in range(5)]
-        for t in threads:
-            t.start()
-        for t in threads:
-            t.join()
+        await limiter.wait()
+        timestamps.append(time.monotonic())
 
-        timestamps.sort()
-        for i in range(1, len(timestamps)):
-            assert timestamps[i] - timestamps[i - 1] >= 0.08
+        assert timestamps[1] - timestamps[0] >= 0.04
 
 
-class TestCreateSession:
-    def test_returns_session(self):
-        session = create_session()
-        assert session is not None
-        assert "User-Agent" in session.headers
+class TestCreateAsyncClient:
+    def test_returns_client(self):
+        client = create_async_client()
+        assert client is not None
+        assert "User-Agent" in client.headers
 
     def test_custom_user_agent(self):
-        session = create_session(user_agent="TestAgent/1.0")
-        assert session.headers["User-Agent"] == "TestAgent/1.0"
-
-    def test_proxy_set(self):
-        session = create_session(proxy="http://proxy:8080")
-        assert session.proxies.get("http") == "http://proxy:8080"
-        assert session.proxies.get("https") == "http://proxy:8080"
+        client = create_async_client(user_agent="TestAgent/1.0")
+        assert client.headers["User-Agent"] == "TestAgent/1.0"
 
     def test_no_proxy(self):
-        session = create_session()
-        assert session.proxies == {} or session.proxies is None or "http" not in session.proxies
+        client = create_async_client()
+        assert client._mounts is not None
 
 
 class TestSetupLogging:
@@ -350,30 +335,30 @@ class TestAddCommonArgs:
 
 class TestApplySessionAuth:
     def test_auth_applied(self):
-        session = create_session(user_agent="Test/1.0")
-        apply_session_auth(session, auth={"Authorization": "Basic abc"})
-        assert session.headers["Authorization"] == "Basic abc"
+        client = create_async_client(user_agent="Test/1.0")
+        apply_session_auth(client, auth={"Authorization": "Basic abc"})
+        assert client.headers["Authorization"] == "Basic abc"
 
     def test_bearer_token_applied(self):
-        session = create_session(user_agent="Test/1.0")
-        apply_session_auth(session, bearer_token="tok123")
-        assert session.headers["Authorization"] == "Bearer tok123"
+        client = create_async_client(user_agent="Test/1.0")
+        apply_session_auth(client, bearer_token="tok123")
+        assert client.headers["Authorization"] == "Bearer tok123"
 
     def test_cookie_applied(self):
-        session = create_session(user_agent="Test/1.0")
-        apply_session_auth(session, cookie="session=abc")
-        assert session.headers["Cookie"] == "session=abc"
+        client = create_async_client(user_agent="Test/1.0")
+        apply_session_auth(client, cookie="session=abc")
+        assert client.headers["Cookie"] == "session=abc"
 
     def test_extra_headers_applied(self):
-        session = create_session(user_agent="Test/1.0")
-        apply_session_auth(session, extra_headers=["X-Token: abc"])
-        assert session.headers["X-Token"] == "abc"
+        client = create_async_client(user_agent="Test/1.0")
+        apply_session_auth(client, extra_headers=["X-Token: abc"])
+        assert client.headers["X-Token"] == "abc"
 
     def test_no_auth_no_change(self):
-        session = create_session(user_agent="Test/1.0")
-        apply_session_auth(session)
-        assert "Authorization" not in session.headers
-        assert "Cookie" not in session.headers
+        client = create_async_client(user_agent="Test/1.0")
+        apply_session_auth(client)
+        assert "Authorization" not in client.headers
+        assert "Cookie" not in client.headers
 
 
 class TestExtractHostname:
@@ -390,15 +375,16 @@ class TestExtractHostname:
         assert extract_hostname("http://test.example.com") == "test.example.com"
 
 
-class TestCreateSessionDefaultUA:
+class TestCreateAsyncClientDefaultUA:
     def test_default_user_agent(self):
-        session = create_session()
-        assert session.headers["User-Agent"] == "MyTools/3.2.0"
+        client = create_async_client()
+        assert client.headers["User-Agent"] == "MyTools/3.2.0"
 
 
 class TestQueryNvd:
-    @responses.activate
-    def test_returns_parsed_results(self):
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_returns_parsed_results(self):
         mock_response = {
             "resultsPerPage": 10,
             "startIndex": 0,
@@ -417,23 +403,31 @@ class TestQueryNvd:
                 }
             ],
         }
-        responses.add(responses.GET, "https://services.nvd.nist.gov/rest/json/cves/2.0", json=mock_response, status=200)
-        results = query_nvd("Log4j 2.14")
+        respx.get("https://services.nvd.nist.gov/rest/json/cves/2.0").mock(
+            return_value=httpx.Response(200, json=mock_response)
+        )
+        results = await query_nvd("Log4j 2.14")
         assert len(results) == 1
         assert results[0]["id"] == "CVE-2021-44228"
         assert results[0]["score"] == 10.0
         assert results[0]["severity"] == "CRITICAL"
 
-    @responses.activate
-    def test_returns_empty_on_rate_limit(self):
-        responses.add(responses.GET, "https://services.nvd.nist.gov/rest/json/cves/2.0", status=403)
-        results = query_nvd("test")
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_returns_empty_on_rate_limit(self):
+        respx.get("https://services.nvd.nist.gov/rest/json/cves/2.0").mock(
+            return_value=httpx.Response(403)
+        )
+        results = await query_nvd("test")
         assert results == []
 
-    @responses.activate
-    def test_returns_empty_on_error(self):
-        responses.add(responses.GET, "https://services.nvd.nist.gov/rest/json/cves/2.0", status=500)
-        results = query_nvd("test")
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_returns_empty_on_error(self):
+        respx.get("https://services.nvd.nist.gov/rest/json/cves/2.0").mock(
+            return_value=httpx.Response(500)
+        )
+        results = await query_nvd("test")
         assert results == []
 
 

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import os
 import re
 import sys
@@ -15,7 +16,7 @@ from utils import (
     add_common_args,
     apply_session_auth,
     color,
-    create_session,
+    create_async_client,
     extract_hostname,
     extract_title,
     fetch,
@@ -417,17 +418,17 @@ def harvest_emails(text: str) -> list[str]:
     return sorted(set(EMAIL_PATTERN.findall(text)))
 
 
-def _fetch_file(session, url: str, timeout: float) -> str:
+async def _fetch_file(client, url: str, timeout: float) -> str:
     """Busca o conteudo de um arquivo (robots.txt, sitemap.xml) como string."""
     try:
-        _, _, body, _ = fetch(session, url, timeout=timeout)
+        _, _, body, _ = await fetch(client, url, timeout=timeout)
         return body.decode("utf-8", errors="replace")
     except ValueError:
         return ""
 
 
-def crawl_internal_links(
-    session,
+async def crawl_internal_links(
+    client,
     url: str,
     body_text: str,
     timeout: float,
@@ -463,7 +464,7 @@ def crawl_internal_links(
     emails: list[str] = []
     for link in internal_urls:
         try:
-            _, _, link_body, _ = fetch(session, link, timeout=timeout)
+            _, _, link_body, _ = await fetch(client, link, timeout=timeout)
             link_text = link_body.decode("utf-8", errors="replace")
             emails.extend(harvest_emails(link_text))
         except ValueError:
@@ -498,7 +499,7 @@ def _severity_color(severity: str) -> str:
     return Cyber.GRAY
 
 
-def lookup_cves(
+async def lookup_cves(
     versions: list[tuple[str, str]],
     api_key: str | None = None,
     limit_per_tech: int = 5,
@@ -522,7 +523,7 @@ def lookup_cves(
         logger.info("NVD lookup: %s", keyword)
 
         try:
-            results = query_nvd(keyword, api_key=api_key, limit=limit_per_tech)
+            results = await query_nvd(keyword, api_key=api_key, limit=limit_per_tech)
         except Exception as error:
             logger.debug("NVD lookup failed for %s: %s", keyword, error)
             continue
@@ -682,16 +683,16 @@ def candidate_urls(url: str) -> list[str]:
     return [normalize_url("https://" + url), normalize_url("http://" + url)]
 
 
-def probe_status(session, url: str, timeout: float) -> int | None:
+async def probe_status(client, url: str, timeout: float) -> int | None:
     """Verifica o status HTTP de uma URL, retornando None em caso de falha."""
     try:
-        status, _, _, _ = fetch(session, url, timeout=timeout)
+        status, _, _, _ = await fetch(client, url, timeout=timeout)
         return status
     except ValueError:
         return None
 
 
-def run_recon(
+async def run_recon(
     url: str,
     timeout: float,
     user_agent: str,
@@ -708,68 +709,74 @@ def run_recon(
     """Executa reconhecimento completo da URL alvo e retorna o resultado."""
     started = time.monotonic()
     errors = []
-    session = create_session(user_agent=user_agent, proxy=proxy)
-    apply_session_auth(session, auth=auth, bearer_token=bearer_token, cookie=cookie, extra_headers=extra_headers)
+    client = create_async_client(user_agent=user_agent, proxy=proxy)
+    apply_session_auth(client, auth=auth, bearer_token=bearer_token, cookie=cookie, extra_headers=extra_headers)
 
     logger.info("recon iniciado: %s", url)
 
-    for target in candidate_urls(url):
-        try:
-            status, headers, body, raw_headers = fetch(session, target, timeout=timeout)
-            break
-        except ValueError as error:
-            errors.append(str(error))
-    else:
-        if len(errors) > 1:
-            raise ValueError("falha ao acessar alvo com https e http:\n  - " + "\n  - ".join(errors))
-        raise ValueError(errors[0])
-
-    content_type = header_get(headers, "content-type")
-    text = body.decode("utf-8", errors="replace") if "text/html" in content_type.lower() else ""
-
-    lower_headers = {key.lower(): value for key, value in headers.items()}
-    present = [header for header in SECURITY_HEADERS if header in lower_headers]
-    missing = [header for header in SECURITY_HEADERS if header not in lower_headers]
-
-    robots_url = urljoin(target.rstrip("/") + "/", "robots.txt")
-    sitemap_url = urljoin(target.rstrip("/") + "/", "sitemap.xml")
-
-    cookie_list = raw_headers.get("set-cookie", [])
-
-    technologies = detect_technologies(
-        headers=headers,
-        body=text,
-        url=target,
-        cookies=cookie_list,
-        lower_headers=lower_headers,
-    )
-
-    waf_detected = detect_waf(
-        headers=headers,
-        body=text,
-        url=target,
-        cookies=cookie_list,
-        lower_headers=lower_headers,
-    )
-
-    cve_findings: list[CVEFinding] | None = None
-    if cve:
-        versions = extract_versions(headers=headers, body=text, lower_headers=lower_headers)
-        if versions:
-            cve_findings = lookup_cves(versions, api_key=nvd_api_key)
+    try:
+        for target in candidate_urls(url):
+            try:
+                status, headers, body, raw_headers = await fetch(client, target, timeout=timeout)
+                break
+            except ValueError as error:
+                errors.append(str(error))
         else:
-            cve_findings = []
+            if len(errors) > 1:
+                raise ValueError("falha ao acessar alvo com https e http:\n  - " + "\n  - ".join(errors))
+            raise ValueError(errors[0])
 
-    emails = harvest_emails(text)
-    robots_text = _fetch_file(session, robots_url, timeout)
-    emails.extend(harvest_emails(robots_text))
-    sitemap_text = _fetch_file(session, sitemap_url, timeout)
-    emails.extend(harvest_emails(sitemap_text))
-    if deep:
-        emails.extend(crawl_internal_links(session, target, text, timeout, max_links=crawl_limit))
-    emails = sorted(set(emails))
+        content_type = header_get(headers, "content-type")
+        text = body.decode("utf-8", errors="replace") if "text/html" in content_type.lower() else ""
 
-    whois_data = run_whois(target)
+        lower_headers = {key.lower(): value for key, value in headers.items()}
+        present = [header for header in SECURITY_HEADERS if header in lower_headers]
+        missing = [header for header in SECURITY_HEADERS if header not in lower_headers]
+
+        robots_url = urljoin(target.rstrip("/") + "/", "robots.txt")
+        sitemap_url = urljoin(target.rstrip("/") + "/", "sitemap.xml")
+
+        cookie_list = raw_headers.get("set-cookie", [])
+
+        technologies = detect_technologies(
+            headers=headers,
+            body=text,
+            url=target,
+            cookies=cookie_list,
+            lower_headers=lower_headers,
+        )
+
+        waf_detected = detect_waf(
+            headers=headers,
+            body=text,
+            url=target,
+            cookies=cookie_list,
+            lower_headers=lower_headers,
+        )
+
+        cve_findings: list[CVEFinding] | None = None
+        if cve:
+            versions = extract_versions(headers=headers, body=text, lower_headers=lower_headers)
+            if versions:
+                cve_findings = await lookup_cves(versions, api_key=nvd_api_key)
+            else:
+                cve_findings = []
+
+        emails = harvest_emails(text)
+        robots_text = await _fetch_file(client, robots_url, timeout)
+        emails.extend(harvest_emails(robots_text))
+        sitemap_text = await _fetch_file(client, sitemap_url, timeout)
+        emails.extend(harvest_emails(sitemap_text))
+        if deep:
+            emails.extend(await crawl_internal_links(client, target, text, timeout, max_links=crawl_limit))
+        emails = sorted(set(emails))
+
+        whois_data = run_whois(target)
+
+        robots_status = await probe_status(client, robots_url, timeout)
+        sitemap_status = await probe_status(client, sitemap_url, timeout)
+    finally:
+        await client.aclose()
 
     return ReconResult(
         url=target,
@@ -783,8 +790,8 @@ def run_recon(
         redirect=header_get(headers, "location"),
         security_headers_present=present,
         security_headers_missing=missing,
-        robots_status=probe_status(session, robots_url, timeout),
-        sitemap_status=probe_status(session, sitemap_url, timeout),
+        robots_status=robots_status,
+        sitemap_status=sitemap_status,
         elapsed=time.monotonic() - started,
         technologies=technologies,
         cve_findings=cve_findings,
@@ -938,9 +945,9 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _run_single(url: str, args: argparse.Namespace, quiet: bool = False) -> ReconResult:
+async def _run_single(url: str, args: argparse.Namespace, quiet: bool = False) -> ReconResult:
     """Executa recon em uma unica URL."""
-    result = run_recon(
+    result = await run_recon(
         url, args.timeout, args.user_agent, proxy=args.proxy,
         auth=getattr(args, "auth", None),
         bearer_token=getattr(args, "bearer_token", None),
@@ -956,8 +963,8 @@ def _run_single(url: str, args: argparse.Namespace, quiet: bool = False) -> Reco
     return result
 
 
-def run_once(args: argparse.Namespace) -> int:
-    """Executa uma única operação de reconhecimento com os argumentos fornecidos."""
+async def _async_run_once(args: argparse.Namespace) -> int:
+    """Executa uma unica operacao de reconhecimento (async)."""
     setup_logging(verbose=args.verbose, log_file=args.log_file)
     quiet = getattr(args, "quiet", False)
     if getattr(args, "color", None) is not None:
@@ -981,7 +988,7 @@ def run_once(args: argparse.Namespace) -> int:
 
     all_results: list[ReconResult] = []
     for url in urls:
-        result = _run_single(url, args, quiet=quiet)
+        result = await _run_single(url, args, quiet=quiet)
         all_results.append(result)
         if output_dir:
             hostname = extract_hostname(url)
@@ -994,6 +1001,11 @@ def run_once(args: argparse.Namespace) -> int:
         else:
             write_output(args.output, [asdict(r) for r in all_results], quiet=quiet)
     return 0
+
+
+def run_once(args: argparse.Namespace) -> int:
+    """Executa uma unica operacao de reconhecimento com os argumentos fornecidos."""
+    return asyncio.run(_async_run_once(args))
 
 
 def main() -> int:

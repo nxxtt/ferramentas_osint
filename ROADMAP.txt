@@ -32,8 +32,11 @@
 # AXFR via dns.query.inbound_xfr() (dnspython).
 # 24 testes unitarios em tests/test_dnstransfer.py.
 
-## 7. Async HTTP
-# Migrar de requests (sync) para httpx (async) ou aiohttp.
+## 7. Async HTTP -- RESOLVIDO
+# Migracao completa de requests (sync) para httpx (async) + respx (testes).
+# utils.py: create_async_client(), async fetch(), async RateLimiter.wait(), async query_nvd().
+# webrecon.py: todas as funcoes HTTP agora sao async, run_once() sync wrapper com asyncio.run().
+# attackaudit.py: asyncio.gather() substitui ThreadPoolExecutor, scan_paths() usa Semaphore.
+# dirscanner.py: asyncio.gather() substitui ThreadPoolExecutor, scan_target() usa Semaphore.
+# Testes migrados de responses para respx + pytest-asyncio.
 # Ganho significativo de performance em multi-target e multi-path.
-# Afeta: webrecon, attackaudit, dirscanner.
-# Requer refatoracao do create_session() e fetch().

@@ -3,9 +3,11 @@ from __future__ import annotations
 import argparse
 import re
 
-import responses
+import httpx
+import pytest
+import respx
 
-from utils import Cyber, create_session
+from utils import Cyber, create_async_client
 from webrecon import (
     CMS_SIGNATURES,
     CVEFinding,
@@ -117,19 +119,26 @@ class TestStatusText:
 
 
 class TestProbeStatus:
-    @responses.activate
-    def test_returns_status_on_success(self):
-        responses.add(responses.GET, "http://example.com/robots.txt", body=b"User-agent: *", status=200)
-        session = create_session(user_agent="TestAgent/1.0")
-        result = probe_status(session, "http://example.com/robots.txt", 5.0)
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_returns_status_on_success(self):
+        respx.get("http://example.com/robots.txt").mock(
+            return_value=httpx.Response(200, text="User-agent: *")
+        )
+        client = create_async_client(user_agent="TestAgent/1.0")
+        result = await probe_status(client, "http://example.com/robots.txt", 5.0)
+        await client.aclose()
         assert result == 200
 
-    @responses.activate
-    def test_returns_none_on_error(self):
-        import requests as _requests
-        responses.add(responses.GET, "http://example.com/robots.txt", body=_requests.exceptions.ConnectionError("refused"))
-        session = create_session(user_agent="TestAgent/1.0")
-        result = probe_status(session, "http://example.com/robots.txt", 5.0)
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_returns_none_on_error(self):
+        respx.get("http://example.com/robots.txt").mock(
+            side_effect=httpx.ConnectError("refused")
+        )
+        client = create_async_client(user_agent="TestAgent/1.0")
+        result = await probe_status(client, "http://example.com/robots.txt", 5.0)
+        await client.aclose()
         assert result is None
 
 
@@ -464,8 +473,9 @@ class TestCVEFindingDataclass:
 
 
 class TestLookupCves:
-    @responses.activate
-    def test_returns_findings(self):
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_returns_findings(self):
         mock_response = {
             "resultsPerPage": 5,
             "startIndex": 0,
@@ -484,14 +494,17 @@ class TestLookupCves:
                 }
             ],
         }
-        responses.add(responses.GET, "https://services.nvd.nist.gov/rest/json/cves/2.0", json=mock_response, status=200)
-        findings = lookup_cves([("Apache", "2.4.41")])
+        respx.get("https://services.nvd.nist.gov/rest/json/cves/2.0").mock(
+            return_value=httpx.Response(200, json=mock_response)
+        )
+        findings = await lookup_cves([("Apache", "2.4.41")])
         assert len(findings) == 1
         assert findings[0].cve_id == "CVE-2021-44228"
         assert findings[0].technology == "Apache"
 
-    @responses.activate
-    def test_deduplicates_cves(self):
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_deduplicates_cves(self):
         mock_response = {
             "resultsPerPage": 5,
             "startIndex": 0,
@@ -506,12 +519,15 @@ class TestLookupCves:
                 }
             ],
         }
-        responses.add(responses.GET, "https://services.nvd.nist.gov/rest/json/cves/2.0", json=mock_response, status=200)
-        findings = lookup_cves([("Apache", "2.4.41"), ("Apache", "2.4.41")])
+        respx.get("https://services.nvd.nist.gov/rest/json/cves/2.0").mock(
+            return_value=httpx.Response(200, json=mock_response)
+        )
+        findings = await lookup_cves([("Apache", "2.4.41"), ("Apache", "2.4.41")])
         assert len(findings) == 1
 
-    def test_empty_versions_returns_empty(self):
-        findings = lookup_cves([])
+    @pytest.mark.asyncio
+    async def test_empty_versions_returns_empty(self):
+        findings = await lookup_cves([])
         assert findings == []
 
 
@@ -665,72 +681,75 @@ class TestHarvestEmails:
 
 
 class TestCrawlInternalLinks:
-    @responses.activate
-    def test_crawls_internal_links(self):
-        responses.add(
-            responses.GET, "http://example.com/contact",
-            body=b'<html><p>Email: info@example.com</p></html>',
-            status=200,
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_crawls_internal_links(self):
+        respx.get("http://example.com/contact").mock(
+            return_value=httpx.Response(200, text='<html><p>Email: info@example.com</p></html>')
         )
-        responses.add(
-            responses.GET, "http://example.com/about",
-            body=b'<html><p>No emails here</p></html>',
-            status=200,
+        respx.get("http://example.com/about").mock(
+            return_value=httpx.Response(200, text='<html><p>No emails here</p></html>')
         )
-        session = create_session(user_agent="TestAgent/1.0")
+        client = create_async_client(user_agent="TestAgent/1.0")
         body = '<html><a href="/contact">Contact</a> <a href="/about">About</a></html>'
-        emails = crawl_internal_links(session, "http://example.com", body, 5.0, max_links=2)
+        emails = await crawl_internal_links(client, "http://example.com", body, 5.0, max_links=2)
+        await client.aclose()
         assert "info@example.com" in emails
 
-    @responses.activate
-    def test_skips_external_links(self):
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_skips_external_links(self):
         body = '<html><a href="https://external.com/mail">Ext</a></html>'
-        session = create_session(user_agent="TestAgent/1.0")
-        emails = crawl_internal_links(session, "http://example.com", body, 5.0)
+        client = create_async_client(user_agent="TestAgent/1.0")
+        emails = await crawl_internal_links(client, "http://example.com", body, 5.0)
+        await client.aclose()
         assert emails == []
 
-    @responses.activate
-    def test_respects_max_links(self):
-        responses.add(
-            responses.GET, "http://example.com/a",
-            body=b'<html><p>a@test.com</p></html>',
-            status=200,
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_respects_max_links(self):
+        respx.get("http://example.com/a").mock(
+            return_value=httpx.Response(200, text='<html><p>a@test.com</p></html>')
         )
         body = '<html><a href="/a">A</a> <a href="/b">B</a> <a href="/c">C</a></html>'
-        session = create_session(user_agent="TestAgent/1.0")
-        emails = crawl_internal_links(session, "http://example.com", body, 5.0, max_links=1)
-        assert len(responses.calls) == 1
+        client = create_async_client(user_agent="TestAgent/1.0")
+        emails = await crawl_internal_links(client, "http://example.com", body, 5.0, max_links=1)
+        await client.aclose()
+        assert respx.get("http://example.com/b").called is False
+        assert respx.get("http://example.com/c").called is False
         assert "a@test.com" in emails
 
-    @responses.activate
-    def test_handles_fetch_error(self):
-        import requests as _requests
-        responses.add(
-            responses.GET, "http://example.com/broken",
-            body=_requests.exceptions.ConnectionError("refused"),
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_handles_fetch_error(self):
+        respx.get("http://example.com/broken").mock(
+            side_effect=httpx.ConnectError("refused")
         )
         body = '<html><a href="/broken">Broken</a></html>'
-        session = create_session(user_agent="TestAgent/1.0")
-        emails = crawl_internal_links(session, "http://example.com", body, 5.0)
+        client = create_async_client(user_agent="TestAgent/1.0")
+        emails = await crawl_internal_links(client, "http://example.com", body, 5.0)
+        await client.aclose()
         assert emails == []
 
-    def test_skips_anchors_and_javascript(self):
+    @pytest.mark.asyncio
+    async def test_skips_anchors_and_javascript(self):
         body = '<html><a href="#section">S</a> <a href="javascript:void(0)">JS</a></html>'
-        session = create_session(user_agent="TestAgent/1.0")
-        emails = crawl_internal_links(session, "http://example.com", body, 5.0)
+        client = create_async_client(user_agent="TestAgent/1.0")
+        emails = await crawl_internal_links(client, "http://example.com", body, 5.0)
+        await client.aclose()
         assert emails == []
 
-    @responses.activate
-    def test_deduplicates_urls(self):
-        responses.add(
-            responses.GET, "http://example.com/page",
-            body=b'<html><p>x@y.com</p></html>',
-            status=200,
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_deduplicates_urls(self):
+        respx.get("http://example.com/page").mock(
+            return_value=httpx.Response(200, text='<html><p>x@y.com</p></html>')
         )
         body = '<html><a href="/page">P1</a> <a href="/page">P2</a></html>'
-        session = create_session(user_agent="TestAgent/1.0")
-        emails = crawl_internal_links(session, "http://example.com", body, 5.0)
-        assert len(responses.calls) == 1
+        client = create_async_client(user_agent="TestAgent/1.0")
+        emails = await crawl_internal_links(client, "http://example.com", body, 5.0)
+        await client.aclose()
+        assert respx.get("http://example.com/page").call_count == 1
         assert "x@y.com" in emails
 
 
@@ -846,7 +865,7 @@ class TestRunWhois:
         result = run_whois("::1")
         assert result is None
 
-    @responses.activate
+    @respx.mock
     def test_returns_none_on_error(self):
         import whois as _whois
         import unittest.mock

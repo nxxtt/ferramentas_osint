@@ -3,7 +3,9 @@ from __future__ import annotations
 import argparse
 import re
 
-import responses
+import httpx
+import pytest
+import respx
 
 from attackaudit import (
     CSRF_FIELD_NAMES_LOWER,
@@ -27,7 +29,7 @@ from attackaudit import (
     risk_score,
     severity_color,
 )
-from utils import Cyber, create_session
+from utils import Cyber, create_async_client
 
 
 class TestNormalizeUrl:
@@ -250,9 +252,8 @@ class TestBuildFindings:
         assert len(headers_findings) == len(SECURITY_HEADERS_RECS)
 
     def test_cors_wildcard(self):
-        from requests.structures import CaseInsensitiveDict
         parser = PageParser()
-        headers = CaseInsensitiveDict({"Access-Control-Allow-Origin": "*"})
+        headers = {"access-control-allow-origin": "*"}
         findings = build_findings("https://example.com", 200, headers, parser, [], [], "example.com")
         cors_findings = [f for f in findings if f.category == "cors"]
         assert len(cors_findings) == 1
@@ -294,9 +295,8 @@ class TestBuildFindings:
         assert exposure[0].severity == "medium"
 
     def test_server_exposed(self):
-        from requests.structures import CaseInsensitiveDict
         parser = PageParser()
-        headers = CaseInsensitiveDict({"Server": "nginx/1.20"})
+        headers = {"server": "nginx/1.20"}
         findings = build_findings("https://example.com", 200, headers, parser, [], [], "example.com")
         fp = [f for f in findings if f.category == "fingerprint"]
         assert any("Server" in f.item for f in fp)
@@ -445,7 +445,6 @@ class TestCSIFFieldNames:
 
 
 class TestCheckTLSVersions:
-    @responses.activate
     def test_http_url_returns_empty(self):
         result = check_tls_versions("http://example.com", 5.0)
         assert result == []
@@ -458,44 +457,60 @@ class TestCheckTLSVersions:
 
 
 class TestCheckXSSReflection:
-    @responses.activate
-    def test_marker_reflected(self):
-        def request_callback(request):
-            # Extract marker from URL query string and reflect it in the response
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_marker_reflected(self):
+        def handler(request):
+            url = str(request.url)
             from urllib.parse import urlparse, parse_qs
-            parsed = urlparse(request.url)
+            parsed = urlparse(url)
             params = parse_qs(parsed.query)
             marker = params.get("q", [""])[0]
-            return (200, {}, f"<html><body>Search results for: {marker}</body></html>".encode())
+            return httpx.Response(200, text=f"<html><body>Search results for: {marker}</body></html>")
 
-        responses.add_callback(responses.GET, "https://example.com/search", callback=request_callback)
-        session = create_session(user_agent="TestAgent/1.0")
-        reflected, evidence = check_xss_reflection(session, "https://example.com/search", 5.0)
-        assert reflected is True
-        assert "refletido" in evidence
+        respx.route(url__regex=r"https://example\.com/search.*").mock(side_effect=handler)
+        client = create_async_client(user_agent="TestAgent/1.0")
+        try:
+            reflected, evidence = await check_xss_reflection(client, "https://example.com/search", 5.0)
+            assert reflected is True
+            assert "refletido" in evidence
+        finally:
+            await client.aclose()
 
-    @responses.activate
-    def test_marker_not_reflected(self):
-        responses.add(responses.GET, re.compile(r"https://example\.com.*"), body=b"<html><body>Hello World</body></html>", status=200)
-        session = create_session(user_agent="TestAgent/1.0")
-        reflected, evidence = check_xss_reflection(session, "https://example.com/search", 5.0)
-        assert reflected is False
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_marker_not_reflected(self):
+        respx.route(url__regex=r"https://example\.com.*").mock(return_value=httpx.Response(200, text="<html><body>Hello World</body></html>"))
+        client = create_async_client(user_agent="TestAgent/1.0")
+        try:
+            reflected, evidence = await check_xss_reflection(client, "https://example.com/search", 5.0)
+            assert reflected is False
+        finally:
+            await client.aclose()
 
 
 class TestCheckSQLiErrors:
-    @responses.activate
-    def test_mysql_error_detected(self):
-        responses.add(responses.GET, re.compile(r"https://example\.com.*"), body=b"You have an error in your SQL syntax near ''", status=200)
-        session = create_session(user_agent="TestAgent/1.0")
-        result = check_sqli_errors(session, "https://example.com/page?id=1", 5.0)
-        assert "mysql" in result
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_mysql_error_detected(self):
+        respx.route(url__regex=r"https://example\.com.*").mock(return_value=httpx.Response(200, text="You have an error in your SQL syntax near ''"))
+        client = create_async_client(user_agent="TestAgent/1.0")
+        try:
+            result = await check_sqli_errors(client, "https://example.com/page?id=1", 5.0)
+            assert "mysql" in result
+        finally:
+            await client.aclose()
 
-    @responses.activate
-    def test_no_error_detected(self):
-        responses.add(responses.GET, re.compile(r"https://example\.com.*"), body=b"<html>Normal page</html>", status=200)
-        session = create_session(user_agent="TestAgent/1.0")
-        result = check_sqli_errors(session, "https://example.com/page?id=1", 5.0)
-        assert result == []
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_no_error_detected(self):
+        respx.route(url__regex=r"https://example\.com.*").mock(return_value=httpx.Response(200, text="<html>Normal page</html>"))
+        client = create_async_client(user_agent="TestAgent/1.0")
+        try:
+            result = await check_sqli_errors(client, "https://example.com/page?id=1", 5.0)
+            assert result == []
+        finally:
+            await client.aclose()
 
 
 class TestBuildParser:

@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import argparse
 
-import responses
+import httpx
+import pytest
+import respx
 
 from dirscanner import (
     DEFAULT_PATHS,
@@ -17,7 +19,7 @@ from dirscanner import (
     parse_statuses,
     scan_path,
 )
-from utils import RateLimiter, create_session, parse_auth, parse_extra_headers
+from utils import RateLimiter, create_async_client, parse_auth, parse_extra_headers
 
 
 class TestNormalizeBaseUrl:
@@ -288,39 +290,52 @@ class TestFindingDataclass:
 
 
 class TestScanPath:
-    @responses.activate
-    def test_returns_finding_on_match(self):
-        responses.add(responses.GET, "http://example.com/admin", body=b"<title>Admin</title>", status=200, headers={"Content-Type": "text/html"})
-        session = create_session(user_agent="TestAgent/1.0")
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_returns_finding_on_match(self):
+        respx.get("http://example.com/admin").mock(
+            return_value=httpx.Response(200, content=b"<title>Admin</title>", headers={"Content-Type": "text/html"})
+        )
+        client = create_async_client(user_agent="TestAgent/1.0")
         limiter = RateLimiter()
-        result = scan_path(session, limiter, "http://example.com/", "admin", 5.0, {200})
+        result = await scan_path(client, limiter, "http://example.com/", "admin", 5.0, {200})
+        await client.aclose()
         assert result is not None
         assert result.status == 200
         assert result.path == "/admin"
 
-    @responses.activate
-    def test_returns_none_on_status_mismatch(self):
-        responses.add(responses.GET, "http://example.com/admin", body=b"not found", status=404)
-        session = create_session(user_agent="TestAgent/1.0")
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_returns_none_on_status_mismatch(self):
+        respx.get("http://example.com/admin").mock(
+            return_value=httpx.Response(404, text="not found")
+        )
+        client = create_async_client(user_agent="TestAgent/1.0")
         limiter = RateLimiter()
-        result = scan_path(session, limiter, "http://example.com/", "admin", 5.0, {200})
+        result = await scan_path(client, limiter, "http://example.com/", "admin", 5.0, {200})
+        await client.aclose()
         assert result is None
 
-    @responses.activate
-    def test_returns_none_on_connection_error(self):
-        import requests as _requests
-        responses.add(responses.GET, "http://example.com/admin", body=_requests.exceptions.ConnectionError("refused"))
-        session = create_session(user_agent="TestAgent/1.0")
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_returns_none_on_connection_error(self):
+        respx.get("http://example.com/admin").mock(side_effect=httpx.ConnectError("refused"))
+        client = create_async_client(user_agent="TestAgent/1.0")
         limiter = RateLimiter()
-        result = scan_path(session, limiter, "http://example.com/", "admin", 5.0, {200})
+        result = await scan_path(client, limiter, "http://example.com/", "admin", 5.0, {200})
+        await client.aclose()
         assert result is None
 
-    @responses.activate
-    def test_custom_method(self):
-        responses.add(responses.POST, "http://example.com/api", json={"ok": True}, status=200)
-        session = create_session(user_agent="TestAgent/1.0")
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_custom_method(self):
+        respx.post("http://example.com/api").mock(
+            return_value=httpx.Response(200, json={"ok": True})
+        )
+        client = create_async_client(user_agent="TestAgent/1.0")
         limiter = RateLimiter()
-        result = scan_path(session, limiter, "http://example.com/", "api", 5.0, {200}, method="POST")
+        result = await scan_path(client, limiter, "http://example.com/", "api", 5.0, {200}, method="POST")
+        await client.aclose()
         assert result is not None
         assert result.method == "POST"
 

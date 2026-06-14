@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import base64
 import csv
 import json
@@ -10,15 +11,12 @@ import logging
 import os
 import shlex
 import sys
-import threading
 import time
 from collections.abc import Callable, Mapping
 from typing import Any
 from urllib.parse import urlparse
 
-import requests
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
+import httpx
 
 logger = logging.getLogger("mytools")
 
@@ -99,92 +97,81 @@ def clear_console() -> None:
 
 
 class RateLimiter:
-    """Rate limiter thread-safe usando lock e intervalo minimo entre requests."""
+    """Rate limiter async usando intervalo minimo entre requests."""
 
     def __init__(self, requests_per_second: float = 0.0) -> None:
         self._min_interval = 1.0 / requests_per_second if requests_per_second > 0 else 0.0
-        self._lock = threading.Lock()
         self._last_request_time = 0.0
 
-    def wait(self) -> None:
+    async def wait(self) -> None:
         """Bloqueia ate que o intervalo minimo entre requests tenha passado."""
         if self._min_interval <= 0:
             return
-        with self._lock:
-            now = time.monotonic()
-            next_slot = self._last_request_time + self._min_interval
-            if now >= next_slot:
-                self._last_request_time = now
-                return
-            sleep_time = next_slot - now
-            self._last_request_time = next_slot
-        time.sleep(sleep_time)
+        now = time.monotonic()
+        next_slot = self._last_request_time + self._min_interval
+        if now >= next_slot:
+            self._last_request_time = now
+            return
+        sleep_time = next_slot - now
+        self._last_request_time = next_slot
+        await asyncio.sleep(sleep_time)
 
 
-def create_session(
+def create_async_client(
     user_agent: str = f"MyTools/{__version__}",
     proxy: str | None = None,
-    max_retries: int = 3,
-    backoff_factor: float = 0.5,
-) -> requests.Session:
-    """Cria uma sessao HTTP compartilhada com retry, proxy e headers padrao."""
-    session = requests.Session()
-
-    retry = Retry(
-        total=max_retries,
-        backoff_factor=backoff_factor,
-        status_forcelist=[429, 500, 502, 503, 504],
-        respect_retry_after_header=True,
+    timeout: float = 5.0,
+) -> httpx.AsyncClient:
+    """Cria um cliente HTTP async com headers padrao."""
+    headers = {"User-Agent": user_agent}
+    return httpx.AsyncClient(
+        headers=headers,
+        proxy=proxy,
+        timeout=timeout,
+        follow_redirects=False,
+        verify=False,
     )
-    adapter = HTTPAdapter(max_retries=retry, pool_connections=10, pool_maxsize=10)
-    session.mount("http://", adapter)
-    session.mount("https://", adapter)
-
-    session.headers.update({"User-Agent": user_agent})
-
-    if proxy:
-        session.proxies = {"http": proxy, "https": proxy}
-
-    return session
 
 
-def _extract_raw_headers(response: requests.Response) -> dict[str, list[str]]:
+def _extract_raw_headers(response: httpx.Response) -> dict[str, list[str]]:
     """Extrai todos os valores de headers (incluindo duplicados como Set-Cookie)."""
     raw: dict[str, list[str]] = {}
-    try:
-        msg = response.raw._original_response.msg  # type: ignore[union-attr]
-        for key in dict.fromkeys(msg.keys()):
-            raw[key.lower()] = msg.get_all(key)  # type: ignore[union-attr]
-    except (AttributeError, TypeError):
-        pass
+    for name, value in response.headers.multi_items():
+        raw.setdefault(name.lower(), []).append(value)
     return raw
 
 
-def fetch(
-    session: requests.Session,
+async def fetch(
+    client: httpx.AsyncClient,
     url: str,
     timeout: float = 5.0,
     method: str = "GET",
     allow_redirects: bool = False,
+    max_retries: int = 3,
 ) -> tuple[int, Mapping[str, str], bytes, dict[str, list[str]]]:
-    """Realiza uma requisicao HTTP e retorna status, headers, corpo e raw_headers.
+    """Realiza uma requisicao HTTP async e retorna status, headers, corpo e raw_headers.
 
     raw_headers e um dict mapeando nomes de headers (lowercase) para listas de
     todos os valores, preservando headers duplicados como Set-Cookie.
     """
-    logger.debug("request %s %s (timeout=%.1f)", method, url, timeout)
-    try:
-        response = session.request(
-            method=method,
-            url=url,
-            timeout=timeout,
-            allow_redirects=allow_redirects,
-        )
-        logger.debug("response %d %s (%d bytes)", response.status_code, url, len(response.content))
-        return response.status_code, response.headers, response.content, _extract_raw_headers(response)
-    except requests.exceptions.RequestException as error:
-        logger.debug("error %s: %s", url, error)
-        raise ValueError(f"falha ao acessar {url}: {error}") from error
+    last_error: Exception | None = None
+    for attempt in range(max_retries):
+        logger.debug("request %s %s (timeout=%.1f, attempt=%d)", method, url, timeout, attempt + 1)
+        try:
+            response = await client.request(
+                method=method,
+                url=url,
+                timeout=timeout,
+                follow_redirects=allow_redirects,
+            )
+            logger.debug("response %d %s (%d bytes)", response.status_code, url, len(response.content))
+            return response.status_code, response.headers, response.content, _extract_raw_headers(response)
+        except httpx.RequestError as error:
+            logger.debug("error %s: %s", url, error)
+            last_error = error
+            if attempt < max_retries - 1:
+                await asyncio.sleep(0.5 * (attempt + 1))
+    raise ValueError(f"falha ao acessar {url}: {last_error}")
 
 
 def status_color(status: int) -> str:
@@ -373,21 +360,21 @@ def add_common_args(parser: argparse.ArgumentParser) -> None:
 
 
 def apply_session_auth(
-    session: requests.Session,
+    client: httpx.AsyncClient,
     auth: dict[str, str] | None = None,
     bearer_token: str | None = None,
     cookie: str | None = None,
     extra_headers: list[str] | None = None,
 ) -> None:
-    """Aplica headers de autenticacao e personalizados a uma sessao."""
+    """Aplica headers de autenticacao e personalizados a um cliente async."""
     if auth:
-        session.headers.update(auth)
+        client.headers.update(auth)
     if bearer_token:
-        session.headers["Authorization"] = f"Bearer {bearer_token}"
+        client.headers["Authorization"] = f"Bearer {bearer_token}"
     if cookie:
-        session.headers["Cookie"] = cookie
+        client.headers["Cookie"] = cookie
     if extra_headers:
-        session.headers.update(parse_extra_headers(extra_headers))
+        client.headers.update(parse_extra_headers(extra_headers))
 
 
 def extract_hostname(url: str) -> str:
@@ -400,7 +387,7 @@ def extract_hostname(url: str) -> str:
 NVD_API_URL = "https://services.nvd.nist.gov/rest/json/cves/2.0"
 
 
-def query_nvd(
+async def query_nvd(
     keyword: str,
     api_key: str | None = None,
     limit: int = 10,
@@ -422,14 +409,15 @@ def query_nvd(
     params = {"keywordSearch": keyword, "resultsPerPage": limit}
 
     try:
-        response = requests.get(NVD_API_URL, params=params, headers=headers, timeout=15)
+        async with httpx.AsyncClient() as client:
+            response = await client.get(NVD_API_URL, params=params, headers=headers, timeout=15)
         if response.status_code == 403:
             logger.debug("NVD rate limited for keyword: %s", keyword)
             return []
         if response.status_code != 200:
             logger.debug("NVD returned %d for keyword: %s", response.status_code, keyword)
             return []
-    except requests.exceptions.RequestException as error:
+    except httpx.RequestError as error:
         logger.debug("NVD request failed: %s", error)
         return []
 

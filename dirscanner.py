@@ -2,10 +2,10 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import os
 import sys
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict, dataclass
 from urllib.parse import urljoin, urlparse
 
@@ -14,7 +14,7 @@ from utils import (
     RateLimiter,
     add_common_args,
     color,
-    create_session,
+    create_async_client,
     extract_hostname,
     extract_title,
     fetch,
@@ -167,8 +167,8 @@ def matches_filter(
     return True
 
 
-def scan_path(
-    session,
+async def scan_path(
+    client,
     rate_limiter: RateLimiter,
     base_url: str,
     path: str,
@@ -176,12 +176,12 @@ def scan_path(
     statuses: set[int],
     method: str = "GET",
 ) -> Finding | None:
-    """Realiza request HTTP para um caminho específico e retorna Finding."""
+    """Realiza request HTTP para um caminho especifico e retorna Finding."""
     full_url = urljoin(base_url, path)
-    rate_limiter.wait()
+    await rate_limiter.wait()
 
     try:
-        status, headers, content, _ = fetch(session, full_url, timeout=timeout, method=method)
+        status, headers, content, _ = await fetch(client, full_url, timeout=timeout, method=method)
     except ValueError:
         return None
 
@@ -202,11 +202,11 @@ def scan_path(
     )
 
 
-def scan_target(
+async def scan_target(
     base_url: str,
     paths: list[str],
     timeout: float,
-    workers: int,
+    concurrency: int,
     statuses: set[int],
     user_agent: str,
     proxy: str | None = None,
@@ -219,17 +219,16 @@ def scan_target(
 ) -> list[Finding]:
     """Executa scan paralelo de todos os caminhos contra o alvo."""
     started = time.monotonic()
-    findings: list[Finding] = []
     rate_limiter = RateLimiter(requests_per_second)
-    session = create_session(user_agent=user_agent, proxy=proxy)
+    client = create_async_client(user_agent=user_agent, proxy=proxy)
 
     logger.info("scan iniciado: %s (%d paths)", base_url, len(paths))
-    logger.debug("method=%s, threads=%d, statuses=%s", method, workers, statuses)
+    logger.debug("method=%s, concurrency=%d, statuses=%s", method, concurrency, statuses)
 
     if auth_headers:
-        session.headers.update(auth_headers)
+        client.headers.update(auth_headers)
     if extra_headers:
-        session.headers.update(extra_headers)
+        client.headers.update(extra_headers)
 
     print(color("[*]", Cyber.CYAN, Cyber.BOLD), f"Alvo: {color(base_url, Cyber.WHITE, Cyber.BOLD)}")
     print(
@@ -237,62 +236,42 @@ def scan_target(
         f"Paths: {color(str(len(paths)), Cyber.WHITE, Cyber.BOLD)} | "
         f"Status: {color(','.join(map(str, sorted(statuses))), Cyber.YELLOW)} | "
         f"Method: {color(method, Cyber.WHITE, Cyber.BOLD)} | "
-        f"Threads: {color(str(workers), Cyber.YELLOW)}",
+        f"Concurrency: {color(str(concurrency), Cyber.YELLOW)}",
     )
 
-    with ThreadPoolExecutor(max_workers=workers) as executor:
-        batch_size = workers * 2
-        pending = []
-        for path in paths:
-            pending.append(executor.submit(scan_path, session, rate_limiter, base_url, path, timeout, statuses, method))
-            if len(pending) >= batch_size:
-                for future in as_completed(pending):
-                    try:
-                        finding = future.result()
-                    except Exception:
-                        continue
-                    if not finding:
-                        continue
-                    if not matches_filter(finding, size_range, words_range):
-                        continue
-                    findings.append(finding)
-                    details = []
-                    if finding.location:
-                        details.append(f"-> {finding.location}")
-                    if finding.title:
-                        details.append(f"title={finding.title}")
-                    suffix = f" | {' | '.join(details)}" if details else ""
-                    print(
-                        f"{color('[+]', Cyber.GREEN, Cyber.BOLD)} "
-                        f"{color(str(finding.status).ljust(3), status_color(finding.status), Cyber.BOLD)} "
-                        f"{color(str(finding.size).rjust(7), Cyber.YELLOW)}B "
-                        f"{color(finding.url, Cyber.CYAN)}"
-                        f"{color(suffix, Cyber.GRAY)}"
-                    )
-                pending.clear()
-        for future in as_completed(pending):
-            try:
-                finding = future.result()
-            except Exception:
+    sem = asyncio.Semaphore(concurrency)
+
+    async def _limited_scan(path: str) -> Finding | None:
+        async with sem:
+            return await scan_path(client, rate_limiter, base_url, path, timeout, statuses, method)
+
+    try:
+        tasks = [_limited_scan(path) for path in paths]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        findings: list[Finding] = []
+        for result in results:
+            if isinstance(result, Exception):
                 continue
-            if not finding:
+            if not result:
                 continue
-            if not matches_filter(finding, size_range, words_range):
+            if not matches_filter(result, size_range, words_range):
                 continue
-            findings.append(finding)
+            findings.append(result)
             details = []
-            if finding.location:
-                details.append(f"-> {finding.location}")
-            if finding.title:
-                details.append(f"title={finding.title}")
+            if result.location:
+                details.append(f"-> {result.location}")
+            if result.title:
+                details.append(f"title={result.title}")
             suffix = f" | {' | '.join(details)}" if details else ""
             print(
                 f"{color('[+]', Cyber.GREEN, Cyber.BOLD)} "
-                f"{color(str(finding.status).ljust(3), status_color(finding.status), Cyber.BOLD)} "
-                f"{color(str(finding.size).rjust(7), Cyber.YELLOW)}B "
-                f"{color(finding.url, Cyber.CYAN)}"
+                f"{color(str(result.status).ljust(3), status_color(result.status), Cyber.BOLD)} "
+                f"{color(str(result.size).rjust(7), Cyber.YELLOW)}B "
+                f"{color(result.url, Cyber.CYAN)}"
                 f"{color(suffix, Cyber.GRAY)}"
             )
+    finally:
+        await client.aclose()
 
     elapsed = time.monotonic() - started
     findings.sort(key=lambda item: (item.status, item.url))
@@ -392,17 +371,17 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _run_single(url: str, args: argparse.Namespace, quiet: bool = False) -> list[Finding]:
+async def _run_single(url: str, args: argparse.Namespace, quiet: bool = False) -> list[Finding]:
     """Executa scan em uma unica URL."""
     extra_headers = parse_extra_headers(args.header) if args.header else None
     cookie_headers = {"Cookie": args.cookie} if args.cookie else None
     base_url = normalize_base_url(url)
     paths = load_paths(args.wordlist, args.extensions)
-    findings = scan_target(
+    findings = await scan_target(
         base_url=base_url,
         paths=paths,
         timeout=args.timeout,
-        workers=args.threads,
+        concurrency=args.threads,
         statuses=args.status,
         user_agent=args.user_agent,
         proxy=args.proxy,
@@ -418,8 +397,8 @@ def _run_single(url: str, args: argparse.Namespace, quiet: bool = False) -> list
     return findings
 
 
-def run_once(args: argparse.Namespace) -> int:
-    """Executa um único scan com os argumentos fornecidos."""
+async def _async_run_once(args: argparse.Namespace) -> int:
+    """Executa um unico scan (async)."""
     setup_logging(verbose=args.verbose, log_file=args.log_file)
     quiet = getattr(args, "quiet", False)
     if getattr(args, "color", None) is not None:
@@ -445,7 +424,7 @@ def run_once(args: argparse.Namespace) -> int:
 
     all_findings: list[Finding] = []
     for url in urls:
-        findings = _run_single(url, args, quiet=quiet)
+        findings = await _run_single(url, args, quiet=quiet)
         all_findings.extend(findings)
         if output_dir:
             hostname = extract_hostname(url)
@@ -465,6 +444,11 @@ def run_once(args: argparse.Namespace) -> int:
             quiet=quiet,
         )
     return 0
+
+
+def run_once(args: argparse.Namespace) -> int:
+    """Executa um unico scan com os argumentos fornecidos."""
+    return asyncio.run(_async_run_once(args))
 
 
 def main() -> int:
