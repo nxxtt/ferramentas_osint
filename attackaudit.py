@@ -500,7 +500,7 @@ async def test_http_methods(
                 status, _, body, _ = await fetch(client, probe.url, timeout=timeout, method=method)
             except ValueError:
                 continue
-            if status not in {0, 404, 405}:
+            if status not in {0, 404, 405} and method in {"PUT", "DELETE", "PATCH", "TRACE"}:
                 results.append(MethodResult(probe.url, method, status, len(body)))
                 if status in {200, 201, 204}:
                     print(

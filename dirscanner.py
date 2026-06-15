@@ -249,11 +249,26 @@ async def scan_target(
     try:
         tasks = [_limited_scan(path) for path in paths]
         results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        non_null = [r for r in results if not isinstance(r, Exception) and r is not None]
+        spa_skip: set[str] = set()
+        if len(non_null) > 10:
+            groups: dict[tuple[int, int], list[Finding]] = {}
+            for r in non_null:
+                groups.setdefault((r.size, r.words), []).append(r)
+            dominant_size, dominant_group = max(groups.items(), key=lambda kv: len(kv[1]))
+            if len(dominant_group) > len(non_null) * 0.8:
+                spa_skip = {r.url for r in dominant_group}
+                logger.debug("SPA detectado: %d/%d findings ignorados (size=%d, words=%d)",
+                             len(spa_skip), len(non_null), dominant_size[0], dominant_size[1])
+
         findings: list[Finding] = []
         for result in results:
             if isinstance(result, Exception):
                 continue
             if not result:
+                continue
+            if result.url in spa_skip:
                 continue
             if not matches_filter(result, size_range, words_range):
                 continue
