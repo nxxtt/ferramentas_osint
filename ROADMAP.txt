@@ -70,3 +70,30 @@
 # Adicionar testes de: timeout, DNS failure, rate limiter edge cases,
 # retry logic, JSON output malformado, conexao recusada.
 # Afeta: test_dirscanner.py, test_attackaudit.py, test_webrecon.py, test_utils.py.
+
+## 13. Split add_common_args (pendente)
+# dnstransfer.py e subdomainenum.py redeclararam args manualmente (timeout, output, verbose, quiet, color, version).
+# add_common_args() inclui 7 args HTTP (--auth, --bearer-token, --cookie, --header, --proxy, --delay, -A)
+# que nao se aplicam a DNS tools. Dividir em add_base_args() (compartilhado) + add_http_args() (HTTP only).
+# dnstransfer e subenum chamariam add_base_args() apenas.
+# Afeta: utils.py, dnstransfer.py, subdomainenum.py.
+
+## 14. write_output validar extensao (pendente)
+# write_output() nao valida extensao do arquivo. -o resultado.xml cai no else e escreve como CSV silenciosamente.
+# Validar extensao (.json ou .csv) e dar erro claro para extensoes nao suportadas.
+# Afeta: utils.py.
+
+## 15. Help contextual no shell interativo (futuro)
+# Shell interativo mostra argparse help completo. Mostrar so argumentos mais usados com exemplos rapidos.
+# Ex: "dir> --help" mostra "Exemplos: 192.168.1.10 -x php --threads 50"
+# Afeta: utils.py (run_interactive_shell).
+
+## 16. MX/CNAME pre-brute-force (futuro)
+# subdomainenum.py comeca direto no brute-force. Consultar MX/CNAME/A existentes primeiro
+# pode revelar subdominios sem brute-force e servir de referencia.
+# Afeta: subdomainenum.py.
+
+## 17. Modo --all / wrapper script (futuro)
+# Rodar todos os modulos contra um alvo de uma vez (recon completo).
+# Melhor como wrapper script separado (ex: mytools-all target.com) do que modificar main.py.
+# Cada modulo precisa de args diferentes (--deep, -x, etc.), wrapper pode configurar defaults.
