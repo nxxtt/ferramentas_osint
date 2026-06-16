@@ -40,3 +40,33 @@
 # dirscanner.py: asyncio.gather() substitui ThreadPoolExecutor, scan_target() usa Semaphore.
 # Testes migrados de responses para respx + pytest-asyncio.
 # Ganho significativo de performance em multi-target e multi-path.
+
+## 8. Renomear --threads -> --concurrency (pendente)
+# dirscanner.py e attackaudit.py usam --threads mas controlam asyncio.Semaphore, nao threads reais.
+# Renomear para --concurrency (primario) com --threads como alias deprecated.
+# Seguir padrao do portscanner.py (--workers primario, --threads deprecated).
+# Afeta: dirscanner.py, attackaudit.py, test_dirscanner.py, test_attackaudit.py, README.MD.
+
+## 9. Progresso visual (pendente)
+# DirScanner e SubEnum ficam sem feedback por 1-20s durante scan.
+# Mostrar progresso tipo "45/200 paths escaneados" ou "120/220 subdominios testados".
+# Usar print() com \r para atualizar linha, ou barra simples.
+# Afeta: dirscanner.py, subdomainenum.py.
+
+## 10. Graceful shutdown (pendente)
+# Se usuario Ctrl+C durante scan async, nao cancela tasks pendentes de forma limpa.
+# Adicionar handler de SIGINT que cancele asyncio.gather() e feche clients.
+# Usar asyncio.Event ou threading.Event para sinalizar cancelamento.
+# Afeta: dirscanner.py, attackaudit.py, webrecon.py.
+
+## 11. FetchError customizado (pendente)
+# fetch() em utils.py levanta ValueError quando falha — generico demais.
+# Criar FetchError(Exception) com contexto (url, tentativas, ultimo erro).
+# Atualizar todos os callers (try/except ValueError → try/except FetchError).
+# Afeta: utils.py, dirscanner.py, attackaudit.py, webrecon.py, testes.
+
+## 12. Edge case tests (pendente)
+# 570 testes atuais sao majoritariamente happy-path.
+# Adicionar testes de: timeout, DNS failure, rate limiter edge cases,
+# retry logic, JSON output malformado, conexao recusada.
+# Afeta: test_dirscanner.py, test_attackaudit.py, test_webrecon.py, test_utils.py.
