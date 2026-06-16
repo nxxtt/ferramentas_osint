@@ -72,11 +72,11 @@
 # Afeta: test_dirscanner.py, test_attackaudit.py, test_webrecon.py, test_utils.py.
 
 ## 13. Split add_common_args (pendente)
-# dnstransfer.py e subdomainenum.py redeclararam args manualmente (timeout, output, verbose, quiet, color, version).
+# dnstransfer.py, subdomainenum.py e portscanner.py redeclararam args manualmente (timeout, output, verbose, quiet, color, version).
 # add_common_args() inclui 7 args HTTP (--auth, --bearer-token, --cookie, --header, --proxy, --delay, -A)
-# que nao se aplicam a DNS tools. Dividir em add_base_args() (compartilhado) + add_http_args() (HTTP only).
-# dnstransfer e subenum chamariam add_base_args() apenas.
-# Afeta: utils.py, dnstransfer.py, subdomainenum.py.
+# que nao se aplicam a DNS tools nem ao portscanner. Dividir em add_base_args() (compartilhado) + add_http_args() (HTTP only).
+# dnstransfer, subenum e portscanner chamariam add_base_args() apenas.
+# Afeta: utils.py, dnstransfer.py, subdomainenum.py, portscanner.py.
 
 ## 14. write_output validar extensao (pendente)
 # write_output() nao valida extensao do arquivo. -o resultado.xml cai no else e escreve como CSV silenciosamente.
@@ -97,3 +97,46 @@
 # Rodar todos os modulos contra um alvo de uma vez (recon completo).
 # Melhor como wrapper script separado (ex: mytools-all target.com) do que modificar main.py.
 # Cada modulo precisa de args diferentes (--deep, -x, etc.), wrapper pode configurar defaults.
+
+## 18. Cookie/--header precedence (pendente)
+# dirscanner.py:402 e attackaudit.py usam {**cookie_headers, **extra_headers}.
+# Se --header "Cookie: foo" e passado junto com --cookie bar, o header sobrescreve o cookie.
+# Ordem deveria ser invertida: {**extra_headers, **cookie_headers}.
+# Afeta: dirscanner.py, attackaudit.py.
+
+## 19. Multi-target code duplication (pendente)
+# dirscanner.py:420-457 e attackaudit.py:929-965 tem ~40 linhas quase identicas:
+# leitura de -l/--list, iteracao de URLs, output-dir com extract_hostname, consolidacao.
+# Extrair para helper em utils.py (ex: resolve_targets() + save_per_target()).
+# Afeta: utils.py, dirscanner.py, attackaudit.py.
+
+## 20. --retries CLI (pendente)
+# fetch() em utils.py tem max_retries=3 hardcoded e backoff linear (0.5 * attempt).
+# Adicionar flag --retries para configurar via CLI.
+# Afeta: utils.py, dirscanner.py, attackaudit.py, webrecon.py.
+
+## 21. DNS cache para brute-force (pendente)
+# subdomainenum.py cria dns.resolver.Resolver() sem cache por chamada.
+# Habilitar cache do dns.resolver ou compartilhar resolver entre threads.
+# Para brute-force de 220 subdominios, reduz consultas DNS repetidas ao NS.
+# Afeta: subdomainenum.py.
+
+## 22. Suporte IPv6 (pendente)
+# portscanner.py:resolve_targets() nao trata explicitamente IPv6.
+# socket.create_connection suporta mas nao ha testes nem tratamento deCIDR IPv6.
+# Afeta: portscanner.py, test_portscanner.py.
+
+## 23. XSS/SQLi auto-detect params (pendente)
+# attackaudit.py testa so ?q= ou ?id= com payloads hardcoded.
+# Auto-detectar query params da URL ou aceitar --params customizado.
+# Afeta: attackaudit.py.
+
+## 24. --dry-run (pendente)
+# Nenhum modo tem opcao de mostrar o que faria sem executar.
+# Util para validar args antes de mandar trafego.
+# Afeta: todos os modulos.
+
+## 25. Rate limit adaptativo (pendente)
+# Se target retorna 429 ou fecha conexoes, scanner continua na mesma velocidade.
+# Detectar 429 e aumentar delay automaticamente (backoff adaptativo).
+# Afeta: utils.py (RateLimiter), todos os modulos HTTP.
