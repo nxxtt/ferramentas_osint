@@ -12,6 +12,8 @@ import time
 from dataclasses import asdict, dataclass, field
 from urllib.parse import urljoin, urlparse
 
+from bs4 import BeautifulSoup
+
 from utils import (
     Cyber,
     SECURITY_HEADERS,
@@ -448,8 +450,6 @@ async def crawl_internal_links(
     max_links: int = 10,
 ) -> list[str]:
     """Crawl links internos para coletar emails adicionais."""
-    from bs4 import BeautifulSoup
-
     parsed_base = urlparse(url)
     base_netloc = parsed_base.netloc.lower()
 
