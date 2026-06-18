@@ -243,14 +243,25 @@ async def scan_target(
     )
 
     sem = asyncio.Semaphore(concurrency)
+    total_paths = len(paths)
+    completed = 0
 
     async def _limited_scan(path: str) -> Finding | None:
+        nonlocal completed
         async with sem:
-            return await scan_path(client, rate_limiter, base_url, path, timeout, statuses, method)
+            result = await scan_path(client, rate_limiter, base_url, path, timeout, statuses, method)
+            completed += 1
+            if completed % 20 == 0 or completed == total_paths:
+                sys.stdout.write(f"\r  Progresso: {completed}/{total_paths} paths testados...")
+                sys.stdout.flush()
+            return result
 
     try:
         tasks = [_limited_scan(path) for path in paths]
         results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        sys.stdout.write("\r" + " " * 60 + "\r")
+        sys.stdout.flush()
 
         non_null = [r for r in results if not isinstance(r, Exception) and r is not None]
         spa_skip: set[str] = set()

@@ -186,7 +186,12 @@ def enumerate_subdomains(
         for future in as_completed(futures):
             done_count += 1
             result = future.result()
+            if done_count % 20 == 0 or done_count == len(wordlist):
+                sys.stdout.write(f"\r  Progresso: {done_count}/{len(wordlist)} subdominios testados...")
+                sys.stdout.flush()
             if result.status == "resolved":
+                sys.stdout.write("\r" + " " * 60 + "\r")
+                sys.stdout.flush()
                 resolved.append(result)
                 ips_str = ", ".join(result.ip_addresses)
                 print(
