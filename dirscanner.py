@@ -11,6 +11,7 @@ from urllib.parse import urljoin
 
 from utils import (
     Cyber,
+    FetchError,
     RateLimiter,
     add_common_args,
     color,
@@ -165,14 +166,15 @@ async def scan_path(
     timeout: float,
     statuses: set[int],
     method: str = "GET",
+    retries: int = 3,
 ) -> Finding | None:
     """Realiza request HTTP para um caminho especifico e retorna Finding."""
     full_url = urljoin(base_url, path)
     await rate_limiter.wait()
 
     try:
-        status, headers, content, _ = await fetch(client, full_url, timeout=timeout, method=method, rate_limiter=rate_limiter)
-    except ValueError:
+        status, headers, content, _ = await fetch(client, full_url, timeout=timeout, method=method, max_retries=retries, rate_limiter=rate_limiter)
+    except FetchError:
         return None
 
     if status not in statuses:
@@ -206,6 +208,7 @@ async def scan_target(
     extra_headers: dict[str, str] | None = None,
     size_range: tuple[int, int] | None = None,
     words_range: tuple[int, int] | None = None,
+    retries: int = 3,
 ) -> list[Finding]:
     """Executa scan paralelo de todos os caminhos contra o alvo."""
     started = time.monotonic()
@@ -236,7 +239,7 @@ async def scan_target(
     async def _limited_scan(path: str) -> Finding | None:
         nonlocal completed
         async with sem:
-            result = await scan_path(client, rate_limiter, base_url, path, timeout, statuses, method)
+            result = await scan_path(client, rate_limiter, base_url, path, timeout, statuses, method, retries=retries)
             completed += 1
             if completed % 20 == 0 or completed == total_paths:
                 sys.stdout.write(f"\r  Progresso: {completed}/{total_paths} paths testados...")
@@ -400,6 +403,7 @@ async def _run_single(url: str, args: argparse.Namespace, quiet: bool = False) -
         extra_headers={**extra_headers, **cookie_headers} if cookie_headers or extra_headers else None,
         size_range=args.filter_size,
         words_range=args.filter_words,
+        retries=args.retries,
     )
     if not quiet:
         print_dir_table(findings)

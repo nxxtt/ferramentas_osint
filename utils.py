@@ -68,6 +68,22 @@ def set_color(enabled: bool) -> None:
     _USE_COLOR = enabled
 
 
+class FetchError(Exception):
+    """Erro de requisicao HTTP com contexto completo.
+
+    Attributes:
+        url: URL que falhou.
+        attempts: Quantidade de tentativas realizadas.
+        last_error: Excecao original do httpx.
+    """
+
+    def __init__(self, url: str, attempts: int, last_error: Exception) -> None:
+        self.url = url
+        self.attempts = attempts
+        self.last_error = last_error
+        super().__init__(f"falha ao acessar {url} apos {attempts} tentativa(s): {last_error}")
+
+
 class Cyber:
     """Constantes de cores ANSI para formatação de terminal."""
 
@@ -167,7 +183,7 @@ async def fetch(
     raw_headers e um dict mapeando nomes de headers (lowercase) para listas de
     todos os valores, preservando headers duplicados como Set-Cookie.
     """
-    last_error: Exception | None = None
+    last_error: httpx.RequestError = httpx.RequestError("unknown error")
     for attempt in range(max_retries):
         logger.debug("request %s %s (timeout=%.1f, attempt=%d)", method, url, timeout, attempt + 1)
         try:
@@ -189,7 +205,7 @@ async def fetch(
             last_error = error
             if attempt < max_retries - 1:
                 await asyncio.sleep(0.5 * (attempt + 1))
-    raise ValueError(f"falha ao acessar {url}: {last_error}")
+    raise FetchError(url=url, attempts=max_retries, last_error=last_error)
 
 
 def status_color(status: int) -> str:
@@ -389,6 +405,7 @@ def add_base_args(parser: argparse.ArgumentParser, timeout_default: float = 5.0)
     parser.add_argument("-q", "--quiet", action="store_true", help="Modo silencioso: sem banner/progresso. Requer -o.")
     parser.add_argument("--color", action="store_true", default=None, dest="color", help="Forca cores no terminal.")
     parser.add_argument("--no-color", action="store_false", dest="color", help="Desabilita cores no terminal.")
+    parser.add_argument("--retries", type=int, default=3, help="Numero de tentativas em caso de falha HTTP. Padrao: 3")
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
 
 
@@ -572,6 +589,8 @@ def run_interactive_shell(
             if validate_fn:
                 validate_fn(args)
             run_fn(args)
+        except FetchError as error:
+            print(color(f"Erro: {error}", Cyber.RED))
         except ValueError as error:
             print(color(f"Erro: {error}", Cyber.RED))
         except SystemExit:

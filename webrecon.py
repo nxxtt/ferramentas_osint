@@ -17,6 +17,7 @@ from bs4 import BeautifulSoup
 
 from utils import (
     Cyber,
+    FetchError,
     SECURITY_HEADERS,
     add_common_args,
     apply_session_auth,
@@ -441,7 +442,7 @@ async def _fetch_file(client, url: str, timeout: float) -> str:
     try:
         _, _, body, _ = await fetch(client, url, timeout=timeout)
         return body.decode("utf-8", errors="replace")
-    except ValueError:
+    except FetchError:
         return ""
 
 
@@ -483,7 +484,7 @@ async def crawl_internal_links(
             _, _, link_body, _ = await fetch(client, link, timeout=timeout)
             link_text = link_body.decode("utf-8", errors="replace")
             emails.extend(harvest_emails(link_text))
-        except ValueError:
+        except FetchError:
             continue
 
     return emails
@@ -711,7 +712,7 @@ async def probe_status(client, url: str, timeout: float) -> int | None:
     try:
         status, _, _, _ = await fetch(client, url, timeout=timeout)
         return status
-    except ValueError:
+    except FetchError:
         return None
 
 
@@ -742,12 +743,12 @@ async def run_recon(
             try:
                 status, headers, body, raw_headers = await fetch(client, target, timeout=timeout)
                 break
-            except ValueError as error:
+            except FetchError as error:
                 errors.append(str(error))
         else:
             if len(errors) > 1:
-                raise ValueError("falha ao acessar alvo com https e http:\n  - " + "\n  - ".join(errors))
-            raise ValueError(errors[0])
+                raise FetchError(url=url, attempts=len(errors), last_error=ValueError("falha em https e http"))
+            raise FetchError(url=url, attempts=1, last_error=ValueError(errors[0]))
 
         content_type = header_get(headers, "content-type")
         text = body.decode("utf-8", errors="replace") if "text/html" in content_type.lower() else ""

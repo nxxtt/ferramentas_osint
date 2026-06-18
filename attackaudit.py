@@ -19,6 +19,7 @@ from urllib.parse import urljoin, urlparse
 
 from utils import (
     Cyber,
+    FetchError,
     RateLimiter,
     add_common_args,
     apply_session_auth,
@@ -386,7 +387,7 @@ async def check_xss_reflection(client, base_url: str, timeout: float) -> tuple[b
 
     try:
         _, headers, body, _ = await fetch(client, test_url, timeout=timeout)
-    except ValueError:
+    except FetchError:
         return False, ""
 
     text = body.decode("utf-8", errors="replace")
@@ -413,7 +414,7 @@ async def check_sqli_errors(client, base_url: str, timeout: float) -> list[str]:
 
         try:
             _, _, body, _ = await fetch(client, test_url, timeout=timeout)
-        except ValueError:
+        except FetchError:
             continue
 
         text = body.decode("utf-8", errors="replace")
@@ -431,7 +432,7 @@ async def parse_allowed_methods(client, url: str, timeout: float) -> list[str]:
     """Obtem metodos HTTP permitidos via requisicao OPTIONS."""
     try:
         _, headers, _, _ = await fetch(client, url, timeout=timeout, method="OPTIONS")
-    except ValueError:
+    except FetchError:
         return []
     allow = header_get(headers, "allow") or header_get(headers, "access-control-allow-methods")
     return sorted({item.strip().upper() for item in allow.split(",") if item.strip()})
@@ -443,7 +444,7 @@ async def probe_path(client, rate_limiter: RateLimiter, base_url: str, path: str
     await rate_limiter.wait()
     try:
         status, headers, body, _ = await fetch(client, url, timeout=timeout, rate_limiter=rate_limiter)
-    except ValueError:
+    except FetchError:
         return None
     if status in {200, 204, 301, 302, 307, 308, 401, 403}:
         return Probe(url, status, len(body), header_get(headers, "location"))
@@ -506,7 +507,7 @@ async def test_http_methods(
             await rate_limiter.wait()
             try:
                 status, _, body, _ = await fetch(client, probe.url, timeout=timeout, method=method, rate_limiter=rate_limiter)
-            except ValueError:
+            except FetchError:
                 continue
             if status not in {0, 404, 405} and method in {"PUT", "DELETE", "PATCH", "TRACE"}:
                 results.append(MethodResult(probe.url, method, status, len(body)))

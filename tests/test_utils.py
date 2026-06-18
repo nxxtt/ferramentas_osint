@@ -11,6 +11,7 @@ import respx
 
 from utils import (
     Cyber,
+    FetchError,
     RateLimiter,
     __version__,
     add_common_args,
@@ -223,7 +224,7 @@ class TestFetch429:
         url = "https://example.com/rate"
 
         respx.get(url).mock(return_value=httpx.Response(429, headers={"Retry-After": "0"}))
-        with pytest.raises(ValueError, match="falha ao acessar"):
+        with pytest.raises(FetchError, match="falha ao acessar"):
             await fetch(client, url, rate_limiter=limiter, max_retries=2)
         await client.aclose()
 
@@ -744,7 +745,7 @@ class TestFetchRetry:
             raise httpx.ConnectError("connection refused")
 
         respx.get(url).mock(side_effect=side_effect)
-        with pytest.raises(ValueError, match="falha ao acessar"):
+        with pytest.raises(FetchError, match="falha ao acessar"):
             await fetch(client, url, max_retries=2)
         assert attempt == 2
         await client.aclose()
@@ -784,8 +785,49 @@ class TestFetchRetry:
             raise httpx.TimeoutException("timeout")
 
         respx.get(url).mock(side_effect=side_effect)
-        with pytest.raises(ValueError, match="falha ao acessar"):
+        with pytest.raises(FetchError, match="falha ao acessar"):
             await fetch(client, url, timeout=0.1, max_retries=1)
+        await client.aclose()
+
+
+class TestFetchErrorAttrs:
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_fetch_error_has_url_and_attempts(self):
+        from utils import create_async_client, fetch
+
+        client = create_async_client()
+        url = "https://example.com/fail"
+
+        def side_effect(request):
+            raise httpx.ConnectError("refused")
+
+        respx.get(url).mock(side_effect=side_effect)
+        with pytest.raises(FetchError) as exc_info:
+            await fetch(client, url, max_retries=3)
+        err = exc_info.value
+        assert err.url == url
+        assert err.attempts == 3
+        assert isinstance(err.last_error, httpx.ConnectError)
+        assert "falha ao acessar" in str(err)
+        await client.aclose()
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_fetch_error_preserves_original_exception(self):
+        from utils import create_async_client, fetch
+
+        client = create_async_client()
+        url = "https://example.com/timeout"
+
+        def side_effect(request):
+            raise httpx.TimeoutException("timed out")
+
+        respx.get(url).mock(side_effect=side_effect)
+        with pytest.raises(FetchError) as exc_info:
+            await fetch(client, url, max_retries=2)
+        assert isinstance(exc_info.value.last_error, httpx.TimeoutException)
+        assert exc_info.value.attempts == 2
         await client.aclose()
 
 
