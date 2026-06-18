@@ -29,7 +29,7 @@ from attackaudit import (
     risk_score,
     severity_color,
 )
-from utils import Cyber, create_async_client
+from utils import Cyber
 
 
 class TestNormalizeUrl:
@@ -461,7 +461,7 @@ class TestCheckTLSVersions:
 class TestCheckXSSReflection:
     @respx.mock
     @pytest.mark.asyncio
-    async def test_marker_reflected(self):
+    async def test_marker_reflected(self, async_client):
         def handler(request):
             url = str(request.url)
             from urllib.parse import urlparse, parse_qs
@@ -471,48 +471,36 @@ class TestCheckXSSReflection:
             return httpx.Response(200, text=f"<html><body>Search results for: {marker}</body></html>")
 
         respx.route(url__regex=r"https://example\.com/search.*").mock(side_effect=handler)
-        client = create_async_client(user_agent="TestAgent/1.0")
-        try:
-            reflected, evidence = await check_xss_reflection(client, "https://example.com/search", 5.0)
-            assert reflected is True
-            assert "refletido" in evidence
-        finally:
-            await client.aclose()
+        client = async_client
+        reflected, evidence = await check_xss_reflection(client, "https://example.com/search", 5.0)
+        assert reflected is True
+        assert "refletido" in evidence
 
     @respx.mock
     @pytest.mark.asyncio
-    async def test_marker_not_reflected(self):
+    async def test_marker_not_reflected(self, async_client):
         respx.route(url__regex=r"https://example\.com.*").mock(return_value=httpx.Response(200, text="<html><body>Hello World</body></html>"))
-        client = create_async_client(user_agent="TestAgent/1.0")
-        try:
-            reflected, evidence = await check_xss_reflection(client, "https://example.com/search", 5.0)
-            assert reflected is False
-        finally:
-            await client.aclose()
+        client = async_client
+        reflected, evidence = await check_xss_reflection(client, "https://example.com/search", 5.0)
+        assert reflected is False
 
 
 class TestCheckSQLiErrors:
     @respx.mock
     @pytest.mark.asyncio
-    async def test_mysql_error_detected(self):
+    async def test_mysql_error_detected(self, async_client):
         respx.route(url__regex=r"https://example\.com.*").mock(return_value=httpx.Response(200, text="You have an error in your SQL syntax near ''"))
-        client = create_async_client(user_agent="TestAgent/1.0")
-        try:
-            result = await check_sqli_errors(client, "https://example.com/page?id=1", 5.0)
-            assert "mysql" in result
-        finally:
-            await client.aclose()
+        client = async_client
+        result = await check_sqli_errors(client, "https://example.com/page?id=1", 5.0)
+        assert "mysql" in result
 
     @respx.mock
     @pytest.mark.asyncio
-    async def test_no_error_detected(self):
+    async def test_no_error_detected(self, async_client):
         respx.route(url__regex=r"https://example\.com.*").mock(return_value=httpx.Response(200, text="<html>Normal page</html>"))
-        client = create_async_client(user_agent="TestAgent/1.0")
-        try:
-            result = await check_sqli_errors(client, "https://example.com/page?id=1", 5.0)
-            assert result == []
-        finally:
-            await client.aclose()
+        client = async_client
+        result = await check_sqli_errors(client, "https://example.com/page?id=1", 5.0)
+        assert result == []
 
 
 class TestBuildParser:

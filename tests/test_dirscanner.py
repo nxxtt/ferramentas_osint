@@ -19,7 +19,7 @@ from dirscanner import (
     parse_statuses,
     scan_path,
 )
-from utils import RateLimiter, create_async_client, parse_auth, parse_extra_headers
+from utils import RateLimiter, parse_auth, parse_extra_headers
 
 
 class TestNormalizeBaseUrl:
@@ -292,50 +292,46 @@ class TestFindingDataclass:
 class TestScanPath:
     @pytest.mark.asyncio
     @respx.mock
-    async def test_returns_finding_on_match(self):
+    async def test_returns_finding_on_match(self, async_client):
         respx.get("http://example.com/admin").mock(
             return_value=httpx.Response(200, content=b"<title>Admin</title>", headers={"Content-Type": "text/html"})
         )
-        client = create_async_client(user_agent="TestAgent/1.0")
+        client = async_client
         limiter = RateLimiter()
         result = await scan_path(client, limiter, "http://example.com/", "admin", 5.0, {200})
-        await client.aclose()
         assert result is not None
         assert result.status == 200
         assert result.path == "/admin"
 
     @pytest.mark.asyncio
     @respx.mock
-    async def test_returns_none_on_status_mismatch(self):
+    async def test_returns_none_on_status_mismatch(self, async_client):
         respx.get("http://example.com/admin").mock(
             return_value=httpx.Response(404, text="not found")
         )
-        client = create_async_client(user_agent="TestAgent/1.0")
+        client = async_client
         limiter = RateLimiter()
         result = await scan_path(client, limiter, "http://example.com/", "admin", 5.0, {200})
-        await client.aclose()
         assert result is None
 
     @pytest.mark.asyncio
     @respx.mock
-    async def test_returns_none_on_connection_error(self):
+    async def test_returns_none_on_connection_error(self, async_client):
         respx.get("http://example.com/admin").mock(side_effect=httpx.ConnectError("refused"))
-        client = create_async_client(user_agent="TestAgent/1.0")
+        client = async_client
         limiter = RateLimiter()
         result = await scan_path(client, limiter, "http://example.com/", "admin", 5.0, {200})
-        await client.aclose()
         assert result is None
 
     @pytest.mark.asyncio
     @respx.mock
-    async def test_custom_method(self):
+    async def test_custom_method(self, async_client):
         respx.post("http://example.com/api").mock(
             return_value=httpx.Response(200, json={"ok": True})
         )
-        client = create_async_client(user_agent="TestAgent/1.0")
+        client = async_client
         limiter = RateLimiter()
         result = await scan_path(client, limiter, "http://example.com/", "api", 5.0, {200}, method="POST")
-        await client.aclose()
         assert result is not None
         assert result.method == "POST"
 

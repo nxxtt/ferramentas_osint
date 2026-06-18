@@ -7,7 +7,7 @@ import httpx
 import pytest
 import respx
 
-from utils import Cyber, create_async_client
+from utils import Cyber
 from webrecon import (
     CMS_SIGNATURES,
     CVEFinding,
@@ -121,24 +121,22 @@ class TestStatusText:
 class TestProbeStatus:
     @pytest.mark.asyncio
     @respx.mock
-    async def test_returns_status_on_success(self):
+    async def test_returns_status_on_success(self, async_client):
         respx.get("http://example.com/robots.txt").mock(
             return_value=httpx.Response(200, text="User-agent: *")
         )
-        client = create_async_client(user_agent="TestAgent/1.0")
+        client = async_client
         result = await probe_status(client, "http://example.com/robots.txt", 5.0)
-        await client.aclose()
         assert result == 200
 
     @pytest.mark.asyncio
     @respx.mock
-    async def test_returns_none_on_error(self):
+    async def test_returns_none_on_error(self, async_client):
         respx.get("http://example.com/robots.txt").mock(
             side_effect=httpx.ConnectError("refused")
         )
-        client = create_async_client(user_agent="TestAgent/1.0")
+        client = async_client
         result = await probe_status(client, "http://example.com/robots.txt", 5.0)
-        await client.aclose()
         assert result is None
 
 
@@ -683,72 +681,66 @@ class TestHarvestEmails:
 class TestCrawlInternalLinks:
     @pytest.mark.asyncio
     @respx.mock
-    async def test_crawls_internal_links(self):
+    async def test_crawls_internal_links(self, async_client):
         respx.get("http://example.com/contact").mock(
             return_value=httpx.Response(200, text='<html><p>Email: info@example.com</p></html>')
         )
         respx.get("http://example.com/about").mock(
             return_value=httpx.Response(200, text='<html><p>No emails here</p></html>')
         )
-        client = create_async_client(user_agent="TestAgent/1.0")
+        client = async_client
         body = '<html><a href="/contact">Contact</a> <a href="/about">About</a></html>'
         emails = await crawl_internal_links(client, "http://example.com", body, 5.0, max_links=2)
-        await client.aclose()
         assert "info@example.com" in emails
 
     @pytest.mark.asyncio
     @respx.mock
-    async def test_skips_external_links(self):
+    async def test_skips_external_links(self, async_client):
         body = '<html><a href="https://external.com/mail">Ext</a></html>'
-        client = create_async_client(user_agent="TestAgent/1.0")
+        client = async_client
         emails = await crawl_internal_links(client, "http://example.com", body, 5.0)
-        await client.aclose()
         assert emails == []
 
     @pytest.mark.asyncio
     @respx.mock
-    async def test_respects_max_links(self):
+    async def test_respects_max_links(self, async_client):
         respx.get("http://example.com/a").mock(
             return_value=httpx.Response(200, text='<html><p>a@test.com</p></html>')
         )
         body = '<html><a href="/a">A</a> <a href="/b">B</a> <a href="/c">C</a></html>'
-        client = create_async_client(user_agent="TestAgent/1.0")
+        client = async_client
         emails = await crawl_internal_links(client, "http://example.com", body, 5.0, max_links=1)
-        await client.aclose()
         assert respx.get("http://example.com/b").called is False
         assert respx.get("http://example.com/c").called is False
         assert "a@test.com" in emails
 
     @pytest.mark.asyncio
     @respx.mock
-    async def test_handles_fetch_error(self):
+    async def test_handles_fetch_error(self, async_client):
         respx.get("http://example.com/broken").mock(
             side_effect=httpx.ConnectError("refused")
         )
         body = '<html><a href="/broken">Broken</a></html>'
-        client = create_async_client(user_agent="TestAgent/1.0")
+        client = async_client
         emails = await crawl_internal_links(client, "http://example.com", body, 5.0)
-        await client.aclose()
         assert emails == []
 
     @pytest.mark.asyncio
-    async def test_skips_anchors_and_javascript(self):
+    async def test_skips_anchors_and_javascript(self, async_client):
         body = '<html><a href="#section">S</a> <a href="javascript:void(0)">JS</a></html>'
-        client = create_async_client(user_agent="TestAgent/1.0")
+        client = async_client
         emails = await crawl_internal_links(client, "http://example.com", body, 5.0)
-        await client.aclose()
         assert emails == []
 
     @pytest.mark.asyncio
     @respx.mock
-    async def test_deduplicates_urls(self):
+    async def test_deduplicates_urls(self, async_client):
         respx.get("http://example.com/page").mock(
             return_value=httpx.Response(200, text='<html><p>x@y.com</p></html>')
         )
         body = '<html><a href="/page">P1</a> <a href="/page">P2</a></html>'
-        client = create_async_client(user_agent="TestAgent/1.0")
+        client = async_client
         emails = await crawl_internal_links(client, "http://example.com", body, 5.0)
-        await client.aclose()
         assert respx.get("http://example.com/page").call_count == 1
         assert "x@y.com" in emails
 
