@@ -551,3 +551,31 @@ class TestParseIntRange:
     def test_deduplication(self):
         result = parse_int_range("80,80,80", 1, 65535, "porta")
         assert result == [80]
+
+
+class TestWriteOutput:
+    """Testa write_output com validacao de extensao."""
+
+    def test_json_extension(self, tmp_path):
+        from utils import write_output
+        path = str(tmp_path / "result.json")
+        write_output(path, {"key": "value"}, quiet=True)
+        assert os.path.exists(path)
+
+    def test_csv_extension(self, tmp_path):
+        from utils import write_output
+        path = str(tmp_path / "result.csv")
+        write_output(path, [{"a": "1"}], fieldnames=["a"], quiet=True)
+        assert os.path.exists(path)
+
+    def test_invalid_extension_raises(self, tmp_path):
+        from utils import write_output
+        path = str(tmp_path / "result.xml")
+        with pytest.raises(ValueError, match="extensao nao suportada"):
+            write_output(path, {"key": "value"}, quiet=True)
+
+    def test_txt_extension_raises(self, tmp_path):
+        from utils import write_output
+        path = str(tmp_path / "result.txt")
+        with pytest.raises(ValueError, match="extensao nao suportada"):
+            write_output(path, [{"a": "1"}], fieldnames=["a"], quiet=True)

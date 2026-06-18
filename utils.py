@@ -297,6 +297,8 @@ def write_output(
 ) -> None:
     """Salva dados em arquivo JSON ou CSV."""
     extension = os.path.splitext(path)[1].lower()
+    if extension not in (".json", ".csv"):
+        raise ValueError(f"extensao nao suportada: {extension!r} (use .json ou .csv)")
     with open(path, "w", encoding="utf-8", newline="") as file_handle:
         if extension == ".json":
             json.dump(data, file_handle, indent=2)
