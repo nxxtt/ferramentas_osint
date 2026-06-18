@@ -1,120 +1,56 @@
 # MyTools Roadmap
 # Itens pendentes e futuro identificados na auditoria de otimizacoes
 
-## 1. Progresso visual (RESOLVIDO - commit f7664d5)
-# DirScanner e SubEnum ficam sem feedback por 1-20s durante scan.
-# Mostrar progresso tipo "45/200 paths escaneados" ou "120/220 subdominios testados".
-# Usar print() com \r para atualizar linha, ou barra simples.
-# Afeta: dirscanner.py, subdomainenum.py.
-
-## 2. Graceful shutdown (RESOLVIDO - commit ed91bdf)
-# Se usuario Ctrl+C durante scan async, nao cancela tasks pendentes de forma limpa.
-# Adicionar handler de SIGINT que cancele asyncio.gather() e feche clients.
-# Usar asyncio.Event ou threading.Event para sinalizar cancelamento.
-# Afeta: dirscanner.py, attackaudit.py, webrecon.py.
-
-## 3. Edge case tests (RESOLVIDO - commit f26efea)
-# 570 testes atuais sao majoritariamente happy-path.
-# Adicionar testes de: timeout, DNS failure, rate limiter edge cases,
-# retry logic, JSON output malformado, conexao recusada.
-# Afeta: test_dirscanner.py, test_attackaudit.py, test_webrecon.py, test_utils.py.
-
-## 4. Split add_common_args (RESOLVIDO - commit 61d2e0c)
-# dnstransfer.py, subdomainenum.py e portscanner.py redeclararam args manualmente (timeout, output, verbose, quiet, color, version).
-# add_common_args() inclui 7 args HTTP (--auth, --bearer-token, --cookie, --header, --proxy, --delay, -A)
-# que nao se aplicam a DNS tools nem ao portscanner. Dividir em add_base_args() (compartilhado) + add_http_args() (HTTP only).
-# dnstransfer, subenum e portscanner chamariam add_base_args() apenas.
-# Afeta: utils.py, dnstransfer.py, subdomainenum.py, portscanner.py.
-
-## 5. write_output validar extensao (RESOLVIDO - commit ea6722f)
-# write_output() nao valida extensao do arquivo. -o resultado.xml cai no else e escreve como CSV silenciosamente.
-# Validar extensao (.json ou .csv) e dar erro claro para extensoes nao suportadas.
-# Afeta: utils.py.
-
-## 6. Cookie/--header precedence (RESOLVIDO - commit b555fe9)
-# dirscanner.py:402 e attackaudit.py usam {**cookie_headers, **extra_headers}.
-# Se --header "Cookie: foo" e passado junto com --cookie bar, o header sobrescreve o cookie.
-# Ordem deveria ser invertida: {**extra_headers, **cookie_headers}.
-# Afeta: dirscanner.py, attackaudit.py.
-
-## 7. Multi-target code duplication (RESOLVIDO - commit 5938518)
-# dirscanner.py:420-457 e attackaudit.py:929-965 tem ~40 linhas quase identicas:
-# leitura de -l/--list, iteracao de URLs, output-dir com extract_hostname, consolidacao.
-# Extrair para helper em utils.py (ex: resolve_targets() + save_per_target()).
-# Afeta: utils.py, dirscanner.py, attackaudit.py.
-
-## 8. Rate limit adaptativo (RESOLVIDO - commit 93a6d48)
-# Se target retorna 429 ou fecha conexoes, scanner continua na mesma velocidade.
-# Detectar 429 e aumentar delay automaticamente (backoff adaptativo).
-# Afeta: utils.py (RateLimiter), todos os modulos HTTP.
-
-## 9. Type checking com mypy/pyright (RESOLVIDO - commit 445c88d)
-# Type hints em todo o codigo mas sem verificacao estatica.
-# Adicionar mypy ou pyright ao pyproject.toml e CI.
-# Afeta: pyproject.toml, .github/workflows/ci.yml.
-
-## 10. conftest.py com fixtures compartilhadas (RESOLVIDO - commit 16b3cbb)
-# 29 chamadas create_async_client() espalhadas em 4 arquivos de teste.
-# Criar conftest.py com fixtures: mock_client, sample_response, sample_headers.
-# Elimina ~200 linhas de duplicacao entre test_dirscanner, test_attackaudit, test_webrecon.
-# Afeta: tests/conftest.py (novo), tests/test_dirscanner.py, tests/test_attackaudit.py, tests/test_webrecon.py.
-
-## 11. Renomear --threads -> --concurrency (futuro)
-# dirscanner.py e attackaudit.py usam --threads mas controlam asyncio.Semaphore, nao threads reais.
-# Renomear para --concurrency (primario) com --threads como alias deprecated.
-# Seguir padrao do portscanner.py (--workers primario, --threads deprecated).
-# Afeta: dirscanner.py, attackaudit.py, test_dirscanner.py, test_attackaudit.py, README.MD.
-
-## 12. FetchError customizado (futuro)
+## 1. FetchError customizado (futuro)
 # fetch() em utils.py levanta ValueError quando falha — generico demais.
 # Criar FetchError(Exception) com contexto (url, tentativas, ultimo erro).
 # Atualizar todos os callers (try/except ValueError -> try/except FetchError).
 # Afeta: utils.py, dirscanner.py, attackaudit.py, webrecon.py, testes.
 
-## 13. --retries CLI (futuro)
+## 2. --retries CLI (futuro)
 # fetch() em utils.py tem max_retries=3 hardcoded e backoff linear (0.5 * attempt).
 # Adicionar flag --retries para configurar via CLI.
 # Afeta: utils.py, dirscanner.py, attackaudit.py, webrecon.py.
 
-## 14. DNS cache para brute-force (futuro)
+## 3. DNS cache para brute-force (futuro)
 # subdomainenum.py cria dns.resolver.Resolver() sem cache por chamada.
 # Habilitar cache do dns.resolver ou compartilhar resolver entre threads.
 # Para brute-force de 220 subdominios, reduz consultas DNS repetidas ao NS.
 # Afeta: subdomainenum.py.
 
-## 15. Suporte IPv6 (futuro)
+## 4. Suporte IPv6 (futuro)
 # portscanner.py:resolve_targets() nao trata explicitamente IPv6.
 # socket.create_connection suporta mas nao ha testes nem tratamento deCIDR IPv6.
 # Afeta: portscanner.py, test_portscanner.py.
 
-## 16. XSS/SQLi auto-detect params (futuro)
+## 5. XSS/SQLi auto-detect params (futuro)
 # attackaudit.py testa so ?q= ou ?id= com payloads hardcoded.
 # Auto-detectar query params da URL ou aceitar --params customizado.
 # Afeta: attackaudit.py.
 
-## 17. --dry-run (futuro)
+## 6. --dry-run (futuro)
 # Nenhum modo tem opcao de mostrar o que faria sem executar.
 # Util para validar args antes de mandar trafego.
 # Afeta: todos os modulos.
 
-## 18. asyncio.run() no shell interativo (futuro)
+## 7. asyncio.run() no shell interativo (futuro)
 # dirscanner.run_once(), webrecon.run_once(), attackaudit.run_once() chamam asyncio.run().
 # Se chamado de dentro de um event loop (ex: Jupyter notebook), causa RuntimeError.
 # Usar nest_asyncio.run() ou detectar loop ativo e usar alternative.
 # Baixo impacto (CLI-only), mas importacao de modulos em notebooks quebra.
 # Afeta: dirscanner.py, webrecon.py, attackaudit.py.
 
-## 19. Help contextual no shell interativo (futuro)
+## 8. Help contextual no shell interativo (futuro)
 # Shell interativo mostra argparse help completo. Mostrar so argumentos mais usados com exemplos rapidos.
 # Ex: "dir> --help" mostra "Exemplos: 192.168.1.10 -x php --threads 50"
 # Afeta: utils.py (run_interactive_shell).
 
-## 20. MX/CNAME pre-brute-force (futuro)
+## 9. MX/CNAME pre-brute-force (futuro)
 # subdomainenum.py comeca direto no brute-force. Consultar MX/CNAME/A existentes primeiro
 # pode revelar subdominios sem brute-force e servir de referencia.
 # Afeta: subdomainenum.py.
 
-## 21. Modo --all / wrapper script (futuro)
+## 10. Modo --all / wrapper script (futuro)
 # Rodar todos os modulos contra um alvo de uma vez (recon completo).
 # Melhor como wrapper script separado (ex: mytools-all target.com) do que modificar main.py.
 # Cada modulo precisa de args diferentes (--deep, -x, etc.), wrapper pode configurar defaults.
