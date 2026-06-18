@@ -551,6 +551,28 @@ async def query_nvd(
     return results
 
 
+def safe_asyncio_run(coro):
+    """Executa uma coroutine async de forma segura, mesmo com event loop ativo.
+
+    Se ja existe um event loop rodando (ex: Jupyter, REPL interativo),
+    executa a coroutine em uma thread separada com seu proprio loop.
+    Caso contrario, usa asyncio.run() normalmente.
+    """
+    try:
+        running_loop = asyncio.get_running_loop()
+    except RuntimeError:
+        running_loop = None
+
+    if running_loop is None:
+        return asyncio.run(coro)
+
+    import concurrent.futures
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        future = pool.submit(asyncio.run, coro)
+        return future.result()
+
+
 def run_interactive_shell(
     parser: argparse.ArgumentParser,
     prompt: str,

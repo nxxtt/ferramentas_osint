@@ -884,3 +884,45 @@ class TestDryRunFlag:
         add_base_args(parser)
         args = parser.parse_args([])
         assert args.dry_run is False
+
+
+class TestSafeAsyncioRun:
+    def test_runs_coroutine_without_loop(self):
+        from utils import safe_asyncio_run
+
+        async def coro():
+            return 42
+
+        result = safe_asyncio_run(coro())
+        assert result == 42
+
+    def test_returns_none_for_none_coroutine(self):
+        from utils import safe_asyncio_run
+
+        async def coro():
+            return None
+
+        result = safe_asyncio_run(coro())
+        assert result is None
+
+    def test_propagates_exception(self):
+        from utils import safe_asyncio_run
+
+        async def coro():
+            raise ValueError("test error")
+
+        with pytest.raises(ValueError, match="test error"):
+            safe_asyncio_run(coro())
+
+    def test_works_with_existing_event_loop(self):
+        from utils import safe_asyncio_run
+        import asyncio
+
+        async def coro():
+            return 99
+
+        async def caller():
+            return safe_asyncio_run(coro())
+
+        result = asyncio.run(caller())
+        assert result == 99

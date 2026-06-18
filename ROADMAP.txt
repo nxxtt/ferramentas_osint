@@ -1,19 +1,12 @@
 # MyTools Roadmap
 # Itens pendentes e futuro identificados na auditoria de otimizacoes
 
-## 1. --dry-run (futuro)
-# Nenhum modo tem opcao de mostrar o que faria sem executar.
-# Util para validar args antes de mandar trafego.
-# Afeta: todos os modulos.
-
-## 2. asyncio.run() no shell interativo (futuro)
-# dirscanner.run_once(), webrecon.run_once(), attackaudit.run_once() chamam asyncio.run().
-# Se chamado de dentro de um event loop (ex: Jupyter notebook), causa RuntimeError.
-# Usar nest_asyncio.run() ou detectar loop ativo e usar alternative.
-# Baixo impacto (CLI-only), mas importacao de modulos em notebooks quebra.
+## 1. asyncio.run() no shell interativo (resolvido)
+# Adicionado safe_asyncio_run() em utils.py que detecta event loop ativo
+# e executa coroutine em thread separada quando necessario.
 # Afeta: dirscanner.py, webrecon.py, attackaudit.py.
 
-## 3. Modo --all / wrapper script (futuro)
+## 2. Modo --all / wrapper script (futuro)
 # Rodar todos os modulos contra um alvo de uma vez (recon completo).
 # Melhor como wrapper script separado (ex: mytools-all target.com) do que modificar main.py.
 # Cada modulo precisa de args diferentes (--deep, -x, etc.), wrapper pode configurar defaults.

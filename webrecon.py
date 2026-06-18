@@ -35,6 +35,7 @@ from utils import (
     query_nvd,
     resolve_target_urls,
     run_interactive_shell,
+    safe_asyncio_run,
     set_color,
     setup_logging,
     status_color,
@@ -1047,7 +1048,7 @@ async def _async_run_once(args: argparse.Namespace) -> int:
 
 def run_once(args: argparse.Namespace) -> int:
     """Executa uma unica operacao de reconhecimento com os argumentos fornecidos."""
-    return asyncio.run(_async_run_once(args))
+    return safe_asyncio_run(_async_run_once(args))
 
 
 def main() -> int:
