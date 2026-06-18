@@ -109,24 +109,26 @@ def load_wordlist(path: str | None = None) -> list[str]:
     return words
 
 
-def _resolve_subdomain(subdomain: str, domain: str, timeout: float) -> SubdomainResult:
+def _resolve_subdomain(subdomain: str, domain: str, timeout: float, resolver: dns.resolver.Resolver | None = None) -> SubdomainResult:
     """Resolve um unico subdominio via DNS A record.
 
     Args:
         subdomain: Prefixo do subdominio (ex: "www").
         domain: Dominio base (ex: "example.com").
         timeout: Timeout em segundos.
+        resolver: Resolver DNS compartilhado (com cache). Cria um novo se None.
 
     Returns:
         SubdomainResult com os IPs encontrados ou erro.
     """
     fqdn = f"{subdomain}.{domain}"
-    resolver = dns.resolver.Resolver()
-    resolver.lifetime = timeout
-    resolver.timeout = timeout
+    shared_resolver = resolver if resolver is not None else dns.resolver.Resolver()
+    if resolver is None:
+        shared_resolver.lifetime = timeout
+        shared_resolver.timeout = timeout
 
     try:
-        answers = resolver.resolve(fqdn, "A")
+        answers = shared_resolver.resolve(fqdn, "A")
         ips = sorted(str(rdata) for rdata in answers)
         logger.debug("resolvido %s -> %s", fqdn, ips)
         return SubdomainResult(subdomain=fqdn, ip_addresses=ips, status="resolved")
@@ -178,9 +180,13 @@ def enumerate_subdomains(
     resolved: list[SubdomainResult] = []
     start = time.monotonic()
 
+    resolver = dns.resolver.Resolver()
+    resolver.lifetime = timeout
+    resolver.timeout = timeout
+
     with ThreadPoolExecutor(max_workers=threads) as executor:
         futures = {
-            executor.submit(_resolve_subdomain, word, domain, timeout): word
+            executor.submit(_resolve_subdomain, word, domain, timeout, resolver): word
             for word in wordlist
         }
 
