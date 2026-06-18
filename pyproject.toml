@@ -50,7 +50,7 @@ ignore = ["E501"]
 [tool.basedpyright]
 pythonVersion = "3.10"
 exclude = ["**/__pycache__", "**/node_modules", ".git", ".venv", "tests"]
-typeCheckingMode = "off"
+typeCheckingMode = "standard"
 reportMissingImports = false
 reportMissingTypeStubs = false
 reportUnnecessaryTypeIgnoreComment = false

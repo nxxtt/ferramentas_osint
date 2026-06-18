@@ -7,7 +7,7 @@ import ipaddress
 import socket
 import sys
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from dataclasses import asdict, dataclass
 from types import MappingProxyType
 from typing import Iterable
@@ -185,7 +185,7 @@ def scan_targets(
             for port in ports
         ]
 
-        def _process_completed(futures_list: list) -> None:
+        def _process_completed(futures_list: list[Future[Finding | None]]) -> None:
             for future in as_completed(futures_list):
                 try:
                     finding = future.result()

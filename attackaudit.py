@@ -14,6 +14,7 @@ import warnings
 import time
 from dataclasses import asdict, dataclass, field
 from html.parser import HTMLParser
+from collections.abc import Mapping
 from urllib.parse import urljoin, urlparse
 
 from utils import (
@@ -308,18 +309,26 @@ def _tls_info_sync(url: str, timeout: float) -> tuple[str, str, str]:
     except (OSError, ssl.SSLError, TimeoutError):
         return "", "", ""
 
-    def flatten_name(rows: tuple[tuple[tuple[str, str], ...], ...]) -> str:
+    if cert is None:
+        return "", "", ""
+
+    def flatten_name(rows: object) -> str:
         parts = []
-        for row in rows:
-            for key, value in row:
-                if key in {"commonName", "organizationName"}:
-                    parts.append(value)
+        if isinstance(rows, tuple):
+            for row in rows:
+                if isinstance(row, tuple):
+                    for key, value in row:
+                        if key in {"commonName", "organizationName"}:
+                            parts.append(value)
         return ", ".join(parts)
 
+    subject = cert.get("subject", ())
+    issuer = cert.get("issuer", ())
+    not_after = cert.get("notAfter", "")
     return (
-        flatten_name(cert.get("subject", ())),
-        flatten_name(cert.get("issuer", ())),
-        cert.get("notAfter", ""),
+        flatten_name(subject),  # pyright: ignore[reportArgumentType]
+        flatten_name(issuer),  # pyright: ignore[reportArgumentType]
+        not_after if isinstance(not_after, str) else "",
     )
 
 
@@ -464,7 +473,7 @@ async def scan_paths(
     results = await asyncio.gather(*tasks, return_exceptions=True)
     probes: list[Probe] = []
     for result in results:
-        if isinstance(result, Exception):
+        if isinstance(result, BaseException):
             continue
         if result:
             probes.append(result)
@@ -517,7 +526,7 @@ async def test_http_methods(
 def build_findings(
     url: str,
     status: int,
-    headers: dict[str, str],
+    headers: Mapping[str, str],
     parser: PageParser,
     methods: list[str],
     probes: list[Probe],
@@ -803,9 +812,9 @@ async def run_audit(
         elapsed=time.monotonic() - started,
         tls_versions=tls_versions,
         xss_reflected=xss_reflected,
-        sqli_errors=sqli_databases,
+        sqli_errors=sqli_databases or [],
         csrf_missing=parser.forms_missing_csrf,
-        method_results=method_results,
+        method_results=method_results or [],
     )
 
 

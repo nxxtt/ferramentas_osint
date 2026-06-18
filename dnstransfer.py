@@ -39,6 +39,11 @@ DNS_PORT = 53
 AXFR_TIMEOUT = 10
 
 
+def banner() -> None:
+    """Exibe o banner ASCII art do DNS Zone Transfer."""
+    show_banner(BANNER_ART, "   DNS zone transfer (AXFR) scanner")
+
+
 @dataclass(frozen=True)
 class XfrResult:
     """Resultado de uma tentativa de zone transfer contra um nameserver."""
@@ -115,7 +120,7 @@ def try_zone_transfer(
     try:
         zone = dns.query.inbound_xfr(
             ns_ip,
-            domain,
+            domain,  # pyright: ignore[reportArgumentType]
             timeout=timeout,
             lifetime=timeout,
         )
@@ -132,7 +137,7 @@ def try_zone_transfer(
             )
 
         records: list[str] = []
-        for name, node in zone.nodes.items():
+        for name, node in zone.nodes.items():  # pyright: ignore[reportGeneralTypeIssues]
             for rdataset in node.rdatasets:
                 for rdata in rdataset:
                     records.append(f"{name} {dns.rdatatype.to_text(rdataset.rdtype)} {rdata}")

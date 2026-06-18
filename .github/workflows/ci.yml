@@ -25,6 +25,5 @@ jobs:
         run: poetry run ruff check .
       - name: Type check
         run: poetry run basedpyright
-        continue-on-error: true
       - name: Tests
         run: poetry run pytest tests/ -v

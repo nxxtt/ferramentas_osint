@@ -9,6 +9,7 @@ import os
 import re
 import sys
 import time
+from collections.abc import Mapping
 from dataclasses import asdict, dataclass, field
 from urllib.parse import urljoin, urlparse
 
@@ -317,7 +318,7 @@ def _match_signature(
 
 
 def detect_technologies(
-    headers: dict[str, str],
+    headers: Mapping[str, str],
     body: str,
     url: str,
     cookies: list[str] | None = None,
@@ -364,7 +365,7 @@ def detect_technologies(
 
 
 def detect_waf(
-    headers: dict[str, str],
+    headers: Mapping[str, str],
     body: str,
     url: str,
     cookies: list[str] | None = None,
@@ -394,7 +395,7 @@ def detect_waf(
 
 
 def extract_versions(
-    headers: dict[str, str],
+    headers: Mapping[str, str],
     body: str,
     lower_headers: dict[str, str] | None = None,
     header_blob: str | None = None,
@@ -460,7 +461,7 @@ async def crawl_internal_links(
     internal_urls: list[str] = []
 
     for tag in soup.find_all("a", href=True):
-        href = tag["href"].strip()
+        href = str(tag["href"]).strip()
         if not href or href.startswith(("#", "javascript:", "mailto:", "tel:")):
             continue
         if href.startswith("/"):

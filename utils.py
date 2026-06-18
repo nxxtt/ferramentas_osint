@@ -300,6 +300,7 @@ def print_table(
     for row in rows:
         cells = []
         styles = row_styles_fn(row) if row_styles_fn else column_styles
+        assert styles is not None
         for i, value in enumerate(row):
             aligned = value.ljust(widths[i]) if alignments[i] == "left" else value.rjust(widths[i])
             cells.append(color(aligned, *styles[i]))

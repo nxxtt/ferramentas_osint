@@ -71,6 +71,11 @@ BUILTIN_WORDLIST: tuple[str, ...] = (
 
 DEFAULT_THREADS = 20
 DEFAULT_TIMEOUT = 3.0
+
+
+def banner() -> None:
+    """Exibe o banner ASCII art do Subdomain Enumeration."""
+    show_banner(BANNER_ART, "   subdomain enumeration via DNS brute-force")
 DNS_TIMEOUT = 3.0
 
 

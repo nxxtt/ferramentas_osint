@@ -263,7 +263,7 @@ async def scan_target(
         sys.stdout.write("\r" + " " * 60 + "\r")
         sys.stdout.flush()
 
-        non_null = [r for r in results if not isinstance(r, Exception) and r is not None]
+        non_null = [r for r in results if isinstance(r, Finding)]
         spa_skip: set[str] = set()
         if len(non_null) > 10:
             groups: dict[tuple[int, int], list[Finding]] = {}
@@ -277,9 +277,7 @@ async def scan_target(
 
         findings: list[Finding] = []
         for result in results:
-            if isinstance(result, Exception):
-                continue
-            if not result:
+            if not isinstance(result, Finding):
                 continue
             if result.url in spa_skip:
                 continue
@@ -397,8 +395,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 async def _run_single(url: str, args: argparse.Namespace, quiet: bool = False) -> list[Finding]:
     """Executa scan em uma unica URL."""
-    extra_headers = parse_extra_headers(args.header) if args.header else None
-    cookie_headers = {"Cookie": args.cookie} if args.cookie else None
+    extra_headers = parse_extra_headers(args.header) if args.header else {}
+    cookie_headers = {"Cookie": args.cookie} if args.cookie else {}
     base_url = normalize_base_url(url)
     paths = load_paths(args.wordlist, args.extensions)
     findings = await scan_target(
