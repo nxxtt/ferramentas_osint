@@ -12,7 +12,7 @@ from dataclasses import asdict, dataclass
 from types import MappingProxyType
 from typing import Iterable
 
-from utils import Cyber, add_base_args, color, parse_int_range, print_table, set_color, setup_logging, show_banner, write_output, run_interactive_shell
+from utils import Cyber, add_base_args, color, create_banner, parse_int_range, print_table, set_color, setup_logging, write_output, run_interactive_shell
 
 import logging
 
@@ -38,16 +38,13 @@ TOP_100_PORTS = [
 
 
 
-def banner() -> None:
-    """Exibe o banner ASCII do scanner na tela."""
-    art = r"""
+banner = create_banner(r"""
     ____             __  _____
    / __ \____  _____/ /_/ ___/_________ _____  ____  ___  _____
   / /_/ / __ \/ ___/ __/\__ \/ ___/ __ `/ __ \/ __ \/ _ \/ ___/
  / ____/ /_/ / /  / /_ ___/ / /__/ /_/ / / / / / / /  __/ /
 /_/    \____/_/   \__//____/\___/\__,_/_/ /_/_/ /_/\___/_/
-"""
-    show_banner(art, "   TCP scanner | use apenas em alvos autorizados")
+""", "   TCP scanner | use apenas em alvos autorizados")
 
 
 @dataclass(frozen=True)

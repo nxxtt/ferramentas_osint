@@ -18,10 +18,10 @@ from utils import (
     Cyber,
     add_base_args,
     color,
+    create_banner,
     run_interactive_shell,
     set_color,
     setup_logging,
-    show_banner,
     write_output,
 )
 
@@ -39,9 +39,7 @@ DNS_PORT = 53
 AXFR_TIMEOUT = 10
 
 
-def banner() -> None:
-    """Exibe o banner ASCII art do DNS Zone Transfer."""
-    show_banner(BANNER_ART, "   DNS zone transfer (AXFR) scanner")
+banner = create_banner(BANNER_ART, "   DNS zone transfer (AXFR) scanner")
 
 
 @dataclass(frozen=True)
@@ -346,7 +344,7 @@ def main() -> int:
             description="DNS Zone Transfer Scanner interativo.",
             example="example.com -t 15",
             validate_fn=_validate,
-            banner_fn=lambda: show_banner(BANNER_ART, "AXFR scanner | use apenas em alvos autorizados"),
+            banner_fn=banner,
         )
 
     quiet = getattr(args, "quiet", False)
@@ -356,7 +354,7 @@ def main() -> int:
 
     try:
         if not quiet:
-            show_banner(BANNER_ART, "AXFR scanner | use apenas em alvos autorizados")
+            banner()
         return run_once(args)
     except Exception as error:
         print(color(f"Erro: {error}", Cyber.RED), file=sys.stderr)

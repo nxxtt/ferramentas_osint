@@ -528,10 +528,10 @@ class TestBuildParser:
         args = parser.parse_args(["https://example.com"])
         assert args.test_vulns is False
 
-    def test_default_threads(self):
+    def test_default_concurrency(self):
         parser = build_parser()
         args = parser.parse_args(["https://example.com"])
-        assert args.threads == 20
+        assert args.concurrency == 20
 
     def test_has_proxy_argument(self):
         parser = build_parser()

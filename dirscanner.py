@@ -7,7 +7,7 @@ import os
 import sys
 import time
 from dataclasses import asdict, dataclass
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urljoin
 
 from utils import (
     Cyber,
@@ -15,10 +15,12 @@ from utils import (
     add_common_args,
     color,
     create_async_client,
+    create_banner,
     ensure_output_dir,
     extract_hostname,
     extract_title,
     fetch,
+    normalize_url,
     parse_extra_headers,
     parse_int_range,
     print_table,
@@ -26,7 +28,6 @@ from utils import (
     run_interactive_shell,
     set_color,
     setup_logging,
-    show_banner,
     status_color,
     write_output,
     __version__,
@@ -65,27 +66,13 @@ class Finding:
     method: str = "GET"
 
 
-def banner() -> None:
-    """Exibe o banner ASCII do DirScanner."""
-    art = r"""
+banner = create_banner(r"""
     ____  _      _____
    / __ \(_)____/ ___/_________ _____  ____  ___  _____
   / / / / / ___/\__ \/ ___/ __ `/ __ \/ __ \/ _ \/ ___/
  / /_/ / / /  ___/ / /__/ /_/ / / / / / / /  __/ /
 /_/  /_/_/  /____/\___/\__,_/_/ /_/_/ /_/\___/_/
-"""
-    show_banner(art, "   HTTP directory scanner | use apenas em alvos autorizados")
-
-
-def normalize_base_url(url: str) -> str:
-    """Normaliza a URL alvo garantindo esquema e barra final."""
-    parsed = urlparse(url)
-    if not parsed.scheme:
-        url = "http://" + url
-        parsed = urlparse(url)
-    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-        raise ValueError(f"URL invalida: {url}")
-    return url.rstrip("/") + "/"
+""", "   HTTP directory scanner | use apenas em alvos autorizados")
 
 
 def parse_statuses(value: str) -> set[int]:
@@ -367,10 +354,10 @@ def build_parser() -> argparse.ArgumentParser:
         help="Status aceitos: default, all, 200,403 ou 200-399. Padrao: default",
     )
     parser.add_argument(
-        "--threads",
+        "--concurrency",
         type=int,
         default=40,
-        help="Numero de threads. Padrao: 40",
+        help="Concorrencia assincrona (requests simultaneos). Padrao: 40",
     )
     parser.add_argument(
         "-M",
@@ -397,13 +384,13 @@ async def _run_single(url: str, args: argparse.Namespace, quiet: bool = False) -
     """Executa scan em uma unica URL."""
     extra_headers = parse_extra_headers(args.header) if args.header else {}
     cookie_headers = {"Cookie": args.cookie} if args.cookie else {}
-    base_url = normalize_base_url(url)
+    base_url = normalize_url(url, default_scheme="http", ensure_trailing_slash=True)
     paths = load_paths(args.wordlist, args.extensions)
     findings = await scan_target(
         base_url=base_url,
         paths=paths,
         timeout=args.timeout,
-        concurrency=args.threads,
+        concurrency=args.concurrency,
         statuses=args.status,
         user_agent=args.user_agent,
         proxy=args.proxy,
@@ -425,8 +412,8 @@ async def _async_run_once(args: argparse.Namespace) -> int:
     quiet = getattr(args, "quiet", False)
     if getattr(args, "color", None) is not None:
         set_color(args.color)
-    if args.threads < 1:
-        raise ValueError("threads precisa ser maior que zero")
+    if args.concurrency < 1:
+        raise ValueError("concorrencia precisa ser maior que zero")
 
     urls = resolve_target_urls(args)
     output_dir = getattr(args, "output_dir", None)

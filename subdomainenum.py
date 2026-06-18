@@ -16,10 +16,10 @@ from utils import (
     Cyber,
     add_base_args,
     color,
+    create_banner,
     run_interactive_shell,
     set_color,
     setup_logging,
-    show_banner,
     write_output,
 )
 
@@ -73,9 +73,7 @@ DEFAULT_THREADS = 20
 DEFAULT_TIMEOUT = 3.0
 
 
-def banner() -> None:
-    """Exibe o banner ASCII art do Subdomain Enumeration."""
-    show_banner(BANNER_ART, "   subdomain enumeration via DNS brute-force")
+banner = create_banner(BANNER_ART, "   subdomain enumeration via DNS brute-force")
 
 
 @dataclass(frozen=True)
@@ -309,7 +307,7 @@ def main() -> int:
             description="Subdomain Enumeration interativo.",
             example="example.com -T 30 -w wordlist.txt",
             validate_fn=_validate,
-            banner_fn=lambda: show_banner(BANNER_ART, "DNS brute-force subdomain enumerator"),
+            banner_fn=banner,
         )
 
     quiet = getattr(args, "quiet", False)
@@ -319,7 +317,7 @@ def main() -> int:
 
     try:
         if not quiet:
-            show_banner(BANNER_ART, "DNS brute-force subdomain enumerator")
+            banner()
         return run_once(args)
     except Exception as error:
         print(color(f"Erro: {error}", Cyber.RED), file=sys.stderr)

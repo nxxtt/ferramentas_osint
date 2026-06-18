@@ -24,6 +24,7 @@ from utils import (
     apply_session_auth,
     color,
     create_async_client,
+    create_banner,
     ensure_output_dir,
     extract_hostname,
     fetch,
@@ -33,7 +34,6 @@ from utils import (
     run_interactive_shell,
     set_color,
     setup_logging,
-    show_banner,
     status_color,
     write_output,
     __version__,
@@ -54,12 +54,12 @@ SECURITY_HEADERS_RECS = {
     "permissions-policy": "Desabilite APIs do browser que a aplicacao nao usa.",
 }
 
-INTERESTING_PATHS = [
+INTERESTING_PATHS = (
     ".env", ".git/HEAD", "backup.zip", "backup.tar.gz", "dump.sql", "db.sql",
     "config.php", "phpinfo.php", "server-status", "actuator", "actuator/env",
     "swagger.json", "swagger-ui/", "api-docs", "openapi.json", "robots.txt",
     "sitemap.xml", "admin", "login", "wp-admin", "phpmyadmin",
-]
+)
 
 METHODS_TO_TEST = ["PUT", "DELETE", "PATCH", "TRACE", "OPTIONS", "HEAD"]
 
@@ -125,7 +125,7 @@ SQL_ERROR_PATTERNS: dict[str, list[re.Pattern[str]]] = {
     ],
 }
 
-SQLI_PAYLOADS = ["'", "\"", "`", "' OR '1'='1", "\" OR \"1\"=\"1"]
+SQLI_PAYLOADS = ("'", "\"", "`", "' OR '1'='1", "\" OR \"1\"=\"1")
 
 CSRF_FIELD_NAMES_LOWER = frozenset({
     "csrf_token", "_csrf", "csrf", "csrftoken", "_token",
@@ -258,16 +258,13 @@ class AuditResult:
     method_results: list[MethodResult] = field(default_factory=list)
 
 
-def banner() -> None:
-    """Exibe banner ASCII art do AttackAudit."""
-    art = r"""
+banner = create_banner(r"""
     ___   __  __             __      ___             ___ __
    /   | / /_/ /_____ ______/ /__   /   | __  ______/ (_) /_
   / /| |/ __/ __/ __ `/ ___/ //_/  / /| |/ / / / __  / / __/
  / ___ / /_/ /_/ /_/ / /__/ ,<    / ___ / /_/ / /_/ / / /_
 /_/  |_\__/\__/\__,_/\___/_/|_|  /_/  |_\__,_/\__,_/_/\__/
-"""
-    show_banner(art, "   red/blue web audit | ofensivo autorizado + hardening defensivo")
+""", "   red/blue web audit | ofensivo autorizado + hardening defensivo")
 
 
 def load_paths_from_file(paths_file: str) -> list[str]:
@@ -888,7 +885,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("url", nargs="?", help="URL alvo. Ex: https://example.com")
     parser.add_argument("-l", "--list", dest="target_list", help="Arquivo com URLs alvo (uma por linha).")
     parser.add_argument("--output-dir", dest="output_dir", help="Diretorio para salvos individuais (hostname.json).")
-    parser.add_argument("--threads", type=int, default=20, help="Threads para probes de paths. Padrao: 20")
+    parser.add_argument("--concurrency", type=int, default=20, help="Concorrencia assincrona para probes de paths. Padrao: 20")
     parser.add_argument("--paths-file", dest="paths_file", help="Arquivo com paths customizados (um por linha). Ativa --deep automaticamente.")
     parser.add_argument("--deep", action="store_true", help="Ativa probes de arquivos/endpoints comuns.")
     parser.add_argument(
@@ -911,7 +908,7 @@ async def _run_single(url: str, args: argparse.Namespace, quiet: bool = False) -
     if getattr(args, "paths_file", None):
         custom_paths = load_paths_from_file(args.paths_file)
     result = await run_audit(
-        url, args.timeout, args.user_agent, args.threads, args.deep,
+        url, args.timeout, args.user_agent, args.concurrency, args.deep,
         proxy=args.proxy, requests_per_second=args.delay,
         test_vulns=args.test_vulns,
         test_methods=getattr(args, "test_methods", False),
@@ -934,8 +931,8 @@ async def _async_run_once(args: argparse.Namespace) -> int:
         set_color(args.color)
     if getattr(args, "paths_file", None):
         args.deep = True
-    if args.threads < 1:
-        raise ValueError("threads precisa ser maior que zero")
+    if args.concurrency < 1:
+        raise ValueError("concorrencia precisa ser maior que zero")
 
     urls = resolve_target_urls(args)
     output_dir = getattr(args, "output_dir", None)

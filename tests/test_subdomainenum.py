@@ -457,7 +457,7 @@ class TestMain:
             assert result == 1
 
     @patch("subdomainenum.run_once")
-    @patch("subdomainenum.show_banner")
+    @patch("utils.show_banner")
     def test_valid_domain_calls_run_once(self, mock_banner, mock_run_once):
         mock_run_once.return_value = 0
         args = self._make_args(domain="example.com")
@@ -471,13 +471,13 @@ class TestMain:
         mock_run_once.return_value = 0
         args = self._make_args(quiet=True, output="out.json")
         with patch("subdomainenum.argparse.ArgumentParser.parse_args", return_value=args):
-            with patch("subdomainenum.show_banner") as mock_banner:
+            with patch("utils.show_banner") as mock_banner:
                 result = main()
                 assert result == 0
                 mock_banner.assert_not_called()
 
     @patch("subdomainenum.run_once")
-    @patch("subdomainenum.show_banner")
+    @patch("utils.show_banner")
     def test_exception_returns_1(self, mock_banner, mock_run_once):
         mock_run_once.side_effect = RuntimeError("fail")
         args = self._make_args(domain="example.com")

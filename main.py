@@ -9,7 +9,7 @@ import dnstransfer
 import portscanner
 import subdomainenum
 import webrecon
-from utils import Cyber, clear_console, color, run_interactive_shell, show_banner, __version__
+from utils import Cyber, clear_console, color, create_banner, run_interactive_shell, __version__
 
 """Módulo principal que integra as ferramentas de segurança: port scanner, dir scanner, web recon e attack audit."""
 
@@ -24,8 +24,8 @@ def banner() -> None:
 /_/  /_/\__, /   /_/  \____/\____/_/____/
        /____/
 """
-    show_banner(art, "   port scanner + dir scanner + web recon + attack audit + dns xfer + subenum")
-    print(color("   by Default\n", Cyber.GRAY))
+    create_banner(art, "   port scanner + dir scanner + web recon + attack audit + dns xfer + subenum",
+                  extra=lambda: print(color("   by Default\n", Cyber.GRAY)))()
 
 
 def menu() -> None:

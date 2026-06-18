@@ -264,6 +264,15 @@ def show_banner(art: str, subtitle: str) -> None:
     print(color(subtitle, Cyber.MAGENTA))
 
 
+def create_banner(art: str, subtitle: str, extra: Callable[[], None] | None = None) -> Callable[[], None]:
+    """Cria uma funcao de banner reutilizavel a partir de art e subtitle."""
+    def _banner() -> None:
+        show_banner(art, subtitle)
+        if extra:
+            extra()
+    return _banner
+
+
 def print_table(
     headers: tuple[str, ...],
     rows: list[tuple[str, ...]],
@@ -354,18 +363,21 @@ def parse_extra_headers(raw_headers: list[str]) -> dict[str, str]:
     return headers
 
 
-def normalize_url(url: str) -> str:
-    """Normaliza e valida uma URL, adicionando https:// se necessario."""
+def normalize_url(url: str, default_scheme: str = "https", ensure_trailing_slash: bool = False) -> str:
+    """Normaliza e valida uma URL, adicionando scheme padrao se necessario."""
     url = url.strip()
     if not url:
         raise ValueError("informe uma URL alvo")
     parsed = urlparse(url)
     if not parsed.scheme:
-        url = "https://" + url
+        url = f"{default_scheme}://" + url
         parsed = urlparse(url)
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
         raise ValueError(f"URL invalida: {url}")
-    return url.rstrip("/")
+    url = url.rstrip("/")
+    if ensure_trailing_slash:
+        url += "/"
+    return url
 
 
 def add_base_args(parser: argparse.ArgumentParser, timeout_default: float = 5.0) -> None:

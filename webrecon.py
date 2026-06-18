@@ -22,6 +22,7 @@ from utils import (
     apply_session_auth,
     color,
     create_async_client,
+    create_banner,
     ensure_output_dir,
     extract_hostname,
     extract_title,
@@ -33,7 +34,6 @@ from utils import (
     run_interactive_shell,
     set_color,
     setup_logging,
-    show_banner,
     status_color,
     write_output,
     __version__,
@@ -684,16 +684,13 @@ class ReconResult:
     whois_data: WhoisResult | None = None
 
 
-def banner() -> None:
-    """Exibe o banner ASCII art da ferramenta."""
-    art = r"""
+banner = create_banner(r"""
  _       __     __    ____
 | |     / /__  / /_  / __ \___  _________  ____
 | | /| / / _ \/ __ \/ /_/ / _ \/ ___/ __ \/ __ \
 | |/ |/ /  __/ /_/ / _, _/  __/ /__/ /_/ / / / /
 |__/|__/\___/_.___/_/ |_|\___/\___/\____/_/ /_/
-"""
-    show_banner(art, "   HTTP recon | headers + robots + security checks")
+""", "   HTTP recon | headers + robots + security checks")
 
 
 def candidate_urls(url: str) -> list[str]:

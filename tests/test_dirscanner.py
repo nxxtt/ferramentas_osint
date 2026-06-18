@@ -13,38 +13,37 @@ from dirscanner import (
     build_parser,
     load_paths,
     matches_filter,
-    normalize_base_url,
     parse_extensions,
     parse_range,
     parse_statuses,
     scan_path,
 )
-from utils import RateLimiter, create_async_client, parse_auth, parse_extra_headers
+from utils import RateLimiter, create_async_client, normalize_url, parse_auth, parse_extra_headers
 
 
 class TestNormalizeBaseUrl:
     def test_adds_http_scheme(self):
-        assert normalize_base_url("example.com") == "http://example.com/"
+        assert normalize_url("example.com", default_scheme="http", ensure_trailing_slash=True) == "http://example.com/"
 
     def test_keeps_https(self):
-        assert normalize_base_url("https://example.com") == "https://example.com/"
+        assert normalize_url("https://example.com", default_scheme="http", ensure_trailing_slash=True) == "https://example.com/"
 
     def test_strips_trailing_slash_then_adds(self):
-        assert normalize_base_url("https://example.com/") == "https://example.com/"
+        assert normalize_url("https://example.com/", default_scheme="http", ensure_trailing_slash=True) == "https://example.com/"
 
     def test_preserves_path(self):
-        assert normalize_base_url("https://example.com/app") == "https://example.com/app/"
+        assert normalize_url("https://example.com/app", default_scheme="http", ensure_trailing_slash=True) == "https://example.com/app/"
 
     def test_invalid_scheme_raises(self):
         try:
-            normalize_base_url("ftp://example.com")
+            normalize_url("ftp://example.com", default_scheme="http", ensure_trailing_slash=True)
             assert False, "Should have raised"
         except ValueError:
             pass
 
     def test_empty_netloc_raises(self):
         try:
-            normalize_base_url("http://")
+            normalize_url("http://", default_scheme="http", ensure_trailing_slash=True)
             assert False, "Should have raised"
         except ValueError:
             pass
@@ -351,10 +350,10 @@ class TestBuildParser:
         args = parser.parse_args(["http://example.com", "-x", "php,txt"])
         assert args.extensions == ["php", "txt"]
 
-    def test_default_threads(self):
+    def test_default_concurrency(self):
         parser = build_parser()
         args = parser.parse_args(["http://example.com"])
-        assert args.threads == 40
+        assert args.concurrency == 40
 
     def test_has_proxy_argument(self):
         parser = build_parser()
