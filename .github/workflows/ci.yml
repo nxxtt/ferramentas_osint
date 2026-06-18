@@ -23,5 +23,8 @@ jobs:
         run: poetry install --with dev
       - name: Lint
         run: poetry run ruff check .
+      - name: Type check
+        run: poetry run mypy --ignore-missing-imports .
+        continue-on-error: true
       - name: Tests
         run: poetry run pytest tests/ -v
