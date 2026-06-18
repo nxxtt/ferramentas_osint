@@ -1,5 +1,16 @@
 #!/usr/bin/env python3
-"""Helpers de rede reutilizáveis e re-exports dos primitivos HTTP."""
+"""Helpers de rede reutilizáveis e re-exports dos primitivos HTTP.
+
+Modulo de conveniencia que:
+  - Re-exporta primitivos HTTP do utils.py (fetch, create_async_client, etc.)
+  - Fornece helpers simplificados (fetch_bytes, read_response_text)
+  - Classifica respostas por Content-Type
+  - Alias: http = httpx, Client = httpx.AsyncClient
+
+Por que existe?
+  Evita imports circulares e centraliza dependencias de rede.
+  Os modulos importam de 'net' em vez de importar utils e httpx diretamente.
+"""
 from __future__ import annotations
 
 from collections.abc import Mapping
