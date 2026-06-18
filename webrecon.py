@@ -1056,6 +1056,9 @@ def main() -> int:
             banner()
             sys.stdout.flush()
         return run_once(args)
+    except KeyboardInterrupt:
+        print(color("\n[*] Interrompido pelo usuario.", Cyber.YELLOW), file=sys.stderr)
+        return 130
     except Exception as error:
         print(color(f"Erro: {error}", Cyber.RED), file=sys.stderr)
         return 1
