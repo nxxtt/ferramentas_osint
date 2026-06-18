@@ -7,9 +7,11 @@ from portscanner import (
     DEFAULT_PORTS,
     TOP_100_PORTS,
     Finding,
+    _create_connection,
     build_parser,
     ip_sort_key,
     parse_ports,
+    resolve_targets,
 )
 
 
@@ -220,3 +222,65 @@ class TestBuildParserV3:
         parser = build_parser()
         args = parser.parse_args(["127.0.0.1"])
         assert args.workers == 200
+
+
+class TestResolveTargetsIPv6:
+    def test_ipv4_single(self):
+        targets = resolve_targets(["192.168.0.1"])
+        assert len(targets) == 1
+        assert targets[0][1] == "192.168.0.1"
+
+    def test_ipv6_loopback(self):
+        targets = resolve_targets(["::1"])
+        assert len(targets) == 1
+        assert targets[0][1] == "::1"
+
+    def test_ipv6_full(self):
+        targets = resolve_targets(["2001:db8::1"])
+        assert len(targets) == 1
+        assert targets[0][1] == "2001:db8::1"
+
+    def test_ipv6_cidr(self):
+        targets = resolve_targets(["::1/128"])
+        assert len(targets) == 1
+
+    def test_ipv4_cidr(self):
+        targets = resolve_targets(["192.168.0.0/30"])
+        assert len(targets) == 2
+
+    def test_mixed_ipv4_ipv6(self):
+        targets = resolve_targets(["192.168.0.1", "::1"])
+        assert len(targets) == 2
+        addresses = {t[1] for t in targets}
+        assert "192.168.0.1" in addresses
+        assert "::1" in addresses
+
+    def test_hostname_resolves(self):
+        targets = resolve_targets(["localhost"])
+        assert len(targets) >= 1
+
+    def test_empty_string_skipped(self):
+        targets = resolve_targets(["", "  ", "192.168.0.1"])
+        assert len(targets) == 1
+
+    def test_invalid_raises(self):
+        import pytest
+        with pytest.raises(ValueError, match="nenhum alvo"):
+            resolve_targets([])
+
+    def test_unresolvable_hostname_raises(self):
+        import pytest
+        with pytest.raises(ValueError, match="nao consegui resolver"):
+            resolve_targets(["thishostdoesnotexist.invalid"])
+
+
+class TestCreateConnection:
+    def test_ipv4_connection_refused(self):
+        import pytest
+        with pytest.raises((ConnectionRefusedError, TimeoutError, OSError)):
+            _create_connection("192.0.2.1", 1, 0.1)
+
+    def test_ipv6_connection_refused(self):
+        import pytest
+        with pytest.raises((ConnectionRefusedError, TimeoutError, OSError)):
+            _create_connection("::1", 1, 0.1)

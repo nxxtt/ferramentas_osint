@@ -69,7 +69,7 @@ def parse_ports(value: str) -> list[int]:
 
 
 def resolve_targets(values: Iterable[str]) -> list[tuple[str, str]]:
-    """Resolve nomes, IPs e CIDRs em lista de pares (host, endereço IP)."""
+    """Resolve nomes, IPs (v4/v6) e CIDRs em lista de pares (host, endereço IP)."""
     targets: list[tuple[str, str]] = []
     seen: set[tuple[str, str]] = set()
 
@@ -82,13 +82,15 @@ def resolve_targets(values: Iterable[str]) -> list[tuple[str, str]]:
             network = ipaddress.ip_network(value, strict=False)
         except ValueError:
             try:
-                address = socket.gethostbyname(value)
+                infos = socket.getaddrinfo(value, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
             except socket.gaierror as error:
                 raise ValueError(f"nao consegui resolver {value!r}: {error}") from error
-            item = (value, address)
-            if item not in seen:
-                targets.append(item)
-                seen.add(item)
+            for family, _, _, _, sockaddr in infos:
+                address = str(sockaddr[0])
+                item = (value, address)
+                if item not in seen:
+                    targets.append(item)
+                    seen.add(item)
             continue
 
         for ip in network.hosts() if network.num_addresses > 2 else network:
@@ -132,6 +134,19 @@ def grab_banner(sock: socket.socket, port: int, timeout: float) -> str:
     return data.decode("utf-8", errors="replace").strip().replace("\r", " ").replace("\n", " ")
 
 
+def _create_connection(address: str, port: int, timeout: float) -> socket.socket:
+    """Cria conexao TCP, detectando automaticamente IPv4/IPv6."""
+    family = socket.AF_INET6 if ":" in address else socket.AF_INET
+    sock = socket.socket(family, socket.SOCK_STREAM)
+    sock.settimeout(timeout)
+    try:
+        sock.connect((address, port))
+        return sock
+    except Exception:
+        sock.close()
+        raise
+
+
 def scan_port(
     host: str,
     address: str,
@@ -141,7 +156,7 @@ def scan_port(
 ) -> Finding | None:
     """Tenta conectar a uma porta e retorna um Finding se estiver aberta."""
     try:
-        with socket.create_connection((address, port), timeout=timeout) as sock:
+        with _create_connection(address, port, timeout) as sock:
             banner_text = grab_banner(sock, port, timeout) if with_banner else ""
             return Finding(
                 host=host,
