@@ -407,6 +407,30 @@ def extract_hostname(url: str) -> str:
     return host.replace("/", "_").replace(":", "_")
 
 
+def resolve_target_urls(args: argparse.Namespace) -> list[str]:
+    """Le -l/--list e args.url, retorna lista deduplicada de URLs."""
+    urls: list[str] = []
+    target_list = getattr(args, "target_list", None)
+    if target_list:
+        try:
+            with open(target_list, "r", encoding="utf-8", errors="replace") as fh:
+                urls = [line.strip() for line in fh if line.strip() and not line.startswith("#")]
+        except FileNotFoundError:
+            raise ValueError(f"arquivo nao encontrado: {target_list}")
+    url = getattr(args, "url", None)
+    if url:
+        urls.append(url)
+    if not urls:
+        raise ValueError("informe uma URL alvo ou use -l/--list")
+    return urls
+
+
+def ensure_output_dir(output_dir: str | None) -> None:
+    """Cria o diretorio de saida se nao existir."""
+    if output_dir and not os.path.isdir(output_dir):
+        os.makedirs(output_dir, exist_ok=True)
+
+
 NVD_API_URL = "https://services.nvd.nist.gov/rest/json/cves/2.0"
 
 

@@ -17,6 +17,7 @@ from utils import (
     apply_session_auth,
     color,
     create_async_client,
+    ensure_output_dir,
     extract_hostname,
     extract_title,
     header_get,
@@ -26,6 +27,7 @@ from utils import (
     parse_int_range,
     print_table,
     query_nvd,
+    resolve_target_urls,
     set_color,
     setup_logging,
     status_color,
@@ -579,3 +581,50 @@ class TestWriteOutput:
         path = str(tmp_path / "result.txt")
         with pytest.raises(ValueError, match="extensao nao suportada"):
             write_output(path, [{"a": "1"}], fieldnames=["a"], quiet=True)
+
+
+class TestResolveTargetUrls:
+    def test_url_only(self):
+        args = argparse.Namespace(target_list=None, url="http://example.com")
+        assert resolve_target_urls(args) == ["http://example.com"]
+
+    def test_list_only(self, tmp_path):
+        lst = tmp_path / "targets.txt"
+        lst.write_text("http://a.com\nhttp://b.com\n", encoding="utf-8")
+        args = argparse.Namespace(target_list=str(lst), url=None)
+        assert resolve_target_urls(args) == ["http://a.com", "http://b.com"]
+
+    def test_both_combined(self, tmp_path):
+        lst = tmp_path / "targets.txt"
+        lst.write_text("http://a.com\n", encoding="utf-8")
+        args = argparse.Namespace(target_list=str(lst), url="http://b.com")
+        assert resolve_target_urls(args) == ["http://a.com", "http://b.com"]
+
+    def test_skips_blank_and_comments(self, tmp_path):
+        lst = tmp_path / "targets.txt"
+        lst.write_text("http://a.com\n\n# comment\n  \nhttp://b.com\n", encoding="utf-8")
+        args = argparse.Namespace(target_list=str(lst), url=None)
+        assert resolve_target_urls(args) == ["http://a.com", "http://b.com"]
+
+    def test_no_targets_raises(self):
+        args = argparse.Namespace(target_list=None, url=None)
+        with pytest.raises(ValueError, match="informe uma URL"):
+            resolve_target_urls(args)
+
+    def test_missing_file_raises(self):
+        args = argparse.Namespace(target_list="/nonexistent/file.txt", url=None)
+        with pytest.raises(ValueError, match="arquivo nao encontrado"):
+            resolve_target_urls(args)
+
+
+class TestEnsureOutputDir:
+    def test_creates_dir(self, tmp_path):
+        new_dir = str(tmp_path / "output")
+        ensure_output_dir(new_dir)
+        assert os.path.isdir(new_dir)
+
+    def test_none_is_noop(self):
+        ensure_output_dir(None)
+
+    def test_existing_dir_is_noop(self, tmp_path):
+        ensure_output_dir(str(tmp_path))

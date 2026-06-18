@@ -23,10 +23,12 @@ from utils import (
     apply_session_auth,
     color,
     create_async_client,
+    ensure_output_dir,
     extract_hostname,
     fetch,
     header_get,
     normalize_url,
+    resolve_target_urls,
     run_interactive_shell,
     set_color,
     setup_logging,
@@ -926,21 +928,9 @@ async def _async_run_once(args: argparse.Namespace) -> int:
     if args.threads < 1:
         raise ValueError("threads precisa ser maior que zero")
 
-    urls: list[str] = []
-    if getattr(args, "target_list", None):
-        try:
-            with open(args.target_list, "r", encoding="utf-8", errors="replace") as fh:
-                urls = [line.strip() for line in fh if line.strip() and not line.startswith("#")]
-        except FileNotFoundError:
-            raise ValueError(f"arquivo nao encontrado: {args.target_list}")
-    if args.url:
-        urls.append(args.url)
-    if not urls:
-        raise ValueError("informe uma URL alvo ou use -l/--list")
-
+    urls = resolve_target_urls(args)
     output_dir = getattr(args, "output_dir", None)
-    if output_dir and not os.path.isdir(output_dir):
-        os.makedirs(output_dir, exist_ok=True)
+    ensure_output_dir(output_dir)
 
     all_results: list[AuditResult] = []
     for url in urls:
