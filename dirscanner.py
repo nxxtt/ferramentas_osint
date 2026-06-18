@@ -399,7 +399,7 @@ async def _run_single(url: str, args: argparse.Namespace, quiet: bool = False) -
         requests_per_second=args.delay,
         method=args.method,
         auth_headers=args.auth,
-        extra_headers={**cookie_headers, **extra_headers} if cookie_headers or extra_headers else None,
+        extra_headers={**extra_headers, **cookie_headers} if cookie_headers or extra_headers else None,
         size_range=args.filter_size,
         words_range=args.filter_words,
     )

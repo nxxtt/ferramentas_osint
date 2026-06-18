@@ -384,10 +384,10 @@ def apply_session_auth(
         client.headers.update(auth)
     if bearer_token:
         client.headers["Authorization"] = f"Bearer {bearer_token}"
-    if cookie:
-        client.headers["Cookie"] = cookie
     if extra_headers:
         client.headers.update(parse_extra_headers(extra_headers))
+    if cookie:
+        client.headers["Cookie"] = cookie
 
 
 def extract_hostname(url: str) -> str:
