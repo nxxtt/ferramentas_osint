@@ -9,6 +9,7 @@ import respx
 
 from attackaudit import (
     CSRF_FIELD_NAMES_LOWER,
+    DEFAULT_INJECT_PARAMS,
     METHODS_TO_TEST,
     SQL_ERROR_PATTERNS,
     SQLI_PAYLOADS,
@@ -20,6 +21,7 @@ from attackaudit import (
     RISK_WEIGHTS,
     SECURITY_HEADERS_RECS,
     TLSVersionResult,
+    _extract_query_params,
     build_findings,
     build_parser,
     check_sqli_errors,
@@ -788,3 +790,140 @@ class TestCheckSQLiErrorsEdgeCases:
         respx.route(url__regex=r"https://example\.com.*").mock(return_value=httpx.Response(200, text="ERROR: syntax error at or near \"1\""))
         result = await check_sqli_errors(async_client, "https://example.com/page?id=1", 5.0)
         assert any("postgresql" in r for r in result) or len(result) > 0
+
+
+class TestExtractQueryParams:
+    def test_empty_url(self):
+        assert _extract_query_params("https://example.com") == []
+
+    def test_single_param(self):
+        result = _extract_query_params("https://example.com?page=1")
+        assert "page" in result
+
+    def test_multiple_params(self):
+        result = _extract_query_params("https://example.com?q=hello&id=42")
+        assert "q" in result
+        assert "id" in result
+
+    def test_empty_param_value(self):
+        result = _extract_query_params("https://example.com?q=")
+        assert "q" in result
+
+    def test_complex_query(self):
+        result = _extract_query_params("https://example.com?search=test&page=2&sort=name")
+        assert len(result) == 3
+
+
+class TestDefaultInjectParams:
+    def test_contains_common_params(self):
+        assert "q" in DEFAULT_INJECT_PARAMS
+        assert "id" in DEFAULT_INJECT_PARAMS
+        assert "search" in DEFAULT_INJECT_PARAMS
+
+    def test_is_tuple(self):
+        assert isinstance(DEFAULT_INJECT_PARAMS, tuple)
+
+    def test_not_empty(self):
+        assert len(DEFAULT_INJECT_PARAMS) > 0
+
+
+class TestCheckXSSWithCustomParams:
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_custom_param_reflected(self, async_client):
+        def handler(request):
+            url = str(request.url)
+            from urllib.parse import urlparse, parse_qs
+            parsed = urlparse(url)
+            params = parse_qs(parsed.query)
+            marker = params.get("search", [""])[0]
+            return httpx.Response(200, text=f"<html><body>Results: {marker}</body></html>")
+
+        respx.route(url__regex=r"https://example\.com.*").mock(side_effect=handler)
+        reflected, evidence = await check_xss_reflection(
+            async_client, "https://example.com/search", 5.0, inject_params=["search"]
+        )
+        assert reflected is True
+        assert "param=search" in evidence
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_auto_detect_from_url(self, async_client):
+        def handler(request):
+            url = str(request.url)
+            from urllib.parse import urlparse, parse_qs
+            parsed = urlparse(url)
+            params = parse_qs(parsed.query)
+            marker = params.get("user", [""])[0]
+            return httpx.Response(200, text=f"<html>Hello {marker}</html>")
+
+        respx.route(url__regex=r"https://example\.com.*").mock(side_effect=handler)
+        reflected, evidence = await check_xss_reflection(
+            async_client, "https://example.com/profile?user=1", 5.0
+        )
+        assert reflected is True
+        assert "param=user" in evidence
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_fallback_to_defaults(self, async_client):
+        def handler(request):
+            url = str(request.url)
+            from urllib.parse import urlparse, parse_qs
+            parsed = urlparse(url)
+            params = parse_qs(parsed.query)
+            marker = params.get("q", [""])[0]
+            return httpx.Response(200, text=f"<html>{marker}</html>")
+
+        respx.route(url__regex=r"https://example\.com.*").mock(side_effect=handler)
+        reflected, evidence = await check_xss_reflection(
+            async_client, "https://example.com", 5.0
+        )
+        assert reflected is True
+
+
+class TestCheckSQLiWithCustomParams:
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_custom_param_sqli(self, async_client):
+        respx.route(url__regex=r"https://example\.com.*").mock(
+            return_value=httpx.Response(200, text="You have an error in your SQL syntax")
+        )
+        result = await check_sqli_errors(
+            async_client, "https://example.com/page?search=test", 5.0, inject_params=["search"]
+        )
+        assert "mysql" in result
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_auto_detect_from_url(self, async_client):
+        respx.route(url__regex=r"https://example\.com.*").mock(
+            return_value=httpx.Response(200, text="You have an error in your SQL syntax")
+        )
+        result = await check_sqli_errors(
+            async_client, "https://example.com/page?item=1", 5.0
+        )
+        assert "mysql" in result
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_no_params_fallback(self, async_client):
+        respx.route(url__regex=r"https://example\.com.*").mock(
+            return_value=httpx.Response(200, text="Normal page")
+        )
+        result = await check_sqli_errors(
+            async_client, "https://example.com/page", 5.0
+        )
+        assert result == []
+
+
+class TestBuildParserParams:
+    def test_has_params_argument(self):
+        parser = build_parser()
+        args = parser.parse_args(["https://example.com", "--params", "q,search,id"])
+        assert args.params == "q,search,id"
+
+    def test_default_params_none(self):
+        parser = build_parser()
+        args = parser.parse_args(["https://example.com"])
+        assert args.params is None

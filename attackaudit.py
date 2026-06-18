@@ -15,7 +15,7 @@ import time
 from dataclasses import asdict, dataclass, field
 from html.parser import HTMLParser
 from collections.abc import Mapping
-from urllib.parse import urljoin, urlparse
+from urllib.parse import parse_qs, urljoin, urlparse
 
 from net import (
     FetchError,
@@ -135,6 +135,16 @@ CSRF_FIELD_NAMES_LOWER = frozenset({
     "authenticity_token", "xsrf-token", "_xsrf", "xsrf-token",
     "_csrf_token", "csrfmiddlewaretoken", "__requestverificationtoken",
 })
+
+DEFAULT_INJECT_PARAMS = ("q", "id", "search", "page", "name", "user", "cmd", "file", "path", "input")
+
+
+def _extract_query_params(url: str) -> list[str]:
+    """Extrai nomes dos query params de uma URL para injecao XSS/SQLi."""
+    parsed = urlparse(url)
+    if not parsed.query:
+        return []
+    return list(parse_qs(parsed.query, keep_blank_values=True).keys())
 
 
 class PageParser(HTMLParser):
@@ -381,51 +391,75 @@ async def check_tls_versions(url: str, timeout: float) -> list[TLSVersionResult]
     return await asyncio.to_thread(_check_tls_versions_sync, url, timeout)
 
 
-async def check_xss_reflection(client, base_url: str, timeout: float) -> tuple[bool, str]:
+async def check_xss_reflection(
+    client,
+    base_url: str,
+    timeout: float,
+    inject_params: list[str] | None = None,
+) -> tuple[bool, str]:
     """Testa se a URL reflete entrada sem sanitizacao basica de XSS."""
-    marker = "xss" + secrets.token_hex(4)
-    separator = "&" if "?" in base_url else "?"
-    test_url = base_url + separator + "q=" + marker
+    if inject_params is None:
+        url_params = _extract_query_params(base_url)
+        inject_params = url_params if url_params else list(DEFAULT_INJECT_PARAMS)
 
-    try:
-        _, headers, body, _ = await fetch(client, test_url, timeout=timeout)
-    except FetchError:
-        return False, ""
-
-    text = body.decode("utf-8", errors="replace")
-    if marker in text:
-        lower_text = text.lower()
-        marker_lower = marker.lower()
-        context = "html_body"
-        idx = lower_text.find(marker_lower)
-        snippet = text[max(0, idx - 30):idx + len(marker) + 30]
-        return True, f"refletido em {context}: ...{snippet}..."
-    return False, ""
-
-
-async def check_sqli_errors(client, base_url: str, timeout: float) -> list[str]:
-    """Testa se a aplicacao retorna erros SQL em payloads de injecao."""
-    detected_databases: list[str] = []
-    parsed = urlparse(base_url)
-
-    for payload in SQLI_PAYLOADS[:2]:
-        if parsed.query:
-            test_url = re.sub(r'=[^&]*', '=' + payload, base_url, count=1)
+    for param in inject_params:
+        marker = "xss" + secrets.token_hex(4)
+        parsed = urlparse(base_url)
+        if parsed.query and param + "=" in parsed.query:
+            test_url = re.sub(rf'{re.escape(param)}=[^&]*', param + "=" + marker, base_url, count=1)
         else:
-            test_url = base_url + "?id=" + payload
+            separator = "&" if "?" in base_url else "?"
+            test_url = base_url + separator + param + "=" + marker
 
         try:
-            _, _, body, _ = await fetch(client, test_url, timeout=timeout)
+            _, headers, body, _ = await fetch(client, test_url, timeout=timeout)
         except FetchError:
             continue
 
         text = body.decode("utf-8", errors="replace")
-        for db_name, patterns in SQL_ERROR_PATTERNS.items():
-            for pattern in patterns:
-                if pattern.search(text):
-                    if db_name not in detected_databases:
-                        detected_databases.append(db_name)
-                    break
+        if marker in text:
+            lower_text = text.lower()
+            marker_lower = marker.lower()
+            context = "html_body"
+            idx = lower_text.find(marker_lower)
+            snippet = text[max(0, idx - 30):idx + len(marker) + 30]
+            return True, f"refletido em {context} via param={param}: ...{snippet}..."
+    return False, ""
+
+
+async def check_sqli_errors(
+    client,
+    base_url: str,
+    timeout: float,
+    inject_params: list[str] | None = None,
+) -> list[str]:
+    """Testa se a aplicacao retorna erros SQL em payloads de injecao."""
+    detected_databases: list[str] = []
+    parsed = urlparse(base_url)
+
+    if inject_params is None:
+        url_params = _extract_query_params(base_url)
+        inject_params = url_params if url_params else ["id"]
+
+    for param in inject_params:
+        for payload in SQLI_PAYLOADS[:2]:
+            if parsed.query:
+                test_url = re.sub(rf'{re.escape(param)}=[^&]*', param + "=" + payload, base_url, count=1)
+            else:
+                test_url = base_url + "?" + param + "=" + payload
+
+            try:
+                _, _, body, _ = await fetch(client, test_url, timeout=timeout)
+            except FetchError:
+                continue
+
+            text = body.decode("utf-8", errors="replace")
+            for db_name, patterns in SQL_ERROR_PATTERNS.items():
+                for pattern in patterns:
+                    if pattern.search(text):
+                        if db_name not in detected_databases:
+                            detected_databases.append(db_name)
+                        break
 
     return detected_databases
 
@@ -719,6 +753,7 @@ async def run_audit(
     cookie: str | None = None,
     extra_headers: list[str] | None = None,
     paths: list[str] | None = None,
+    inject_params: list[str] | None = None,
 ) -> AuditResult:
     """Executa auditoria completa em uma URL alvo."""
     started = time.monotonic()
@@ -764,12 +799,12 @@ async def run_audit(
         sqli_databases: list[str] | None = None
         if test_vulns:
             print(color("[*]", Cyber.CYAN, Cyber.BOLD), "Testando XSS reflection...")
-            xss_reflected, xss_evidence = await check_xss_reflection(client, target, timeout)
+            xss_reflected, xss_evidence = await check_xss_reflection(client, target, timeout, inject_params=inject_params)
             if xss_reflected:
                 print(color("[!]", Cyber.RED, Cyber.BOLD), "XSS refletido detectado!")
 
             print(color("[*]", Cyber.CYAN, Cyber.BOLD), "Testando SQLi error-based...")
-            sqli_databases = await check_sqli_errors(client, target, timeout)
+            sqli_databases = await check_sqli_errors(client, target, timeout, inject_params=inject_params)
             if sqli_databases:
                 print(color("[!]", Cyber.RED, Cyber.BOLD), f"Erros SQL detectados: {', '.join(sqli_databases)}")
 
@@ -901,6 +936,10 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Testa metodos HTTP perigosos (PUT, DELETE, PATCH, TRACE) nos endpoints.",
     )
+    parser.add_argument(
+        "--params",
+        help="Query params para injecao XSS/SQLi (separado por virgula). Ex: --params 'q,id,search'",
+    )
     parser.set_defaults(user_agent=f"Mozilla/5.0 (X11; Linux x86_64) AttackAudit/{__version__}")
     return parser
 
@@ -910,6 +949,9 @@ async def _run_single(url: str, args: argparse.Namespace, quiet: bool = False) -
     custom_paths = None
     if getattr(args, "paths_file", None):
         custom_paths = load_paths_from_file(args.paths_file)
+    inject_params = None
+    if getattr(args, "params", None):
+        inject_params = [p.strip() for p in args.params.split(",") if p.strip()]
     result = await run_audit(
         url, args.timeout, args.user_agent, args.concurrency, args.deep,
         proxy=args.proxy, requests_per_second=args.delay,
@@ -920,6 +962,7 @@ async def _run_single(url: str, args: argparse.Namespace, quiet: bool = False) -
         cookie=getattr(args, "cookie", None),
         extra_headers=getattr(args, "header", None),
         paths=custom_paths,
+        inject_params=inject_params,
     )
     if not quiet:
         print_result(result)
@@ -984,6 +1027,7 @@ def main() -> int:
                 "Exemplos:\n"
                 "  https://example.com --deep\n"
                 "  https://example.com --deep --test-vulns --test-methods\n"
+                "  https://example.com --deep --test-vulns --params 'q,search,id'\n"
                 "  https://example.com --paths-file custom.txt -o audit.json\n"
                 "  -l targets.txt --output-dir results/"
             ),
