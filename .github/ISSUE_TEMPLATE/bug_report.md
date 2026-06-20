@@ -24,7 +24,7 @@ Se aplicável, adicione screenshots ou trechos do log de erro.
 ## Ambiente
 - OS: [ex: Windows 11, Ubuntu 24.04]
 - Python: [ex: 3.14.5]
-- Versão do MyTools: [ex: 3.1.5]
+- Versão do MyTools: [ex: 3.2.0]
 
 ## Contexto Adicional
 Qualquer outra informação relevante.

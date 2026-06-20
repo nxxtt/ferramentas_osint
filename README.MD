@@ -316,7 +316,7 @@ MyTools-main/
 ├── utils.py           # Código compartilhado (cores, helpers, HTTP async)
 ├── KNOW_ISSUES.txt    # Problemas conhecidos
 ├── ROADMAP.txt        # Roadmap de otimizações
-├── tests/             # Testes unitários (703 testes)
+├── tests/             # Testes unitários (712 testes)
 ├── pyproject.toml     # Configuração do projeto
 └── README.MD
 ```
@@ -345,16 +345,16 @@ poetry install --with dev
 ## Dependências
 
 ### Runtime
-- `httpx>=0.28.0` — HTTP client async com sessions, proxy, retry
+- `httpx>=0.28.1` — HTTP client async com sessions, proxy, retry
 - `beautifulsoup4>=4.15.0` — Parser HTML avançado
 - `python-whois>=0.9.6` — Consulta WHOIS
 - `dnspython>=2.8.0` — Resolução DNS, zone transfer e enumeração de subdomínios
 
 ### Dev
-- `pytest>=9.1.0` — Framework de testes
-- `pytest-asyncio>=0.25.0` — Testes async
-- `respx>=0.25.0` — Mock de httpx para testes
-- `ruff>=0.15.17` — Linter/formatter
+- `pytest>=9.1.1` — Framework de testes
+- `pytest-asyncio>=1.4.0` — Testes async
+- `respx>=0.23.1` — Mock de httpx para testes
+- `ruff>=0.15.18` — Linter/formatter
 
 ---
 

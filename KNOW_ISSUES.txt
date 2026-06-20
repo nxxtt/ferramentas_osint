@@ -1,12 +1,12 @@
 MyTools - Known Issues
 ======================
 
-1. TLS versions depreciadas
+1. TLS versions descontinuadas
    Severo: Nenhum (suprimido)
    Arquivo: attackaudit.py (check_tls_versions)
 
    A ferramenta testa intencionalmente SSLv3, TLS 1.0 e TLS 1.1, que estao
-   depreciados no Python 3.14+. Os DeprecationWarnings sao suprimidos com
+   descontinuados no Python 3.14+. Os DeprecationWarnings sao suprimidos com
    warnings.catch_warnings() pois o objetivo e detectar se o alvo aceita
    versoes inseguras de TLS.
 
@@ -17,3 +17,210 @@ MyTools - Known Issues
    A deteccao de tecnologias usa dicts de assinaturas estaticas (CMS,
    frameworks, libraries, servers). Atualizacoes em signatures de sites
    podem causar falsos negativos. Nao usa banco de dados externo ou API.
+
+=== OTIMIZACOES PENDENTES (v3.3+) ===
+
+3. DRY: boilerplate de main() duplicado em 5 scanners
+   Arquivos: webrecon.py:1106, portscanner.py:388, dirscanner.py:497,
+             dnstransfer.py:359, subdomainenum.py:372
+   Descricao: Estrutura identica (parse_args -> interactive -> quiet -> try).
+   Solucao: Extrair para funcao run_main_loop(parser, banner_fn, run_fn).
+
+4. DRY: run_once() preamble duplicado em 5 scanners
+   Arquivos: webrecon.py:1060-1063, portscanner.py:329-332,
+             dirscanner.py:447-450, dnstransfer.py:318-321,
+             subdomainenum.py:333-336
+   Descricao: setup_logging + quiet + set_color identicos.
+   Solucao: Extrair para init_scanner(args).
+
+5. DRY: target file reading logic duplicada
+   Arquivos: portscanner.py:348-356, utils.py:494-509
+   Descricao: Leitura de arquivo de targets com mesmo boilerplate.
+   Diferenca: portscanner usa hostnames, resolve_target_urls usa URLs.
+   Solucao: Extrair read_target_lines(filepath) -> list[str].
+
+6. header_get() e case-sensitive (docstring mentiroso)
+   Arquivo: utils.py:260
+   Descricao: Docstring diz "ignorando maiusculas/minusculas" mas e dict.get()
+   case-sensitive. Funciona porque httpx.Headers e case-insensitive.
+   Solucao: Ou corrigir docstring ou implementar case-insensitive real.
+
+7. verify=False hardcoded em create_async_client
+   Arquivo: utils.py:186
+   Descricao: Desabilita verificacao SSL para todas as requisicoes.
+   Nao ha flag --verify/--no-verify no CLI.
+   Solucao: Adicionar parametro verify: bool = False ao create_async_client
+   e flag --verify/--no-verify nos modulos relevantes.
+
+8. SPA detection duplicada entre dirscanner e attackaudit
+   Arquivos: dirscanner.py:286-298, attackaudit.py:591-607
+   Descricao: Algoritmo identico com keys diferentes (size,words vs status,size)
+   e thresholds diferentes (10 vs 5).
+   Solucao: Extrair para funcao shared detect_spa_fallback() parametrizavel.
+
+9. Portscanner sem limite de futures na fila
+   Arquivo: portscanner.py:210-243
+   Descricao: targets_ports materializa todas as combinacoes (host x port)
+   antes de submeter. Scans grandes (ex: /16 x 100 ports) consomem muita RAM.
+   Solucao: Usar generator ao inves de list comprehension para targets_ports.
+
+10. base_ns hardcoded sem validacao em reconall.py
+    Arquivo: reconall.py:110-146
+    Descricao: ~30 defaults hardcoded bypassam validacao dos modulos filhos.
+    Solucao: Validar defaults contra restricoes dos modulos ou usar
+    um dict TypedDict com tipos corretos.
+
+11. RateLimiter nao e thread-safe
+    Arquivo: utils.py:133-171
+    Descricao: Projetado para uso dentro de event loop asyncio unico.
+    Usa time.monotonic() sem locks.
+    Solucao: Documentar claramente (ja documentado) ou adicionar Lock
+    se uso cross-thread for necessario.
+
+12. _resolve_subdomain() aceita resolver=None como default
+    Arquivo: subdomainenum.py:131
+    Descricao: Quando chamado sem resolver, cria Resolver novo a cada call.
+    Nunca acontece em producao (sempre passa shared_resolver).
+    Solucao: Tornar resolver obrigatorio ou usar sentinel.
+
+13. Type hints ausentes em funcoes que aceitam client
+    Arquivos: webrecon.py:471,480,763; attackaudit.py:424,470,533,543,556,612;
+              dirscanner.py:190
+    Descricao: Parametro client sem anotacao de tipo (e httpx.AsyncClient).
+    Solucao: Adicionar client: httpx.AsyncClient em todas as assinaturas.
+
+14. cve_findings redundante em webrecon.py
+    Arquivo: webrecon.py:857-858
+    Descricao: else: cve_findings = [] era redundante (ja removido no commit 1).
+
+15. json.dump manual bypassando write_output
+    Arquivo: attackaudit.py:1210-1216
+    Descricao: Codigo consolidado fazia json.dump direto.
+    Solucao: Ja substituido por write_output() no commit 1.
+
+16. try/assert False anti-pattern (46 instancias)
+    Arquivos: Todos os test_*.py
+    Descricao: Padrão try/except/assert False em vez de pytest.raises().
+    Algumas (frozen dataclass) sao aceitaveis.
+    Solucao: Converter ~40 instancias para pytest.raises().
+
+17. _make_args() duplicado 3x em test_subdomainenum.py
+    Arquivo: test_subdomainenum.py:375,428,523
+    Descricao: Mesma funcao helper copiada em 3 classes de teste.
+    Solucao: Extrair para modulo-level helper ou fixture.
+
+18. test_dirscanner.py clientes manuais vs fixture
+    Arquivo: test_dirscanner.py:422-488 (TestScanPathEdgeCases)
+    Descricao: Cria clients manualmente com try/finally ao inves da fixture.
+    Solucao: Refatorar para usar fixture async_client do conftest.
+
+19. Versao hardcoded em 4 arquivos sem single source of truth
+    Arquivos: utils.py:41, pyproject.toml:3, setup.sh:9, setup.ps1:8
+    Descricao: Todos dizem "3.2.0" mas sao editados independentemente.
+    Solucao: Usar poetry-dynamic-versioning ou importar de pyproject.toml.
+
+20. 12 dataclasses frozen=True sem __slots__
+    Arquivos: dirscanner.py:79, attackaudit.py:231-272, webrecon.py:532-716,
+              subdomainenum.py:98, portscanner.py:68, dnstransfer.py:66
+    Descricao: Memory overhead em dataclasses com muitos campos.
+    Solucao: Adicionar __slots__ = () (Python 3.10+ com frozen=True).
+
+21. net.py e essencialmente um re-export layer
+    Arquivo: net.py (108 linhas)
+    Descricao: 20/30 linhas sao re-exports de utils.py.
+    Solucao: Avaliar se vale manter indireta ou importar direto de utils.
+
+22. json.dump manual no consolidation output (atacaudit)
+    Arquivo: attackaudit.py:1210-1216
+    Descricao: Ja corrigido no commit 1.
+
+23. Testes para net.py inexistentes
+    Arquivo: tests/
+    Descricao: Nao existe test_net.py. As 3 funcoes originais (fetch_bytes,
+    read_response_text, classify_by_content_type) nao sao testadas.
+    Solucao: Criar test_net.py com cobertura basica.
+
+24. out.json nao e tracked por git
+    Arquivo: .gitignore
+    Descricao: Ja resolvido - *.json removido do .gitignore, substituido por
+    out.json especifico.
+
+25. __all__ definido apenas em net.py
+    Arquivos: Todos os modulos exceto net.py
+    Descricao: Comportamento de from module import * nao controlado.
+    Solucao: Adicionar __all__ em utils.py e modulos publicos.
+
+26. import order incorreto em portscanner/webrecon/attackaudit/dirscanner
+    Arquivos: portscanner.py:33-35, webrecon.py:46-48, etc.
+    Descricao: import logging vem depois de imports locais (violates PEP 8).
+    Solucao: Reordenar imports (automatico com ruff I rules - ja ativo).
+
+27. Bug report template com versao desatualizada
+    Arquivo: .github/ISSUE_TEMPLATE/bug_report.md:27
+    Descricao: Exemplo mostra 3.1.5, atual e 3.2.0.
+    Solucao: Ja corrigido no commit 2.
+
+28. CI dependabot faltando github-actions ecosystem
+    Arquivo: .github/dependabot.yml
+    Descricao: Apenas pip configurado.
+    Solucao: Ja corrigido no commit 4.
+
+29. CI sem dependency caching
+    Arquivo: .github/workflows/ci.yml
+    Descricao: Poetry reinstala do zero a cada run.
+    Solucao: Ja corrigido no commit 4 (actions/cache).
+
+30. CI matrix sem Python 3.11/3.13
+    Arquivo: .github/workflows/ci.yml
+    Descricao: Apenas 3.10, 3.12, 3.14.
+    Solucao: Ja corrigido no commit 4.
+
+31. CI jobs sequenciais (lint -> type -> test)
+    Arquivo: .github/workflows/ci.yml
+    Descricao: Um so job, tudo sequencial.
+    Solucao: Ja corrigido no commit 4 (3 jobs paralelos).
+
+32. setup.sh sem pipefail
+    Arquivo: setup.sh:5
+    Descricao: Apenas set -e.
+    Solucao: Ja corrigido no commit 3.
+
+33. setup.sh dead code ($? check sob set -e)
+    Arquivo: setup.sh:32-35
+    Descricao: if [ $? -ne 0 ] nunca executa sob set -e.
+    Solucao: Ja corrigido no commit 3.
+
+34. setup.ps1 sem validacao de versao do Poetry
+    Arquivo: setup.ps1:24-26
+    Descricao: Aceita qualquer versao.
+    Solucao: Ja corrigido no commit 3.
+
+35. pytest-asyncio version mismatch (README vs pyproject)
+    Arquivos: pyproject.toml:19 vs README.MD:355
+    Descricao: >=1.4.0 vs >=0.25.0.
+    Solucao: Ja corrigido no commit 2.
+
+36. README com 5 versoes de dependencias desatualizadas
+    Arquivo: README.MD:348-357
+    Descricao: httpx, pytest, pytest-asyncio, respx, ruff.
+    Solucao: Ja corrigido no commit 2.
+
+37. README test count errado (703 vs 712)
+    Arquivo: README.MD:319
+    Descricao: 703 testes, real e 712.
+    Solucao: Ja corrigido no commit 2.
+
+38. Ruff rules minimas (E, F, W)
+    Arquivo: pyproject.toml:48
+    Descricao: Sem I, UP, B, SIM, RUF.
+    Solucao: Ja corrigido no commit 5.
+
+39. .gitignore *.json muito abrangente
+    Arquivo: .gitignore:38
+    Descricao: Ignora todos os JSON.
+    Solucao: Ja corrigido no commit 5 (out.json especifico).
+
+40. .gitignore sem .basedpyright_cache/
+    Arquivo: .gitignore
+    Descricao: Falta entrada para cache do type checker.
+    Solucao: Ja corrigido no commit 5.
