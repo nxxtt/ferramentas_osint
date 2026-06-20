@@ -37,6 +37,7 @@ import dnstransfer
 import portscanner
 import subdomainenum
 import webrecon
+from portscanner import parse_ports
 from utils import (
     Cyber,
     color,
@@ -70,7 +71,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--test-vulns", action="store_true", help="Testa XSS/SQLi no attackaudit")
     parser.add_argument("--test-methods", action="store_true", help="Testa metodos HTTP (PUT/DELETE/PATCH)")
     parser.add_argument("--cve", action="store_true", help="Busca CVEs no webrecon")
-    parser.add_argument("-p", "--ports", default="top100", help="Portas para portscanner. Padrao: top100")
+    parser.add_argument("-p", "--ports", default="top100", type=parse_ports, help="Portas para portscanner. Padrao: top100")
     parser.add_argument("-o", "--output-dir", help="Diretorio para salvar resultados JSON de cada modulo")
     parser.add_argument("-t", "--timeout", type=float, default=5.0, help="Timeout em segundos. Padrao: 5")
     parser.add_argument("-v", "--verbose", action="store_true", help="Mostra mensagens de debug")
@@ -99,22 +100,6 @@ def _make_args(target: str, extra: dict, base_args: argparse.Namespace) -> argpa
     return ns
 
 
-def _run_module(name: str, fn, args: argparse.Namespace) -> int:
-    color_name = color(f"[{name}]", Cyber.CYAN, Cyber.BOLD)
-    print(f"\n{'='*60}")
-    print(f" {color_name} Iniciando {name}")
-    print(f"{'='*60}")
-    start = time.monotonic()
-    try:
-        result = fn(args)
-    except Exception as exc:
-        print(color(f"  Erro em {name}: {exc}", Cyber.RED))
-        return 1
-    elapsed = time.monotonic() - start
-    status = color("OK", Cyber.GREEN, Cyber.BOLD) if result == 0 else color(f"FALHA ({result})", Cyber.RED, Cyber.BOLD)
-    print(f" {color_name} {status} ({elapsed:.1f}s)")
-    return result
-
 
 def run_all(args: argparse.Namespace) -> int:
     skipped = {s.lower() for s in args.skip}
@@ -132,7 +117,7 @@ def run_all(args: argparse.Namespace) -> int:
         retries=3,
         dry_run=args.dry_run,
         target_list=None,
-        user_agent=None,
+        user_agent=f"MyTools/{__version__}",
         proxy=None,
         delay=0.0,
         auth=None,
@@ -196,7 +181,7 @@ def run_all(args: argparse.Namespace) -> int:
 
     if "portscanner" not in skipped:
         modules.append(("portscanner", portscanner.run_once,
-                        _make_args(target, {"targets": [domain], "ports": args.ports}, base_ns)))
+                        _make_args(target, {"targets": [domain], "ports": args.ports, "output": _out("portscanner")}, base_ns)))
 
     if is_url:
         if "dirscanner" not in skipped:

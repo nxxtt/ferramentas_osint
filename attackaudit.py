@@ -967,17 +967,6 @@ async def run_audit(
         methods = await parse_allowed_methods(client, target, timeout)
         probes = await scan_paths(client, rate_limiter, target, timeout, threads, paths=paths) if deep else []
 
-        spa_shell_size: int | None = None
-        if len(probes) > 10:
-            size_counts: dict[int, int] = {}
-            for p in probes:
-                size_counts[p.size] = size_counts.get(p.size, 0) + 1
-            dominant_size, dominant_count = max(size_counts.items(), key=lambda kv: kv[1])
-            if dominant_count > len(probes) * 0.8:
-                spa_shell_size = dominant_size
-                logger.debug("SPA detectado: %d/%d probes com size=%d",
-                             dominant_count, len(probes), dominant_size)
-
         xss_reflected, xss_evidence = False, ""
         sqli_databases: list[str] | None = None
         method_results: list[MethodResult] | None = None
@@ -1021,11 +1010,6 @@ async def run_audit(
                     print(color("[*]", Cyber.CYAN, Cyber.BOLD), "Nenhum metodo perigoso aceito.")
     finally:
         await client.aclose()
-
-    if spa_shell_size is not None:
-        probes = [p for p in probes if p.size != spa_shell_size]
-        if method_results:
-            method_results = [m for m in method_results if m.size != spa_shell_size]
 
     findings = build_findings(
         target, status, headers, parser, methods, probes, tls_subject,

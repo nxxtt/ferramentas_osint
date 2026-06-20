@@ -396,3 +396,19 @@ class TestDryRun:
         assert result == 0
         captured = capsys.readouterr()
         assert "DRY-RUN" in captured.out
+
+    def test_dry_run_no_dns_query(self):
+        parser = build_parser()
+        args = parser.parse_args(["example.com", "--dry-run"])
+        with patch("dnstransfer.get_nameservers") as mock_ns:
+            result = run_once(args)
+            assert result == 0
+            mock_ns.assert_not_called()
+
+    def test_dry_run_no_zone_transfer(self):
+        parser = build_parser()
+        args = parser.parse_args(["example.com", "--dry-run"])
+        with patch("dnstransfer.try_zone_transfer") as mock_xfr:
+            result = run_once(args)
+            assert result == 0
+            mock_xfr.assert_not_called()

@@ -926,3 +926,51 @@ class TestSafeAsyncioRun:
 
         result = asyncio.run(caller())
         assert result == 99
+
+
+class TestRetryAfterEdgeCases:
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_429_http_date_does_not_crash(self):
+        from utils import create_async_client, fetch
+
+        client = create_async_client()
+        limiter = RateLimiter(100.0)
+        url = "https://example.com/date-retry"
+        call_count = 0
+
+        def side_effect(request):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return httpx.Response(429, headers={"Retry-After": "Fri, 31 Dec 1999 23:59:59 GMT"})
+            return httpx.Response(200, text="ok")
+
+        respx.get(url).mock(side_effect=side_effect)
+        status, _, body, _ = await fetch(client, url, rate_limiter=limiter, max_retries=3)
+        assert status == 200
+        assert call_count == 2
+        await client.aclose()
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_429_invalid_retry_after_uses_default(self):
+        from utils import create_async_client, fetch
+
+        client = create_async_client()
+        limiter = RateLimiter(100.0)
+        url = "https://example.com/bad-retry"
+        call_count = 0
+
+        def side_effect(request):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return httpx.Response(429, headers={"Retry-After": "not-a-number"})
+            return httpx.Response(200, text="ok")
+
+        respx.get(url).mock(side_effect=side_effect)
+        status, _, body, _ = await fetch(client, url, rate_limiter=limiter, max_retries=3)
+        assert status == 200
+        assert call_count == 2
+        await client.aclose()

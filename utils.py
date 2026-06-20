@@ -227,7 +227,10 @@ async def fetch(
             )
             if response.status_code == 429 and rate_limiter is not None:
                 rate_limiter.notify_429()
-                retry_after = float(response.headers.get("Retry-After", "5"))
+                try:
+                    retry_after = float(response.headers.get("Retry-After", "5"))
+                except (ValueError, TypeError):
+                    retry_after = 5.0
                 await asyncio.sleep(min(retry_after, 30))
                 continue
             logger.debug("response %d %s (%d bytes)", response.status_code, url, len(response.content))

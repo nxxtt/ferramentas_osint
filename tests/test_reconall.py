@@ -208,3 +208,52 @@ class TestNamespaceConstruction:
             ns = mock_fn.call_args[0][0]
             assert hasattr(ns, "threads")
             assert ns.threads is None
+
+    def test_portscanner_ports_is_list(self):
+        parser = build_parser()
+        args = parser.parse_args(["example.com", "--skip", "dnstransfer", "--skip", "subenum"])
+        with patch("reconall.portscanner.run_once", return_value=0) as mock_fn:
+            run_all(args)
+            ns = mock_fn.call_args[0][0]
+            assert isinstance(ns.ports, list)
+            assert all(isinstance(p, int) for p in ns.ports)
+
+    def test_portscanner_default_ports_count(self):
+        from portscanner import TOP_100_PORTS
+        parser = build_parser()
+        args = parser.parse_args(["example.com", "--skip", "dnstransfer", "--skip", "subenum"])
+        with patch("reconall.portscanner.run_once", return_value=0) as mock_fn:
+            run_all(args)
+            ns = mock_fn.call_args[0][0]
+            assert len(ns.ports) == len(TOP_100_PORTS)
+
+    def test_portscanner_custom_ports(self):
+        parser = build_parser()
+        args = parser.parse_args(["example.com", "-p", "22,80,443", "--skip", "dnstransfer", "--skip", "subenum"])
+        with patch("reconall.portscanner.run_once", return_value=0) as mock_fn:
+            run_all(args)
+            ns = mock_fn.call_args[0][0]
+            assert ns.ports == [22, 80, 443]
+
+    def test_http_modules_user_agent_not_none(self):
+        parser = build_parser()
+        args = parser.parse_args(["https://example.com", "--skip", "portscanner"])
+        with (
+            patch("reconall.dirscanner.run_once", return_value=0) as mock_dir,
+            patch("reconall.webrecon.run_once", return_value=0) as mock_web,
+            patch("reconall.attackaudit.run_once", return_value=0) as mock_audit,
+        ):
+            run_all(args)
+            for mock_fn in (mock_dir, mock_web, mock_audit):
+                ns = mock_fn.call_args[0][0]
+                assert ns.user_agent is not None
+                assert "MyTools/" in ns.user_agent
+
+    def test_portscanner_has_output(self):
+        parser = build_parser()
+        args = parser.parse_args(["example.com", "-o", "/tmp/results", "--skip", "dnstransfer", "--skip", "subenum"])
+        with patch("reconall.portscanner.run_once", return_value=0) as mock_fn:
+            run_all(args)
+            ns = mock_fn.call_args[0][0]
+            assert ns.output is not None
+            assert "portscanner" in ns.output
