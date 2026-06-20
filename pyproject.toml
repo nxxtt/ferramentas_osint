@@ -14,10 +14,10 @@ python-whois = ">=0.9.6"
 dnspython = ">=2.8.0"
 
 [tool.poetry.group.dev.dependencies]
-pytest = ">=9.1.0"
+pytest = ">=9.1.1"
 respx = ">=0.23.1"
 pytest-asyncio = ">=1.4.0"
-ruff = ">=0.15.17"
+ruff = ">=0.15.18"
 basedpyright = ">=1.39.8"
 
 [tool.poetry.scripts]
