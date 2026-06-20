@@ -28,6 +28,7 @@ import argparse
 import concurrent.futures
 import os
 import time
+from collections.abc import Callable
 from urllib.parse import urlparse
 
 import attackaudit
@@ -183,7 +184,7 @@ def run_all(args: argparse.Namespace) -> int:
         print(f" {color_name} {status} ({elapsed:.1f}s)")
         return result
 
-    modules: list[tuple[str, callable, argparse.Namespace]] = []
+    modules: list[tuple[str, Callable[..., object], argparse.Namespace]] = []
 
     if not is_url:
         if "dnstransfer" not in skipped:

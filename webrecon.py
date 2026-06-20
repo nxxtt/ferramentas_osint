@@ -522,7 +522,7 @@ async def crawl_internal_links(
 
     results = await asyncio.gather(*[_fetch_link(link) for link in internal_urls], return_exceptions=True)
     for result in results:
-        if isinstance(result, Exception):
+        if isinstance(result, BaseException):
             continue
         emails.extend(result)
 
@@ -607,7 +607,7 @@ async def lookup_cves(
     findings: list[CVEFinding] = []
     seen_cves: set[str] = set()
     for result in results:
-        if isinstance(result, Exception):
+        if isinstance(result, BaseException):
             continue
         for finding in result:
             if finding.cve_id not in seen_cves:

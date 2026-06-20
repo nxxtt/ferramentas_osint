@@ -521,7 +521,7 @@ async def check_sqli_errors(
 
     detected_databases: list[str] = []
     for result in results:
-        if isinstance(result, Exception):
+        if isinstance(result, BaseException):
             continue
         for db_name in result:
             if db_name not in detected_databases:
@@ -649,7 +649,7 @@ async def test_http_methods(
 
     method_results: list[MethodResult] = []
     for result in results:
-        if isinstance(result, Exception) or result is None:
+        if isinstance(result, BaseException) or result is None:
             continue
         method_results.append(result)
         if result.status in {200, 201, 204}:
@@ -999,13 +999,13 @@ async def run_audit(
                 task_idx += 1
                 sqli_result = vuln_results[task_idx]
                 task_idx += 1
-                if isinstance(xss_result, Exception):
+                if isinstance(xss_result, BaseException):
                     xss_reflected, xss_evidence = False, ""
                 else:
                     xss_reflected, xss_evidence = xss_result
                 if xss_reflected:
                     print(color("[!]", Cyber.RED, Cyber.BOLD), "XSS refletido detectado!")
-                if isinstance(sqli_result, Exception):
+                if isinstance(sqli_result, BaseException):
                     sqli_databases = []
                 else:
                     sqli_databases = sqli_result
@@ -1013,7 +1013,7 @@ async def run_audit(
                     print(color("[!]", Cyber.RED, Cyber.BOLD), f"Erros SQL detectados: {', '.join(sqli_databases)}")
             if test_methods and probes:
                 methods_result = vuln_results[task_idx]
-                if isinstance(methods_result, Exception):
+                if isinstance(methods_result, BaseException):
                     method_results = []
                 else:
                     method_results = methods_result
