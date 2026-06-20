@@ -1,5 +1,7 @@
 # MyTools v3.2.0
 
+[![CI](https://github.com/nxxtt/ferramentas_osint/actions/workflows/ci.yml/badge.svg)](https://github.com/nxxtt/ferramentas_osint/actions/workflows/ci.yml)
+
 Suite de ferramentas de auditoria e reconhecimento web/network para ambientes de laboratório e alvos autorizados.
 
 > **AVISO:** Este projeto é destinado exclusivamente para fins educacionais e de teste em ambientes autorizados. O uso irresponsável pode ser ilegal. Use com responsabilidade.
