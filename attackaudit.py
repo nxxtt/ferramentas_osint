@@ -923,6 +923,7 @@ async def run_audit(
     threads: int,
     deep: bool,
     proxy: str | None = None,
+    verify: bool = False,
     requests_per_second: float = 0.0,
     test_vulns: bool = False,
     test_methods: bool = False,
@@ -939,7 +940,7 @@ async def run_audit(
     parsed = urlparse(target)
     ip = await resolve_ip(parsed.hostname or "")
     rate_limiter = RateLimiter(requests_per_second)
-    client = create_async_client(user_agent=user_agent, proxy=proxy)
+    client = create_async_client(user_agent=user_agent, proxy=proxy, verify=verify)
     apply_session_auth(client, auth=auth, bearer_token=bearer_token, cookie=cookie, extra_headers=extra_headers)
 
     logger.info("audit iniciado: %s", target)
@@ -1135,7 +1136,7 @@ async def _run_single(url: str, args: argparse.Namespace, quiet: bool = False) -
         inject_params = [p.strip() for p in args.params.split(",") if p.strip()]
     result = await run_audit(
         url, args.timeout, args.user_agent, args.concurrency, args.deep,
-        proxy=args.proxy, requests_per_second=args.delay,
+        proxy=args.proxy, verify=getattr(args, "verify", False), requests_per_second=args.delay,
         test_vulns=args.test_vulns,
         test_methods=getattr(args, "test_methods", False),
         auth=getattr(args, "auth", None),

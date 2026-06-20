@@ -767,6 +767,7 @@ async def run_recon(
     timeout: float,
     user_agent: str,
     proxy: str | None = None,
+    verify: bool = False,
     auth: dict[str, str] | None = None,
     bearer_token: str | None = None,
     cookie: str | None = None,
@@ -784,7 +785,7 @@ async def run_recon(
     """
     started = time.monotonic()
     errors = []
-    client = create_async_client(user_agent=user_agent, proxy=proxy)
+    client = create_async_client(user_agent=user_agent, proxy=proxy, verify=verify)
     apply_session_auth(client, auth=auth, bearer_token=bearer_token, cookie=cookie, extra_headers=extra_headers)
 
     logger.info("recon iniciado: %s", url)
@@ -1032,6 +1033,7 @@ async def _run_single(url: str, args: argparse.Namespace, quiet: bool = False) -
     """Executa recon em uma unica URL."""
     result = await run_recon(
         url, args.timeout, args.user_agent, proxy=args.proxy,
+        verify=getattr(args, "verify", False),
         auth=getattr(args, "auth", None),
         bearer_token=getattr(args, "bearer_token", None),
         cookie=getattr(args, "cookie", None),

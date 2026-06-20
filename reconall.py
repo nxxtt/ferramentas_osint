@@ -119,6 +119,7 @@ def run_all(args: argparse.Namespace) -> int:
         target_list=None,
         user_agent=f"MyTools/{__version__}",
         proxy=None,
+        verify=False,
         delay=0.0,
         auth=None,
         bearer_token=None,

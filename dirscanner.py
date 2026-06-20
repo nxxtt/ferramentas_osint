@@ -225,6 +225,7 @@ async def scan_target(
     statuses: set[int],
     user_agent: str,
     proxy: str | None = None,
+    verify: bool = False,
     requests_per_second: float = 0.0,
     method: str = "GET",
     auth_headers: dict[str, str] | None = None,
@@ -236,7 +237,7 @@ async def scan_target(
     """Executa scan paralelo de todos os caminhos contra o alvo."""
     started = time.monotonic()
     rate_limiter = RateLimiter(requests_per_second)
-    client = create_async_client(user_agent=user_agent, proxy=proxy)
+    client = create_async_client(user_agent=user_agent, proxy=proxy, verify=verify)
 
     logger.info("scan iniciado: %s (%d paths)", base_url, len(paths))
     logger.debug("method=%s, concurrency=%d, statuses=%s", method, concurrency, statuses)
@@ -415,6 +416,7 @@ async def _run_single(url: str, args: argparse.Namespace, quiet: bool = False) -
         statuses=args.status,
         user_agent=args.user_agent,
         proxy=args.proxy,
+        verify=getattr(args, "verify", False),
         requests_per_second=args.delay,
         method=args.method,
         auth_headers=args.auth,

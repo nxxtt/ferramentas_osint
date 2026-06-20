@@ -230,6 +230,7 @@ def create_async_client(
     user_agent: str = f"MyTools/{__version__}",
     proxy: str | None = None,
     timeout: float = 5.0,
+    verify: bool = False,
 ) -> httpx.AsyncClient:
     """Cria um cliente HTTP async com headers padrao."""
     headers = {"User-Agent": user_agent}
@@ -238,7 +239,7 @@ def create_async_client(
         proxy=proxy,
         timeout=timeout,
         follow_redirects=False,
-        verify=False,
+        verify=verify,
     )
 
 
@@ -497,6 +498,8 @@ def add_base_args(parser: argparse.ArgumentParser, timeout_default: float = 5.0)
     parser.add_argument("--no-color", action="store_false", dest="color", help="Desabilita cores no terminal.")
     parser.add_argument("--retries", type=int, default=3, help="Numero de tentativas em caso de falha HTTP. Padrao: 3")
     parser.add_argument("--dry-run", action="store_true", help="Mostra o que faria sem executar nada.")
+    parser.add_argument("--verify", action="store_true", default=False, help="Verifica certificados SSL/TLS. Padrao: desabilitado.")
+    parser.add_argument("--no-verify", action="store_false", dest="verify", help="Desabilita verificacao de certificados SSL/TLS (padrao).")
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
 
 
