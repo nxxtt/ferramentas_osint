@@ -23,6 +23,14 @@ try {
 Write-Host "[2/4] Verificando Poetry..." -ForegroundColor Yellow
 try {
     $poVersion = poetry --version 2>&1
+    if ($poVersion -match "(\d+)\.") {
+        $major = [int]$Matches[1]
+        if ($major -lt 2) {
+            Write-Host "  ERRO: Poetry $poVersion encontrado. MyTools requer Poetry 2.0+." -ForegroundColor Red
+            Write-Host "  Atualize com: pip install --upgrade poetry" -ForegroundColor Yellow
+            exit 1
+        }
+    }
     Write-Host "  OK: $poVersion" -ForegroundColor Green
 } catch {
     Write-Host "  Poetry nao encontrado. Instalando..." -ForegroundColor Yellow

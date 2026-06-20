@@ -2,7 +2,7 @@
 # MyTools — Script de instalacao (Linux/Mac)
 # Executa: chmod +x setup.sh && ./setup.sh
 
-set -e
+set -euo pipefail
 
 echo ""
 echo "========================================"
@@ -29,10 +29,6 @@ if command -v poetry &>/dev/null; then
 else
     echo "  Poetry nao encontrado. Instalando..."
     $PY -m pip install poetry
-    if [ $? -ne 0 ]; then
-        echo "  ERRO: Falha ao instalar Poetry."
-        exit 1
-    fi
     echo "  Poetry instalado com sucesso."
 fi
 
