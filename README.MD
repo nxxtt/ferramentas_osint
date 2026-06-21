@@ -113,6 +113,7 @@ mytools-audit https://example.com --deep
 mytools-audit https://example.com --deep -o audit.json
 mytools-audit https://example.com --deep --proxy http://proxy:8080 --delay 5
 mytools-audit -l targets.txt --output-dir results/
+mytools-audit https://example.com --test-vulns                 # Testa XSS, SQLi e CSRF
 mytools-audit https://example.com --paths-file sensitive.txt  # Paths customizados
 mytools-audit https://example.com --test-methods              # Scan de métodos HTTP
 ```
@@ -273,6 +274,7 @@ Use `help` para ver a ajuda, `exit` para voltar ao menu.
 | `mytools-recon https://example.com --cve` | Recon com lookup de CVEs |
 | `mytools-recon https://example.com --deep` | Recon com email harvesting + crawl |
 | `mytools-audit https://example.com --deep` | Auditoria completa com deep scan |
+| `mytools-audit https://example.com --test-vulns` | Auditoria com testes XSS, SQLi e CSRF |
 | `mytools-audit https://example.com -q -o audit.json` | Audit silencioso com saída em arquivo |
 | `mytools-audit https://example.com --test-methods` | Scan de métodos HTTP |
 | `mytools-dnsxfer example.com` | DNS Zone Transfer scan |
@@ -286,8 +288,8 @@ Todos os módulos HTTP suportam proxy e rate limiting:
 # Usar proxy
 mytools-dir http://target.local --proxy http://proxy:8080
 
-# Rate limiting (requests por segundo)
-mytools-dir http://target.local --delay 10
+# Rate limiting (segundos entre requests)
+mytools-dir http://target.local --delay 0.5
 
 # Proxy + rate limiting
 mytools-audit https://target.local --deep --proxy http://proxy:8080 --delay 5
@@ -316,7 +318,7 @@ MyTools-main/
 ├── utils.py           # Código compartilhado (cores, helpers, HTTP async)
 ├── KNOW_ISSUES.txt    # Problemas conhecidos
 ├── ROADMAP.txt        # Roadmap de otimizações
-├── tests/             # Testes unitários (712 testes)
+├── tests/             # Testes unitários (733 testes)
 ├── pyproject.toml     # Configuração do projeto
 └── README.MD
 ```

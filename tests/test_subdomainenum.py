@@ -101,7 +101,7 @@ class TestLoadWordlist:
         assert result == ["www", "test", "api"]
 
     def test_file_not_found(self):
-        with pytest.raises(ValueError, match="nao encontrada"):
+        with pytest.raises(ValueError, match="arquivo nao encontrado"):
             load_wordlist("/tmp/nonexistent_wordlist_12345.txt")
 
     def test_empty_file(self, tmp_path):

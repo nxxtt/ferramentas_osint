@@ -10,6 +10,7 @@ import re
 import time
 from collections.abc import Mapping
 from dataclasses import asdict, dataclass, field
+from typing import Any
 from urllib.parse import urljoin, urlparse
 
 import httpx
@@ -39,6 +40,7 @@ from utils import (
     resolve_target_urls,
     run_main_loop,
     safe_asyncio_run,
+    severity_color,
     status_color,
     write_output,
 )
@@ -534,20 +536,6 @@ class CVEFinding:
     version: str
 
 
-def _severity_color(severity: str) -> str:
-    """Retorna a cor ANSI correspondente a severidade CVSS."""
-    severity_upper = severity.upper()
-    if severity_upper == "CRITICAL":
-        return Cyber.RED
-    if severity_upper == "HIGH":
-        return Cyber.MAGENTA
-    if severity_upper == "MEDIUM":
-        return Cyber.YELLOW
-    if severity_upper == "LOW":
-        return Cyber.GREEN
-    return Cyber.GRAY
-
-
 async def lookup_cves(
     versions: list[tuple[str, str]],
     api_key: str | None = None,
@@ -628,7 +616,7 @@ class WhoisResult:
     status: list[str] | None = None
 
 
-def _format_date(value) -> str | None:
+def _format_date(value: Any) -> str | None:
     """Converte valor de data WHOIS para string ISO."""
     if value is None:
         return None
@@ -641,7 +629,7 @@ def _format_date(value) -> str | None:
     return str(value)
 
 
-def _ensure_list(value) -> list[str] | None:
+def _ensure_list(value: Any) -> list[str] | None:
     """Normaliza valor para lista de strings."""
     if value is None:
         return None
@@ -965,7 +953,7 @@ def _print_cve_findings(findings: list[CVEFinding]) -> None:
 
     print(color(f"\nCVEs ({len(findings)} encontrados)", Cyber.CYAN, Cyber.BOLD))
     for finding in findings[:20]:
-        sev_color = _severity_color(finding.severity)
+        sev_color = severity_color(finding.severity)
         print(
             f"  {color('[!]', sev_color, Cyber.BOLD)} "
             f"{color(finding.cve_id, sev_color, Cyber.BOLD)} "

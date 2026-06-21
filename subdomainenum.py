@@ -37,6 +37,7 @@ from utils import (
     color,
     create_banner,
     init_scanner,
+    read_target_lines,
     run_main_loop,
     write_output,
 )
@@ -115,12 +116,7 @@ def load_wordlist(path: str | None = None) -> list[str]:
     if path is None:
         return list(BUILTIN_WORDLIST)
 
-    try:
-        with open(path, encoding="utf-8", errors="replace") as fh:
-            words = [line.strip().lower() for line in fh if line.strip() and not line.startswith("#")]
-    except FileNotFoundError:
-        raise ValueError(f"wordlist nao encontrada: {path}") from None
-
+    words = read_target_lines(path, lowercase=True)
     if not words:
         raise ValueError("wordlist esta vazia")
 

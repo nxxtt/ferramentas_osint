@@ -7,7 +7,7 @@ import httpx
 import pytest
 import respx
 
-from utils import Cyber
+from utils import Cyber, severity_color
 from webrecon import (
     CMS_SIGNATURES,
     EMAIL_PATTERN,
@@ -21,7 +21,6 @@ from webrecon import (
     _async_run_once,
     _ensure_list,
     _format_date,
-    _severity_color,
     build_parser,
     candidate_urls,
     crawl_internal_links,
@@ -416,22 +415,22 @@ class TestExtractVersions:
 
 class TestSeverityColor:
     def test_critical_is_red(self):
-        assert _severity_color("CRITICAL") == Cyber.RED
+        assert severity_color("CRITICAL") == Cyber.RED
 
-    def test_high_is_magenta(self):
-        assert _severity_color("HIGH") == Cyber.MAGENTA
+    def test_high_is_orange(self):
+        assert severity_color("HIGH") == Cyber.ORANGE
 
     def test_medium_is_yellow(self):
-        assert _severity_color("MEDIUM") == Cyber.YELLOW
+        assert severity_color("MEDIUM") == Cyber.YELLOW
 
-    def test_low_is_green(self):
-        assert _severity_color("LOW") == Cyber.GREEN
+    def test_low_is_blue(self):
+        assert severity_color("LOW") == Cyber.BLUE
 
     def test_unknown_is_gray(self):
-        assert _severity_color("UNKNOWN") == Cyber.GRAY
+        assert severity_color("UNKNOWN") == Cyber.GRAY
 
     def test_case_insensitive(self):
-        assert _severity_color("critical") == Cyber.RED
+        assert severity_color("critical") == Cyber.RED
 
 
 class TestCVEFindingDataclass:

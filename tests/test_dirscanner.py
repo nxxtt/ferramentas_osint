@@ -218,7 +218,7 @@ class TestLoadPaths:
         assert paths == sorted(paths)
 
     def test_missing_wordlist_raises(self):
-        with pytest.raises(ValueError, match="nao encontrada"):
+        with pytest.raises(ValueError, match="arquivo nao encontrado"):
             load_paths("/nonexistent/wordlist.txt", [])
 
 

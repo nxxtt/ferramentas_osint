@@ -34,6 +34,7 @@ from utils import (
     parse_extra_headers,
     parse_int_range,
     print_table,
+    read_target_lines,
     resolve_target_urls,
     run_main_loop,
     safe_asyncio_run,
@@ -140,15 +141,7 @@ def parse_range(value: str | None) -> tuple[int, int] | None:
 @functools.lru_cache(maxsize=8)
 def _read_wordlist(wordlist: str) -> list[str]:
     """Le e cacheia o conteudo bruto de uma wordlist."""
-    try:
-        with open(wordlist, encoding="utf-8", errors="replace") as file_handle:
-            return [
-                line.strip()
-                for line in file_handle
-                if line.strip() and not line.lstrip().startswith("#")
-            ]
-    except FileNotFoundError:
-        raise ValueError(f"wordlist nao encontrada: {wordlist}") from None
+    return read_target_lines(wordlist)
 
 
 def load_paths(wordlist: str | None, extensions: list[str]) -> list[str]:
@@ -178,7 +171,7 @@ def matches_filter(
     """Verifica se o finding atende aos filtros de tamanho e palavras."""
     if size_range and not (size_range[0] <= finding.size <= size_range[1]):
         return False
-    return not (words_range and not words_range[0] <= finding.words <= words_range[1])
+    return not words_range or words_range[0] <= finding.words <= words_range[1]
 
 
 async def scan_path(

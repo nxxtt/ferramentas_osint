@@ -184,6 +184,7 @@ class Cyber:
     BLUE = "\033[38;5;39m"
     MAGENTA = "\033[38;5;201m"
     YELLOW = "\033[38;5;226m"
+    ORANGE = "\033[38;5;208m"
     WHITE = "\033[38;5;255m"
     GRAY = "\033[38;5;244m"
 
@@ -325,6 +326,20 @@ def status_color(status: int) -> str:
     if 400 <= status < 500:
         return Cyber.RED
     return Cyber.GRAY
+
+
+_SEVERITY_COLOR_MAP: dict[str, str] = {
+    "critical": Cyber.RED,
+    "high": Cyber.ORANGE,
+    "medium": Cyber.YELLOW,
+    "low": Cyber.BLUE,
+    "info": Cyber.GRAY,
+}
+
+
+def severity_color(severity: str) -> str:
+    """Retorna a cor ANSI correspondente a severidade CVSS."""
+    return _SEVERITY_COLOR_MAP.get(severity.lower(), Cyber.GRAY)
 
 
 def header_get(headers: Mapping[str, str], name: str) -> str:
@@ -527,7 +542,7 @@ def add_http_args(parser: argparse.ArgumentParser) -> None:
     """Adiciona argumentos HTTP especificos (user-agent, proxy, auth, etc)."""
     parser.add_argument("-A", "--user-agent", help="User-Agent usado nas requests.")
     parser.add_argument("--proxy", help="Proxy para as requests. Ex: http://proxy:8080")
-    parser.add_argument("--delay", type=float, default=0.0, help="Delay entre requests (req/s). 0 = sem limite.")
+    parser.add_argument("--delay", type=float, default=0.0, help="Delay em segundos entre requests. 0 = sem limite.")
     parser.add_argument(
         "--auth",
         type=parse_auth,
@@ -569,13 +584,24 @@ def extract_hostname(url: str) -> str:
     return host.replace("/", "_").replace(":", "_")
 
 
-def read_target_lines(filepath: str) -> list[str]:
-    """Le linhas de um arquivo de targets, removendo blanks e comentarios."""
+def read_target_lines(filepath: str, *, lowercase: bool = False, sort_dedup: bool = False) -> list[str]:
+    """Le linhas de um arquivo, removendo blanks e comentarios #.
+
+    Args:
+        filepath: Caminho do arquivo.
+        lowercase: Se True, converte linhas para minusculo.
+        sort_dedup: Se True, ordena e remove duplicatas.
+    """
     try:
         with open(filepath, encoding="utf-8", errors="replace") as fh:
-            return [line.strip() for line in fh if line.strip() and not line.startswith("#")]
+            lines = [line.strip() for line in fh if line.strip() and not line.startswith("#")]
     except FileNotFoundError:
         raise ValueError(f"arquivo nao encontrado: {filepath}") from None
+    if lowercase:
+        lines = [line.lower() for line in lines]
+    if sort_dedup:
+        lines = sorted(set(lines))
+    return lines
 
 
 def detect_spa_fallback(
@@ -691,7 +717,7 @@ async def query_nvd(
     return results
 
 
-def safe_asyncio_run(coro):
+def safe_asyncio_run(coro: Any) -> Any:
     """Executa uma coroutine async de forma segura, mesmo com event loop ativo.
 
     Se ja existe um event loop rodando (ex: Jupyter, REPL interativo),
@@ -716,11 +742,11 @@ def safe_asyncio_run(coro):
 def run_interactive_shell(
     parser: argparse.ArgumentParser,
     prompt: str,
-    run_fn: Callable,
+    run_fn: Callable[[argparse.Namespace], int],
     description: str = "",
     example: str = "",
-    validate_fn: Callable | None = None,
-    banner_fn: Callable | None = None,
+    validate_fn: Callable[[argparse.Namespace], None] | None = None,
+    banner_fn: Callable[[], None] | None = None,
     contextual_help: str | None = None,
 ) -> int:
     """Inicia shell interativo generico com loop de comandos."""

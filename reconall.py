@@ -47,6 +47,8 @@ from utils import (
     setup_logging,
 )
 
+ALL_MODULES = ["portscanner", "dnstransfer", "subenum", "dirscanner", "webrecon", "attackaudit"]
+
 """Recon completo: executa portscanner, dirscanner, webrecon, attackaudit, dnstransfer e subenum contra um alvo."""
 
 
@@ -108,7 +110,8 @@ def run_all(args: argparse.Namespace) -> int:
     is_url = _is_url(target)
     domain = _extract_domain(target)
 
-    # ATENCAO: Se adicionar arg em modulo filho, adicione aqui tambem.
+    # ATENCAO: Mantenha sincronizado com os argumentos dos modulos filhos.
+    # Se adicionar um arg em qualquer modulo, adicione aqui tambem com o mesmo nome.
     base_ns = argparse.Namespace(
         timeout=args.timeout,
         output=None,
@@ -223,7 +226,7 @@ def main() -> int:
     if args.dry_run:
         print(color("[DRY-RUN]", Cyber.YELLOW, Cyber.BOLD), "Modo dry-run ativado")
         print(color("  Alvo:", Cyber.CYAN), args.target)
-        print(color("  Modulos:", Cyber.CYAN), ", ".join(m for m in ["portscanner", "dnstransfer", "subenum", "dirscanner", "webrecon", "attackaudit"] if m not in args.skip))
+        print(color("  Modulos:", Cyber.CYAN), ", ".join(m for m in ALL_MODULES if m not in args.skip))
         if args.deep:
             print(color("  Flags:", Cyber.CYAN), "--deep")
         if args.test_vulns:
@@ -234,7 +237,7 @@ def main() -> int:
 
     banner()
     print(color(f"  Alvo: {args.target}", Cyber.WHITE, Cyber.BOLD))
-    print(color(f"  Modulos: {', '.join(m for m in ['portscanner', 'dnstransfer', 'subenum', 'dirscanner', 'webrecon', 'attackaudit'] if m not in args.skip)}", Cyber.WHITE))
+    print(color(f"  Modulos: {', '.join(m for m in ALL_MODULES if m not in args.skip)}", Cyber.WHITE))
 
     start = time.monotonic()
     errors = run_all(args)

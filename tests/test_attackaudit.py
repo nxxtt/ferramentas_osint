@@ -30,9 +30,8 @@ from attackaudit import (
     check_xss_reflection,
     normalize_url,
     risk_score,
-    severity_color,
 )
-from utils import Cyber
+from utils import Cyber, severity_color
 
 
 class TestNormalizeUrl:
@@ -80,8 +79,8 @@ class TestSeverityColor:
     def test_critical_is_red(self):
         assert severity_color("critical") == Cyber.RED
 
-    def test_high_is_red(self):
-        assert severity_color("high") == Cyber.RED
+    def test_high_is_orange(self):
+        assert severity_color("high") == Cyber.ORANGE
 
     def test_medium_is_yellow(self):
         assert severity_color("medium") == Cyber.YELLOW
@@ -92,8 +91,8 @@ class TestSeverityColor:
     def test_info_is_gray(self):
         assert severity_color("info") == Cyber.GRAY
 
-    def test_unknown_is_white(self):
-        assert severity_color("unknown") == Cyber.WHITE
+    def test_unknown_is_gray(self):
+        assert severity_color("unknown") == Cyber.GRAY
 
     def test_all_severities_return_strings(self):
         for sev in ("critical", "high", "medium", "low", "info", "unknown"):

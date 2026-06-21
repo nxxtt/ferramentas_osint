@@ -37,9 +37,11 @@ from utils import (
     ensure_output_dir,
     extract_hostname,
     init_scanner,
+    read_target_lines,
     resolve_target_urls,
     run_main_loop,
     safe_asyncio_run,
+    severity_color,
     status_color,
     write_output,
 )
@@ -85,14 +87,6 @@ RISK_WEIGHTS = {
     "medium": 4,
     "low": 1,
     "info": 0,
-}
-
-_SEVERITY_COLORS = {
-    "critical": Cyber.RED,
-    "high": Cyber.RED,
-    "medium": Cyber.YELLOW,
-    "low": Cyber.BLUE,
-    "info": Cyber.GRAY,
 }
 
 SQL_ERROR_PATTERNS: dict[str, list[re.Pattern[str]]] = {
@@ -304,14 +298,10 @@ banner = create_banner(r"""
 
 def load_paths_from_file(paths_file: str) -> list[str]:
     """Carrega paths customizados de arquivo (um por linha)."""
-    try:
-        with open(paths_file, encoding="utf-8", errors="replace") as fh:
-            paths = [line.strip() for line in fh if line.strip() and not line.startswith("#")]
-    except FileNotFoundError:
-        raise ValueError(f"arquivo de paths nao encontrado: {paths_file}") from None
+    paths = read_target_lines(paths_file, sort_dedup=True)
     if not paths:
         raise ValueError(f"nenhum path valido em {paths_file}")
-    return sorted(set(paths))
+    return paths
 
 
 def _resolve_ip_sync(hostname: str) -> str:
@@ -420,7 +410,7 @@ async def check_tls_versions(url: str, timeout: float) -> list[TLSVersionResult]
 
 
 async def check_xss_reflection(
-    client,
+    client: httpx.AsyncClient,
     base_url: str,
     timeout: float,
     inject_params: list[str] | None = None,
@@ -466,7 +456,7 @@ async def check_xss_reflection(
 
 
 async def check_sqli_errors(
-    client,
+    client: httpx.AsyncClient,
     base_url: str,
     timeout: float,
     inject_params: list[str] | None = None,
@@ -552,7 +542,7 @@ async def probe_path(client: httpx.AsyncClient, rate_limiter: RateLimiter, base_
 
 
 async def scan_paths(
-    client,
+    client: httpx.AsyncClient,
     rate_limiter: RateLimiter,
     base_url: str,
     timeout: float,
@@ -605,7 +595,7 @@ async def scan_paths(
 
 
 async def test_http_methods(
-    client,
+    client: httpx.AsyncClient,
     probes: list[Probe],
     timeout: float,
     rate_limiter: RateLimiter,
@@ -910,10 +900,6 @@ def risk_score(findings: list[Finding]) -> int:
     """Calcula score de risco somando pesos das severidades."""
     return sum(RISK_WEIGHTS.get(finding.severity, 0) for finding in findings)
 
-
-def severity_color(severity: str) -> str:
-    """Retorna cor ANSI correspondente a severidade do finding."""
-    return _SEVERITY_COLORS.get(severity, Cyber.WHITE)
 
 
 async def run_audit(

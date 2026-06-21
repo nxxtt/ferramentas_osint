@@ -575,14 +575,12 @@ class TestSetColor:
         set_color(False)
         import utils
         assert utils._USE_COLOR is False
-        set_color(True)
 
     def test_enables_color(self, monkeypatch):
         monkeypatch.setattr("utils._USE_COLOR", False)
         set_color(True)
         import utils
         assert utils._USE_COLOR is True
-        set_color(False)
 
 
 class TestPrintTable:
