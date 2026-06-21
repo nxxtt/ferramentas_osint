@@ -45,7 +45,8 @@ def _read_version() -> str:
     try:
         pyproject = Path(__file__).parent / "pyproject.toml"
         for line in pyproject.read_text(encoding="utf-8").splitlines():
-            if line.startswith("version"):
+            key = line.split("=", 1)[0].strip()
+            if key == "version":
                 return line.split("=", 1)[1].strip().strip('"')
     except (FileNotFoundError, IndexError, OSError):
         pass
@@ -434,7 +435,8 @@ def print_table(
     for row in rows:
         cells = []
         styles = row_styles_fn(row) if row_styles_fn else column_styles
-        assert styles is not None
+        if styles is None:
+            styles = [(Cyber.WHITE, Cyber.RESET)] * len(headers)
         for i, value in enumerate(row):
             aligned = value.ljust(widths[i]) if alignments[i] == "left" else value.rjust(widths[i])
             cells.append(color(aligned, *styles[i]))

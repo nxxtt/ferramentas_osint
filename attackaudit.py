@@ -1090,7 +1090,7 @@ def _save_audit_output(path: str, result: AuditResult, quiet: bool = False) -> N
     write_output(
         path,
         data,
-        fieldnames=["severity", "category", "item", "evidence", "recommendation"],
+        fieldnames=["severity", "category", "item", "evidence", "recommendation", "exploit"],
         csv_rows=data["findings"],
         quiet=quiet,
     )

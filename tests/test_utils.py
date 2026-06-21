@@ -310,7 +310,7 @@ class TestVersion:
         assert len(parts) == 3
         assert all(p.isdigit() for p in parts)
 
-    def test_version_is_3_1_5(self):
+    def test_version_matches_pyproject(self):
         from pathlib import Path
         pyproject = Path(__file__).parent.parent / "pyproject.toml"
         for line in pyproject.read_text(encoding="utf-8").splitlines():

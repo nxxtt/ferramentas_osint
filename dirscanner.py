@@ -121,7 +121,7 @@ def parse_extensions(value: str) -> list[str]:
     return extensions
 
 
-def parse_range(value: str) -> tuple[int, int] | None:
+def parse_range(value: str | None) -> tuple[int, int] | None:
     """Converte string de range 'min-max' em tupla (min, max). None se vazio."""
     if not value:
         return None
