@@ -219,6 +219,7 @@ def scan_targets(
                 try:
                     finding = future.result()
                 except Exception:
+                    logger.debug("erro no scan_port", exc_info=True)
                     continue
                 if finding:
                     findings.append(finding)

@@ -490,7 +490,7 @@ class TestExtractHostname:
 class TestCreateAsyncClientDefaultUA:
     def test_default_user_agent(self):
         client = create_async_client()
-        assert client.headers["User-Agent"] == "MyTools/3.2.0"
+        assert client.headers["User-Agent"] == f"MyTools/{__version__}"
 
 
 class TestQueryNvd:

@@ -1195,7 +1195,9 @@ async def _async_run_once(args: argparse.Namespace) -> int:
             _save_audit_output(args.output, all_results[0], quiet=quiet)
         else:
             consolidated = [asdict(r) for r in all_results]
-            write_output(args.output, consolidated, quiet=quiet)
+            csv_rows = [f for r in all_results for f in asdict(r)["findings"]]
+            write_output(args.output, consolidated, quiet=quiet, csv_rows=csv_rows,
+                         fieldnames=["severity", "category", "item", "evidence", "recommendation", "exploit"])
     return 0
 
 

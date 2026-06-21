@@ -325,7 +325,9 @@ def run_once(args: argparse.Namespace) -> int:
     """Executa uma unica enumeracao de subdominios."""
     quiet = init_scanner(args)
 
-    if args.threads < 1:
+    raw_threads = getattr(args, "threads", None)
+    threads = DEFAULT_THREADS if raw_threads is None else raw_threads
+    if threads < 1:
         raise ValueError("threads precisa ser maior que zero")
     if args.timeout <= 0:
         raise ValueError("timeout precisa ser maior que zero")
@@ -337,13 +339,13 @@ def run_once(args: argparse.Namespace) -> int:
         print(color("[DRY-RUN]", Cyber.YELLOW, Cyber.BOLD), "Nenhuma consulta DNS sera realizada.")
         print(color("[*]", Cyber.CYAN, Cyber.BOLD), f"Dominio: {color(domain, Cyber.WHITE, Cyber.BOLD)}")
         print(color("[*]", Cyber.CYAN, Cyber.BOLD), f"Wordlist: {color(str(len(wordlist)), Cyber.WHITE, Cyber.BOLD)} subdominios")
-        print(color("[*]", Cyber.CYAN, Cyber.BOLD), f"Threads: {color(str(args.threads), Cyber.WHITE, Cyber.BOLD)} | Timeout: {color(f'{args.timeout}s', Cyber.YELLOW)}")
+        print(color("[*]", Cyber.CYAN, Cyber.BOLD), f"Threads: {color(str(threads), Cyber.WHITE, Cyber.BOLD)} | Timeout: {color(f'{args.timeout}s', Cyber.YELLOW)}")
         return 0
 
     results = run_enum_scan(
         domain,
         wordlist_path=getattr(args, "wordlist", None),
-        threads=args.threads,
+        threads=threads,
         timeout=args.timeout,
     )
 
