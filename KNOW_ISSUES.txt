@@ -1,19 +1,2 @@
 MyTools - Known Issues
 ======================
-
-1. TLS versions descontinuadas
-   Severo: Nenhum (suprimido)
-   Arquivo: attackaudit.py (check_tls_versions)
-
-   A ferramenta testa intencionalmente SSLv3, TLS 1.0 e TLS 1.1, que estao
-   descontinuados no Python 3.14+. Os DeprecationWarnings sao suprimidos com
-   warnings.catch_warnings() pois o objetivo e detectar se o alvo aceita
-   versoes inseguras de TLS.
-
-2. Fingerprinting por assinaturas hardcoded
-   Severo: Baixo
-   Arquivo: webrecon.py (detect_technologies)
-
-   A deteccao de tecnologias usa dicts de assinaturas estaticas (CMS,
-   frameworks, libraries, servers). Atualizacoes em signatures de sites
-   podem causar falsos negativos. Nao usa banco de dados externo ou API.
