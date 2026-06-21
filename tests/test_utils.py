@@ -317,11 +317,8 @@ class TestParseAuthUtils:
         assert "Authorization" in result
 
     def test_no_colon_raises(self):
-        try:
+        with pytest.raises(argparse.ArgumentTypeError):
             parse_auth("nocolon")
-            raise AssertionError("Should have raised")
-        except argparse.ArgumentTypeError:
-            pass
 
 
 class TestParseExtraHeadersUtils:
@@ -334,11 +331,8 @@ class TestParseExtraHeadersUtils:
         assert len(result) == 2
 
     def test_no_colon_raises(self):
-        try:
+        with pytest.raises(ValueError):
             parse_extra_headers(["InvalidHeader"])
-            raise AssertionError("Should have raised")
-        except ValueError:
-            pass
 
 
 class TestAddCommonArgs:
@@ -547,25 +541,16 @@ class TestNormalizeUrl:
         assert normalize_url("  https://example.com  ") == "https://example.com"
 
     def test_empty_raises(self):
-        try:
+        with pytest.raises(ValueError):
             normalize_url("")
-            raise AssertionError("Should have raised")
-        except ValueError:
-            pass
 
     def test_invalid_scheme_raises(self):
-        try:
+        with pytest.raises(ValueError):
             normalize_url("ftp://example.com")
-            raise AssertionError("Should have raised")
-        except ValueError:
-            pass
 
     def test_no_netloc_raises(self):
-        try:
+        with pytest.raises(ValueError):
             normalize_url("http://")
-            raise AssertionError("Should have raised")
-        except ValueError:
-            pass
 
 
 class TestSetColor:

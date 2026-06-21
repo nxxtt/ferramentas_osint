@@ -48,18 +48,12 @@ class TestNormalizeUrl:
         assert normalize_url("example.com") == "https://example.com"
 
     def test_ftp_scheme_raises(self):
-        try:
+        with pytest.raises(ValueError):
             normalize_url("ftp://example.com")
-            raise AssertionError("Should have raised")
-        except ValueError:
-            pass
 
     def test_no_netloc_raises(self):
-        try:
+        with pytest.raises(ValueError):
             normalize_url("http://")
-            raise AssertionError("Should have raised")
-        except ValueError:
-            pass
 
     def test_strips_trailing_slash(self):
         assert normalize_url("https://example.com/") == "https://example.com"
@@ -81,11 +75,8 @@ class TestCandidateUrls:
         assert result[1].startswith("http://")
 
     def test_empty_raises(self):
-        try:
+        with pytest.raises(ValueError):
             candidate_urls("")
-            raise AssertionError("Should have raised")
-        except ValueError:
-            pass
 
     def test_strips_whitespace(self):
         result = candidate_urls("  example.com  ")
@@ -161,11 +152,8 @@ class TestReconResultDataclass:
             security_headers_missing=[], robots_status=None, sitemap_status=None,
             elapsed=0.0,
         )
-        try:
+        with pytest.raises(AttributeError):
             r.status = 404
-            raise AssertionError("Should be frozen")
-        except AttributeError:
-            pass
 
 
 class TestDetectTechnologies:
@@ -464,11 +452,8 @@ class TestCVEFindingDataclass:
             cve_id="CVE-2021-44228", description="Log4j RCE",
             score=10.0, severity="CRITICAL", technology="Apache", version="2.14",
         )
-        try:
+        with pytest.raises(AttributeError):
             f.score = 5.0
-            raise AssertionError("Should be frozen")
-        except AttributeError:
-            pass
 
 
 class TestLookupCves:
@@ -789,11 +774,8 @@ class TestWhoisResultDataclass:
 
     def test_frozen(self):
         w = WhoisResult(domain="example.com")
-        try:
+        with pytest.raises(AttributeError):
             w.domain = "other.com"
-            raise AssertionError("Should be frozen")
-        except AttributeError:
-            pass
 
     def test_defaults_none(self):
         w = WhoisResult(domain="test.com")

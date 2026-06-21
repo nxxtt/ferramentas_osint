@@ -50,18 +50,12 @@ class TestNormalizeUrl:
         assert normalize_url("  https://example.com  ") == "https://example.com"
 
     def test_empty_raises(self):
-        try:
+        with pytest.raises(ValueError):
             normalize_url("")
-            raise AssertionError("Should have raised")
-        except ValueError:
-            pass
 
     def test_invalid_scheme_raises(self):
-        try:
+        with pytest.raises(ValueError):
             normalize_url("ftp://example.com")
-            raise AssertionError("Should have raised")
-        except ValueError:
-            pass
 
 
 class TestRiskScore:
@@ -175,11 +169,8 @@ class TestProbeDataclass:
 
     def test_frozen(self):
         p = Probe(url="http://x.com/.env", status=200, size=50, location="")
-        try:
+        with pytest.raises(AttributeError):
             p.status = 404
-            raise AssertionError("Should be frozen")
-        except AttributeError:
-            pass
 
 
 class TestFindingDataclass:
@@ -189,11 +180,8 @@ class TestFindingDataclass:
 
     def test_frozen(self):
         f = Finding("high", "transport", "item", "evidence", "rec")
-        try:
+        with pytest.raises(AttributeError):
             f.severity = "low"
-            raise AssertionError("Should be frozen")
-        except AttributeError:
-            pass
 
 
 class TestTLSVersionResult:
@@ -210,11 +198,8 @@ class TestTLSVersionResult:
 
     def test_frozen(self):
         r = TLSVersionResult(protocol="TLS 1.3", supported=True)
-        try:
+        with pytest.raises(AttributeError):
             r.supported = False
-            raise AssertionError("Should be frozen")
-        except AttributeError:
-            pass
 
 
 class TestAuditResultDataclass:
@@ -644,11 +629,8 @@ class TestMethodResultDataclass:
 
     def test_frozen(self):
         r = MethodResult(url="https://example.com/api", method="DELETE", status=204, size=0)
-        try:
+        with pytest.raises(AttributeError):
             r.status = 404
-            raise AssertionError("Should be frozen")
-        except AttributeError:
-            pass
 
 
 class TestMethodsToTest:

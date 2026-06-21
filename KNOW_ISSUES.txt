@@ -20,115 +20,49 @@ MyTools - Known Issues
 
 === OTIMIZACOES PENDENTES (v3.3+) ===
 
-3. DRY: boilerplate de main() duplicado em 5 scanners
-   Arquivos: webrecon.py:1106, portscanner.py:388, dirscanner.py:497,
-             dnstransfer.py:359, subdomainenum.py:372
-   Descricao: Estrutura identica (parse_args -> interactive -> quiet -> try).
-   Solucao: Extrair para funcao run_main_loop(parser, banner_fn, run_fn).
-
-4. DRY: run_once() preamble duplicado em 5 scanners
-   Arquivos: webrecon.py:1060-1063, portscanner.py:329-332,
-             dirscanner.py:447-450, dnstransfer.py:318-321,
-             subdomainenum.py:333-336
-   Descricao: setup_logging + quiet + set_color identicos.
-   Solucao: Extrair para init_scanner(args).
-
-5. DRY: target file reading logic duplicada
-   Arquivos: portscanner.py:348-356, utils.py:494-509
-   Descricao: Leitura de arquivo de targets com mesmo boilerplate.
-   Diferenca: portscanner usa hostnames, resolve_target_urls usa URLs.
-   Solucao: Extrair read_target_lines(filepath) -> list[str].
-
-6. header_get() e case-sensitive (docstring corrigido, impl continua)
+3. header_get() e case-sensitive (docstring corrigido, impl continua)
    Arquivo: utils.py:260
    Descricao: Implementacao e dict.get() case-sensitive. Funciona porque
    httpx.Headers e case-insensitive. Se alguem passar dict puro com
    casing diferente, vai falhar silenciosamente.
    Solucao: Implementar case-insensitive real ou documentar claramente.
 
-7. verify=False hardcoded em create_async_client
-   Arquivo: utils.py:186
-   Descricao: Desabilita verificacao SSL para todas as requisicoes.
-   Nao ha flag --verify/--no-verify no CLI.
-   Solucao: Adicionar parametro verify: bool = False ao create_async_client
-   e flag --verify/--no-verify nos modulos relevantes.
-
-8. SPA detection duplicada entre dirscanner e attackaudit
-   Arquivos: dirscanner.py:286-298, attackaudit.py:591-607
-   Descricao: Algoritmo identico com keys diferentes (size,words vs status,size)
-   e thresholds diferentes (10 vs 5).
-   Solucao: Extrair para funcao shared detect_spa_fallback() parametrizavel.
-
-9. Portscanner sem limite de futures na fila
+4. Portscanner sem limite de futures na fila
    Arquivo: portscanner.py:210-243
    Descricao: targets_ports materializa todas as combinacoes (host x port)
    antes de submeter. Scans grandes (ex: /16 x 100 ports) consomem muita RAM.
    Solucao: Usar generator ao inves de list comprehension para targets_ports.
 
-10. base_ns hardcoded sem validacao em reconall.py
-    Arquivo: reconall.py:110-146
-    Descricao: ~30 defaults hardcoded bypassam validacao dos modulos filhos.
-    Solucao: Validar defaults contra restricoes dos modulos ou usar
-    um dict TypedDict com tipos corretos.
+5. base_ns hardcoded sem validacao em reconall.py
+   Arquivo: reconall.py:110-146
+   Descricao: ~30 defaults hardcoded bypassam validacao dos modulos filhos.
+   Solucao: Validar defaults contra restricoes dos modulos ou usar
+   um dict TypedDict com tipos corretos.
 
-11. RateLimiter nao e thread-safe
-    Arquivo: utils.py:133-171
-    Descricao: Projetado para uso dentro de event loop asyncio unico.
-    Usa time.monotonic() sem locks.
-    Solucao: Documentar claramente (ja documentado) ou adicionar Lock
-    se uso cross-thread for necessario.
+6. RateLimiter nao e thread-safe
+   Arquivo: utils.py:133-171
+   Descricao: Projetado para uso dentro de event loop asyncio unico.
+   Usa time.monotonic() sem locks.
+   Solucao: Documentar claramente (ja documentado) ou adicionar Lock
+   se uso cross-thread for necessario.
 
-12. _resolve_subdomain() aceita resolver=None como default
-    Arquivo: subdomainenum.py:131
-    Descricao: Quando chamado sem resolver, cria Resolver novo a cada call.
-    Nunca acontece em producao (sempre passa shared_resolver).
-    Solucao: Tornar resolver obrigatorio ou usar sentinel.
+7. Versao hardcoded em 4 arquivos sem single source of truth
+   Arquivos: utils.py:41, pyproject.toml:3, setup.sh:9, setup.ps1:8
+   Descricao: Todos dizem "3.2.0" mas sao editados independentemente.
+   Solucao: Usar poetry-dynamic-versioning ou importar de pyproject.toml.
 
-13. Type hints ausentes em funcoes que aceitam client
-    Arquivos: webrecon.py:471,480,763; attackaudit.py:424,470,533,543,556,612;
-              dirscanner.py:190
-    Descricao: Parametro client sem anotacao de tipo (e httpx.AsyncClient).
-    Solucao: Adicionar client: httpx.AsyncClient em todas as assinaturas.
+8. 12 dataclasses frozen=True sem __slots__
+   Arquivos: dirscanner.py:79, attackaudit.py:231-272, webrecon.py:532-716,
+             subdomainenum.py:98, portscanner.py:68, dnstransfer.py:66
+   Descricao: Memory overhead em dataclasses com muitos campos.
+   Solucao: Adicionar __slots__ = () (Python 3.10+ com frozen=True).
 
-14. try/assert False anti-pattern (~40 instancias)
-    Arquivos: Todos os test_*.py
-    Descricao: Padrao try/except/assert False em vez de pytest.raises().
-    Algumas (frozen dataclass) sao aceitaveis.
-    Solucao: Converter ~40 instancias para pytest.raises().
+9. net.py e essencialmente um re-export layer
+   Arquivo: net.py (108 linhas)
+   Descricao: 20/30 linhas sao re-exports de utils.py.
+   Solucao: Avaliar se vale manter indireta ou importar direto de utils.
 
-15. _make_args() duplicado 3x em test_subdomainenum.py
-    Arquivo: test_subdomainenum.py:375,428,523
-    Descricao: Mesma funcao helper copiada em 3 classes de teste.
-    Solucao: Extrair para modulo-level helper ou fixture.
-
-16. test_dirscanner.py clientes manuais vs fixture
-    Arquivo: test_dirscanner.py:422-488 (TestScanPathEdgeCases)
-    Descricao: Cria clients manualmente com try/finally ao inves da fixture.
-    Solucao: Refatorar para usar fixture async_client do conftest.
-
-17. Versao hardcoded em 4 arquivos sem single source of truth
-    Arquivos: utils.py:41, pyproject.toml:3, setup.sh:9, setup.ps1:8
-    Descricao: Todos dizem "3.2.0" mas sao editados independentemente.
-    Solucao: Usar poetry-dynamic-versioning ou importar de pyproject.toml.
-
-18. 12 dataclasses frozen=True sem __slots__
-    Arquivos: dirscanner.py:79, attackaudit.py:231-272, webrecon.py:532-716,
-              subdomainenum.py:98, portscanner.py:68, dnstransfer.py:66
-    Descricao: Memory overhead em dataclasses com muitos campos.
-    Solucao: Adicionar __slots__ = () (Python 3.10+ com frozen=True).
-
-19. net.py e essencialmente um re-export layer
-    Arquivo: net.py (108 linhas)
-    Descricao: 20/30 linhas sao re-exports de utils.py.
-    Solucao: Avaliar se vale manter indireta ou importar direto de utils.
-
-20. Testes para net.py inexistentes
-    Arquivo: tests/
-    Descricao: Nao existe test_net.py. As 3 funcoes originais (fetch_bytes,
-    read_response_text, classify_by_content_type) nao sao testadas.
-    Solucao: Criar test_net.py com cobertura basica.
-
-21. __all__ definido apenas em net.py
+10. __all__ definido apenas em net.py
     Arquivos: Todos os modulos exceto net.py
     Descricao: Comportamento de from module import * nao controlado.
     Solucao: Adicionar __all__ em utils.py e modulos publicos.

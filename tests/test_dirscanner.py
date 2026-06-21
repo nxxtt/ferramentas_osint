@@ -20,7 +20,7 @@ from dirscanner import (
     parse_statuses,
     scan_path,
 )
-from utils import RateLimiter, create_async_client, normalize_url, parse_auth, parse_extra_headers
+from utils import RateLimiter, normalize_url, parse_auth, parse_extra_headers
 
 
 class TestNormalizeBaseUrl:
@@ -37,18 +37,12 @@ class TestNormalizeBaseUrl:
         assert normalize_url("https://example.com/app", default_scheme="http", ensure_trailing_slash=True) == "https://example.com/app/"
 
     def test_invalid_scheme_raises(self):
-        try:
+        with pytest.raises(ValueError):
             normalize_url("ftp://example.com", default_scheme="http", ensure_trailing_slash=True)
-            raise AssertionError("Should have raised")
-        except ValueError:
-            pass
 
     def test_empty_netloc_raises(self):
-        try:
+        with pytest.raises(ValueError):
             normalize_url("http://", default_scheme="http", ensure_trailing_slash=True)
-            raise AssertionError("Should have raised")
-        except ValueError:
-            pass
 
 
 class TestParseStatuses:
@@ -72,25 +66,16 @@ class TestParseStatuses:
         assert parse_statuses("202-200") == {200, 201, 202}
 
     def test_invalid_status_raises(self):
-        try:
+        with pytest.raises(argparse.ArgumentTypeError):
             parse_statuses("99")
-            raise AssertionError("Should have raised")
-        except argparse.ArgumentTypeError:
-            pass
 
     def test_non_numeric_raises(self):
-        try:
+        with pytest.raises(argparse.ArgumentTypeError, match="abc"):
             parse_statuses("abc")
-            raise AssertionError("Should have raised")
-        except argparse.ArgumentTypeError as e:
-            assert "abc" in str(e)
 
     def test_non_numeric_in_range_raises(self):
-        try:
+        with pytest.raises(argparse.ArgumentTypeError, match="abc-200"):
             parse_statuses("abc-200")
-            raise AssertionError("Should have raised")
-        except argparse.ArgumentTypeError as e:
-            assert "abc-200" in str(e)
 
     def test_trailing_comma(self):
         assert parse_statuses("200,403,") == {200, 403}
@@ -131,18 +116,12 @@ class TestParseRange:
         assert parse_range(None) is None
 
     def test_invalid_format_raises(self):
-        try:
+        with pytest.raises(argparse.ArgumentTypeError):
             parse_range("abc")
-            raise AssertionError("Should have raised")
-        except argparse.ArgumentTypeError:
-            pass
 
     def test_non_numeric_raises(self):
-        try:
+        with pytest.raises(argparse.ArgumentTypeError):
             parse_range("abc-200")
-            raise AssertionError("Should have raised")
-        except argparse.ArgumentTypeError:
-            pass
 
 
 class TestParseAuth:
@@ -156,11 +135,8 @@ class TestParseAuth:
         assert "Authorization" in result
 
     def test_no_colon_raises(self):
-        try:
+        with pytest.raises(argparse.ArgumentTypeError):
             parse_auth("nocolon")
-            raise AssertionError("Should have raised")
-        except argparse.ArgumentTypeError:
-            pass
 
 
 class TestParseExtraHeaders:
@@ -175,11 +151,8 @@ class TestParseExtraHeaders:
         assert result["X-Custom"] == "xyz"
 
     def test_no_colon_raises(self):
-        try:
+        with pytest.raises(ValueError):
             parse_extra_headers(["InvalidHeader"])
-            raise AssertionError("Should have raised")
-        except ValueError:
-            pass
 
 
 class TestMatchesFilter:
@@ -245,11 +218,8 @@ class TestLoadPaths:
         assert paths == sorted(paths)
 
     def test_missing_wordlist_raises(self):
-        try:
+        with pytest.raises(ValueError, match="nao encontrada"):
             load_paths("/nonexistent/wordlist.txt", [])
-            raise AssertionError("Should have raised")
-        except ValueError as e:
-            assert "nao encontrada" in str(e)
 
 
 class TestDefaultPaths:
@@ -279,11 +249,8 @@ class TestFindingDataclass:
 
     def test_frozen(self):
         f = Finding(url="http://x.com/a", path="/a", status=200, size=100, words=5, title="T")
-        try:
+        with pytest.raises(AttributeError):
             f.status = 404
-            raise AssertionError("Should be frozen")
-        except AttributeError:
-            pass
 
     def test_custom_method(self):
         f = Finding(url="http://x.com/a", path="/a", status=200, size=100, words=5, title="T", method="POST")
@@ -422,69 +389,49 @@ class TestBuildParser:
 class TestScanPathEdgeCases:
     @respx.mock
     @pytest.mark.asyncio
-    async def test_connection_refused_returns_none(self):
+    async def test_connection_refused_returns_none(self, async_client):
         respx.get("https://example.com/secret").mock(side_effect=httpx.ConnectError("refused"))
-        client = create_async_client(user_agent="TestAgent/1.0")
-        try:
-            rl = RateLimiter(0)
-            result = await scan_path(client, rl, "https://example.com/", "/secret", 1.0, {200, 301})
-            assert result is None
-        finally:
-            await client.aclose()
+        rl = RateLimiter(0)
+        result = await scan_path(async_client, rl, "https://example.com/", "/secret", 1.0, {200, 301})
+        assert result is None
 
     @respx.mock
     @pytest.mark.asyncio
-    async def test_timeout_returns_none(self):
+    async def test_timeout_returns_none(self, async_client):
         def handler(request):
             raise httpx.TimeoutException("timeout")
 
         respx.get("https://example.com/slow").mock(side_effect=handler)
-        client = create_async_client(user_agent="TestAgent/1.0")
-        try:
-            rl = RateLimiter(0)
-            result = await scan_path(client, rl, "https://example.com/", "/slow", 0.1, {200})
-            assert result is None
-        finally:
-            await client.aclose()
+        rl = RateLimiter(0)
+        result = await scan_path(async_client, rl, "https://example.com/", "/slow", 0.1, {200})
+        assert result is None
 
     @respx.mock
     @pytest.mark.asyncio
-    async def test_empty_path_probes_root(self):
+    async def test_empty_path_probes_root(self, async_client):
         respx.get("https://example.com/").mock(return_value=httpx.Response(200, text="root"))
-        client = create_async_client(user_agent="TestAgent/1.0")
-        try:
-            rl = RateLimiter(0)
-            result = await scan_path(client, rl, "https://example.com", "", 1.0, {200})
-            assert result is None or result.path == "/"
-        finally:
-            await client.aclose()
+        rl = RateLimiter(0)
+        result = await scan_path(async_client, rl, "https://example.com", "", 1.0, {200})
+        assert result is None or result.path == "/"
 
     @respx.mock
     @pytest.mark.asyncio
-    async def test_403_returns_finding_when_in_statuses(self):
+    async def test_403_returns_finding_when_in_statuses(self, async_client):
         respx.get("https://example.com/admin").mock(return_value=httpx.Response(403, text="forbidden"))
-        client = create_async_client(user_agent="TestAgent/1.0")
-        try:
-            rl = RateLimiter(0)
-            result = await scan_path(client, rl, "https://example.com/", "/admin", 1.0, {200, 403})
-            assert result is not None
-            assert result.status == 403
-        finally:
-            await client.aclose()
+        rl = RateLimiter(0)
+        result = await scan_path(async_client, rl, "https://example.com/", "/admin", 1.0, {200, 403})
+        assert result is not None
+        assert result.status == 403
 
     @respx.mock
     @pytest.mark.asyncio
-    async def test_large_body_handled(self):
+    async def test_large_body_handled(self, async_client):
         body = "x" * 500_000
         respx.get("https://example.com/big").mock(return_value=httpx.Response(200, text=body))
-        client = create_async_client(user_agent="TestAgent/1.0")
-        try:
-            rl = RateLimiter(0)
-            result = await scan_path(client, rl, "https://example.com/", "/big", 5.0, {200})
-            assert result is not None
-            assert result.size >= 500_000
-        finally:
-            await client.aclose()
+        rl = RateLimiter(0)
+        result = await scan_path(async_client, rl, "https://example.com/", "/big", 5.0, {200})
+        assert result is not None
+        assert result.size >= 500_000
 
 
 class TestDryRun:

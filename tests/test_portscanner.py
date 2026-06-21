@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import argparse
 
+import pytest
+
 from portscanner import (
     BANNER_PROBES,
     DEFAULT_PORTS,
@@ -46,39 +48,26 @@ class TestParsePorts:
         assert parse_ports("80,80,80") == [80]
 
     def test_invalid_port_raises(self):
-        try:
+        with pytest.raises(argparse.ArgumentTypeError):
             parse_ports("0")
-            raise AssertionError("Should have raised")
-        except argparse.ArgumentTypeError:
-            pass
 
     def test_empty_raises(self):
-        try:
+        with pytest.raises(argparse.ArgumentTypeError):
             parse_ports("")
-            raise AssertionError("Should have raised")
-        except argparse.ArgumentTypeError:
-            pass
 
     def test_non_numeric_raises(self):
-        try:
+        with pytest.raises(argparse.ArgumentTypeError) as exc_info:
             parse_ports("abc")
-            raise AssertionError("Should have raised")
-        except argparse.ArgumentTypeError as e:
-            assert "abc" in str(e)
+        assert "abc" in str(exc_info.value)
 
     def test_non_numeric_in_range_raises(self):
-        try:
+        with pytest.raises(argparse.ArgumentTypeError) as exc_info:
             parse_ports("abc-100")
-            raise AssertionError("Should have raised")
-        except argparse.ArgumentTypeError as e:
-            assert "abc-100" in str(e)
+        assert "abc-100" in str(exc_info.value)
 
     def test_mixed_valid_invalid_raises(self):
-        try:
+        with pytest.raises(argparse.ArgumentTypeError):
             parse_ports("80,abc,443")
-            raise AssertionError("Should have raised")
-        except argparse.ArgumentTypeError:
-            pass
 
     def test_trailing_comma(self):
         assert parse_ports("80,443,") == [80, 443]
@@ -144,11 +133,8 @@ class TestFindingDataclass:
 
     def test_frozen(self):
         f = Finding(host="localhost", address="127.0.0.1", port=80, state="open", service="http")
-        try:
+        with pytest.raises(AttributeError):
             f.port = 443
-            raise AssertionError("Should be frozen")
-        except AttributeError:
-            pass
 
 
 class TestBuildParser:

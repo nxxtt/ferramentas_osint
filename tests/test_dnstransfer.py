@@ -7,6 +7,7 @@ import dns.name
 import dns.rdatatype
 import dns.resolver
 import dns.zone
+import pytest
 
 from dnstransfer import (
     AXFR_TIMEOUT,
@@ -25,11 +26,8 @@ from dnstransfer import (
 class TestXfrResult:
     def test_frozen(self):
         result = XfrResult(domain="example.com", nameserver="ns1.example.com", ns_ip="1.2.3.4", zone_transferred=False)
-        try:
+        with pytest.raises(AttributeError):
             result.domain = "other.com"
-            raise AssertionError("Should be frozen")
-        except AttributeError:
-            pass
 
     def test_default_values(self):
         result = XfrResult(domain="example.com", nameserver="ns1.example.com", ns_ip="1.2.3.4", zone_transferred=False)
@@ -130,11 +128,9 @@ class TestResolveNsToIp:
 
     @patch("dnstransfer.dns.resolver.resolve", side_effect=dns.exception.DNSException("fail"))
     def test_raises_on_failure(self, mock_resolve):
-        try:
+        with pytest.raises(ValueError) as exc_info:
             resolve_ns_to_ip("ns1.example.com")
-            raise AssertionError("Should have raised ValueError")
-        except ValueError as e:
-            assert "ns1.example.com" in str(e)
+        assert "ns1.example.com" in str(exc_info.value)
 
 
 class TestTryZoneTransfer:
@@ -258,11 +254,8 @@ class TestRunXfrScan:
         assert results[0].record_count == 10
 
     def test_raises_on_empty_domain(self):
-        try:
+        with pytest.raises(ValueError):
             run_xfr_scan("  ")
-            raise AssertionError("Should have raised ValueError")
-        except ValueError:
-            pass
 
 
 class TestBuildParser:
@@ -305,11 +298,8 @@ class TestBuildParser:
 
     def test_version_flag(self):
         parser = build_parser()
-        try:
+        with pytest.raises(SystemExit):
             parser.parse_args(["--version"])
-            raise AssertionError("Should have raised SystemExit")
-        except SystemExit:
-            pass
 
     def test_no_args_domain_is_none(self):
         parser = build_parser()
@@ -349,11 +339,8 @@ class TestRunOnce:
     @patch("dnstransfer.run_xfr_scan")
     def test_negative_timeout_raises(self, mock_scan):
         args = build_parser().parse_args(["example.com", "-t", "-1"])
-        try:
+        with pytest.raises(ValueError):
             run_once(args)
-            raise AssertionError("Should have raised ValueError")
-        except ValueError:
-            pass
 
     @patch("dnstransfer.run_xfr_scan")
     def test_quiet_mode(self, mock_scan, capsys):

@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import dns.exception
 import dns.resolver
+import pytest
 
 from subdomainenum import (
     BANNER_ART,
@@ -41,11 +42,8 @@ def _make_args(**kwargs):
 class TestSubdomainResult:
     def test_frozen(self):
         result = SubdomainResult(subdomain="www.example.com")
-        try:
+        with pytest.raises(AttributeError):
             result.subdomain = "other.com"
-            raise AssertionError("Should be frozen")
-        except AttributeError:
-            pass
 
     def test_defaults(self):
         result = SubdomainResult(subdomain="www.example.com")
@@ -103,20 +101,14 @@ class TestLoadWordlist:
         assert result == ["www", "test", "api"]
 
     def test_file_not_found(self):
-        try:
+        with pytest.raises(ValueError, match="nao encontrada"):
             load_wordlist("/tmp/nonexistent_wordlist_12345.txt")
-            raise AssertionError("Should raise ValueError")
-        except ValueError as e:
-            assert "nao encontrada" in str(e)
 
     def test_empty_file(self, tmp_path):
         wl = tmp_path / "empty.txt"
         wl.write_text("\n\n\n", encoding="utf-8")
-        try:
+        with pytest.raises(ValueError, match="vazia"):
             load_wordlist(str(wl))
-            raise AssertionError("Should raise ValueError")
-        except ValueError as e:
-            assert "vazia" in str(e)
 
     def test_strips_and_lowercases(self, tmp_path):
         wl = tmp_path / "mixed.txt"
@@ -221,18 +213,13 @@ class TestResolveSubdomain:
 
 class TestEnumerateSubdomains:
     def test_empty_domain(self):
-        try:
+        with pytest.raises(ValueError) as excinfo:
             enumerate_subdomains("", ["www"])
-            raise AssertionError("Should raise ValueError")
-        except ValueError as e:
-            assert "dominio" in str(e).lower() or "domínio" in str(e).lower()
+        assert "dominio" in str(excinfo.value).lower() or "domínio" in str(excinfo.value).lower()
 
     def test_whitespace_domain_stripped(self):
-        try:
+        with pytest.raises(ValueError):
             enumerate_subdomains("   ", ["www"])
-            raise AssertionError("Should raise ValueError")
-        except ValueError:
-            pass
 
     @patch("subdomainenum._resolve_subdomain")
     def test_returns_only_resolved(self, mock_resolve):
@@ -386,19 +373,13 @@ class TestRunOnce:
 
     def test_invalid_threads(self):
         args = _make_args(threads=0)
-        try:
+        with pytest.raises(ValueError, match="threads"):
             run_once(args)
-            raise AssertionError("Should raise ValueError")
-        except ValueError as e:
-            assert "threads" in str(e).lower()
 
     def test_invalid_timeout(self):
         args = _make_args(timeout=0)
-        try:
+        with pytest.raises(ValueError, match="timeout"):
             run_once(args)
-            raise AssertionError("Should raise ValueError")
-        except ValueError as e:
-            assert "timeout" in str(e).lower()
 
     @patch("subdomainenum.run_enum_scan")
     @patch("subdomainenum.write_output")
