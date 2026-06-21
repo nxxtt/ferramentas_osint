@@ -20,49 +20,19 @@ MyTools - Known Issues
 
 === OTIMIZACOES PENDENTES (v3.3+) ===
 
-3. header_get() e case-sensitive (docstring corrigido, impl continua)
-   Arquivo: utils.py:260
-   Descricao: Implementacao e dict.get() case-sensitive. Funciona porque
-   httpx.Headers e case-insensitive. Se alguem passar dict puro com
-   casing diferente, vai falhar silenciosamente.
-   Solucao: Implementar case-insensitive real ou documentar claramente.
-
-4. Portscanner sem limite de futures na fila
-   Arquivo: portscanner.py:210-243
-   Descricao: targets_ports materializa todas as combinacoes (host x port)
-   antes de submeter. Scans grandes (ex: /16 x 100 ports) consomem muita RAM.
-   Solucao: Usar generator ao inves de list comprehension para targets_ports.
-
-5. base_ns hardcoded sem validacao em reconall.py
-   Arquivo: reconall.py:110-146
-   Descricao: ~30 defaults hardcoded bypassam validacao dos modulos filhos.
-   Solucao: Validar defaults contra restricoes dos modulos ou usar
-   um dict TypedDict com tipos corretos.
-
-6. RateLimiter nao e thread-safe
+3. RateLimiter nao e thread-safe
    Arquivo: utils.py:133-171
    Descricao: Projetado para uso dentro de event loop asyncio unico.
    Usa time.monotonic() sem locks.
    Solucao: Documentar claramente (ja documentado) ou adicionar Lock
    se uso cross-thread for necessario.
 
-7. Versao hardcoded em 4 arquivos sem single source of truth
-   Arquivos: utils.py:41, pyproject.toml:3, setup.sh:9, setup.ps1:8
-   Descricao: Todos dizem "3.2.0" mas sao editados independentemente.
-   Solucao: Usar poetry-dynamic-versioning ou importar de pyproject.toml.
-
-8. 12 dataclasses frozen=True sem __slots__
-   Arquivos: dirscanner.py:79, attackaudit.py:231-272, webrecon.py:532-716,
-             subdomainenum.py:98, portscanner.py:68, dnstransfer.py:66
-   Descricao: Memory overhead em dataclasses com muitos campos.
-   Solucao: Adicionar __slots__ = () (Python 3.10+ com frozen=True).
-
-9. net.py e essencialmente um re-export layer
+4. net.py e essencialmente um re-export layer
    Arquivo: net.py (108 linhas)
    Descricao: 20/30 linhas sao re-exports de utils.py.
    Solucao: Avaliar se vale manter indireta ou importar direto de utils.
 
-10. __all__ definido apenas em net.py
-    Arquivos: Todos os modulos exceto net.py
-    Descricao: Comportamento de from module import * nao controlado.
-    Solucao: Adicionar __all__ em utils.py e modulos publicos.
+5. __all__ definido apenas em net.py
+   Arquivos: Todos os modulos exceto net.py
+   Descricao: Comportamento de from module import * nao controlado.
+   Solucao: Adicionar __all__ em utils.py e modulos publicos.
