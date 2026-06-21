@@ -17,22 +17,3 @@ MyTools - Known Issues
    A deteccao de tecnologias usa dicts de assinaturas estaticas (CMS,
    frameworks, libraries, servers). Atualizacoes em signatures de sites
    podem causar falsos negativos. Nao usa banco de dados externo ou API.
-
-=== OTIMIZACOES PENDENTES (v3.3+) ===
-
-3. RateLimiter nao e thread-safe
-   Arquivo: utils.py:133-171
-   Descricao: Projetado para uso dentro de event loop asyncio unico.
-   Usa time.monotonic() sem locks.
-   Solucao: Documentar claramente (ja documentado) ou adicionar Lock
-   se uso cross-thread for necessario.
-
-4. net.py e essencialmente um re-export layer
-   Arquivo: net.py (108 linhas)
-   Descricao: 20/30 linhas sao re-exports de utils.py.
-   Solucao: Avaliar se vale manter indireta ou importar direto de utils.
-
-5. __all__ definido apenas em net.py
-   Arquivos: Todos os modulos exceto net.py
-   Descricao: Comportamento de from module import * nao controlado.
-   Solucao: Adicionar __all__ em utils.py e modulos publicos.
