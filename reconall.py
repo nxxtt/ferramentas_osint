@@ -43,6 +43,7 @@ from utils import (
     __version__,
     color,
     create_banner,
+    parse_auth,
     setup_logging,
 )
 
@@ -79,6 +80,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("-v", "--verbose", action="store_true", help="Mostra mensagens de debug")
     parser.add_argument("-q", "--quiet", action="store_true", help="Modo silencioso")
     parser.add_argument("--dry-run", action="store_true", help="Mostra o que faria sem executar nada")
+    parser.add_argument("--auth", type=parse_auth, help="Autenticacao Basic (user:pass). Suporta @credencial do keyring.")
+    parser.add_argument("--bearer-token", dest="bearer_token", help="Token Bearer para autenticacao. Suporta @credencial do keyring.")
+    parser.add_argument("--cookie", help="Cookie para as requests. Suporta @credencial do keyring.")
+    parser.add_argument("--header", action="append", default=[], help="Header customizado (pode repetir). Ex: 'X-Token: abc'")
     parser.add_argument("--skip", action="append", default=[],
                         choices=ALL_MODULES,
                         help=f"Modulo para pular (pode repetir). Opcoes: {', '.join(ALL_MODULES)}")
@@ -128,6 +133,10 @@ def _build_base_ns(args: argparse.Namespace) -> argparse.Namespace:
         "user_agent": f"MyTools/{__version__}",
         "verify": False,
         "threads": None,
+        "auth": getattr(args, "auth", None),
+        "bearer_token": getattr(args, "bearer_token", None),
+        "cookie": getattr(args, "cookie", None),
+        "header": getattr(args, "header", None),
     })
 
     return argparse.Namespace(**all_defaults)
@@ -222,6 +231,12 @@ def main() -> int:
             print(color("  Flags:", Cyber.CYAN), "--test-vulns")
         if args.cve:
             print(color("  Flags:", Cyber.CYAN), "--cve")
+        if getattr(args, "bearer_token", None):
+            print(color("  Auth:", Cyber.CYAN), "bearer-token")
+        elif getattr(args, "auth", None):
+            print(color("  Auth:", Cyber.CYAN), "basic")
+        elif getattr(args, "cookie", None):
+            print(color("  Auth:", Cyber.CYAN), "cookie")
         return 0
 
     banner()

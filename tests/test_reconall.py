@@ -263,3 +263,93 @@ class TestNamespaceConstruction:
             ns = mock_fn.call_args[0][0]
             assert ns.output is not None
             assert "portscanner" in ns.output
+
+
+class TestAuthArgs:
+    """Testes para argumentos de auth no reconall."""
+
+    def test_has_auth_argument(self):
+        parser = build_parser()
+        args = parser.parse_args(["example.com", "--auth", "user:pass"])
+        assert args.auth == {"Authorization": "Basic dXNlcjpwYXNz"}
+
+    def test_has_bearer_token_argument(self):
+        parser = build_parser()
+        args = parser.parse_args(["example.com", "--bearer-token", "tok123"])
+        assert args.bearer_token == "tok123"
+
+    def test_has_cookie_argument(self):
+        parser = build_parser()
+        args = parser.parse_args(["example.com", "--cookie", "session=abc"])
+        assert args.cookie == "session=abc"
+
+    def test_has_header_argument(self):
+        parser = build_parser()
+        args = parser.parse_args(["example.com", "--header", "X-Token: abc"])
+        assert args.header == ["X-Token: abc"]
+
+    def test_header_multiple(self):
+        parser = build_parser()
+        args = parser.parse_args(["example.com", "--header", "X-A: 1", "--header", "X-B: 2"])
+        assert args.header == ["X-A: 1", "X-B: 2"]
+
+    def test_auth_defaults_none(self):
+        parser = build_parser()
+        args = parser.parse_args(["example.com"])
+        assert args.auth is None
+        assert args.bearer_token is None
+        assert args.cookie is None
+        assert args.header == []
+
+
+class TestAuthPropagated:
+    """Testes para propagacao de auth via base_ns."""
+
+    def test_bearer_token_propagated_to_http_modules(self):
+        parser = build_parser()
+        args = parser.parse_args(["https://example.com", "--bearer-token", "tok_abc", "--skip", "portscanner"])
+        with (
+            patch("reconall.webrecon.run_once", return_value=0) as mock_web,
+            patch("reconall.attackaudit.run_once", return_value=0) as mock_audit,
+        ):
+            run_all(args)
+            for mock_fn in (mock_web, mock_audit):
+                ns = mock_fn.call_args[0][0]
+                assert ns.bearer_token == "tok_abc"
+
+    def test_auth_propagated_to_http_modules(self):
+        parser = build_parser()
+        args = parser.parse_args(["https://example.com", "--auth", "admin:s3cret", "--skip", "portscanner"])
+        with (
+            patch("reconall.webrecon.run_once", return_value=0) as mock_web,
+            patch("reconall.attackaudit.run_once", return_value=0) as mock_audit,
+        ):
+            run_all(args)
+            for mock_fn in (mock_web, mock_audit):
+                ns = mock_fn.call_args[0][0]
+                assert ns.auth is not None
+
+    def test_cookie_propagated(self):
+        parser = build_parser()
+        args = parser.parse_args(["https://example.com", "--cookie", "sid=xyz", "--skip", "portscanner"])
+        with patch("reconall.webrecon.run_once", return_value=0) as mock_web:
+            run_all(args)
+            ns = mock_web.call_args[0][0]
+            assert ns.cookie == "sid=xyz"
+
+    def test_header_propagated(self):
+        parser = build_parser()
+        args = parser.parse_args(["https://example.com", "--header", "X-Custom: val", "--skip", "portscanner"])
+        with patch("reconall.attackaudit.run_once", return_value=0) as mock_audit:
+            run_all(args)
+            ns = mock_audit.call_args[0][0]
+            assert ns.header == ["X-Custom: val"]
+
+    def test_auth_none_does_not_override_defaults(self):
+        parser = build_parser()
+        args = parser.parse_args(["https://example.com", "--skip", "portscanner"])
+        with patch("reconall.webrecon.run_once", return_value=0) as mock_web:
+            run_all(args)
+            ns = mock_web.call_args[0][0]
+            assert ns.auth is None
+            assert ns.bearer_token is None
