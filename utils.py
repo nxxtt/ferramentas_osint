@@ -103,7 +103,7 @@ def set_color(enabled: bool) -> None:
 
 
 def init_scanner(args: argparse.Namespace) -> bool:
-    """Inicializa logging, quiet mode e color para um scanner.
+    """Inicializa logging, quiet mode, color e tema para um scanner.
 
     Retorna True se o modo quiet esta ativo.
     """
@@ -111,6 +111,15 @@ def init_scanner(args: argparse.Namespace) -> bool:
     quiet = getattr(args, "quiet", False)
     if getattr(args, "color", None) is not None:
         set_color(args.color)
+    theme = getattr(args, "theme", None)
+    if theme and theme != "cyber":
+        apply_theme(theme)
+    severity_raw = getattr(args, "severity_override", None)
+    if severity_raw:
+        for pair in severity_raw.split(","):
+            if "=" in pair:
+                sev, cname = pair.split("=", 1)
+                override_severity(sev.strip(), cname.strip())
     return quiet
 
 
@@ -174,7 +183,10 @@ class FetchError(Exception):
 
 
 class Cyber:
-    """Constantes de cores ANSI para formatação de terminal."""
+    """Constantes de cores ANSI para formatação de terminal.
+
+    Cores sao atualizadas por apply_theme(). RESET/BOLD/DIM sao fixos.
+    """
 
     RESET = "\033[0m"
     BOLD = "\033[1m"
@@ -188,6 +200,74 @@ class Cyber:
     ORANGE = "\033[38;5;208m"
     WHITE = "\033[38;5;255m"
     GRAY = "\033[38;5;244m"
+
+
+THEMES: dict[str, dict[str, str]] = {
+    "cyber": {
+        "RED": "\033[38;5;203m",
+        "GREEN": "\033[38;5;46m",
+        "CYAN": "\033[38;5;51m",
+        "BLUE": "\033[38;5;39m",
+        "MAGENTA": "\033[38;5;201m",
+        "YELLOW": "\033[38;5;226m",
+        "ORANGE": "\033[38;5;208m",
+        "WHITE": "\033[38;5;255m",
+        "GRAY": "\033[38;5;244m",
+    },
+    "dracula": {
+        "RED": "\033[38;5;203m",
+        "GREEN": "\033[38;5;84m",
+        "CYAN": "\033[38;5;117m",
+        "BLUE": "\033[38;5;99m",
+        "MAGENTA": "\033[38;5;212m",
+        "YELLOW": "\033[38;5;228m",
+        "ORANGE": "\033[38;5;215m",
+        "WHITE": "\033[38;5;231m",
+        "GRAY": "\033[38;5;248m",
+    },
+    "solarized": {
+        "RED": "\033[38;5;167m",
+        "GREEN": "\033[38;5;142m",
+        "CYAN": "\033[38;5;108m",
+        "BLUE": "\033[38;5;33m",
+        "MAGENTA": "\033[38;5;168m",
+        "YELLOW": "\033[38;5;178m",
+        "ORANGE": "\033[38;5;166m",
+        "WHITE": "\033[38;5;252m",
+        "GRAY": "\033[38;5;246m",
+    },
+    "high-contrast": {
+        "RED": "\033[38;5;196m",
+        "GREEN": "\033[38;5;46m",
+        "CYAN": "\033[38;5;51m",
+        "BLUE": "\033[38;5;21m",
+        "MAGENTA": "\033[38;5;201m",
+        "YELLOW": "\033[38;5;226m",
+        "ORANGE": "\033[38;5;208m",
+        "WHITE": "\033[38;5;255m",
+        "GRAY": "\033[38;5;240m",
+    },
+}
+
+_SEVERITY_COLOR_NAMES: dict[str, str] = {
+    "critical": "RED",
+    "high": "ORANGE",
+    "medium": "YELLOW",
+    "low": "BLUE",
+    "info": "GRAY",
+}
+
+
+def apply_theme(name: str) -> None:
+    """Aplica um tema de cores atualizando os atributos da classe Cyber."""
+    theme = THEMES[name]
+    for attr, code in theme.items():
+        setattr(Cyber, attr, code)
+
+
+def override_severity(severity: str, color_name: str) -> None:
+    """Sobrescreve a cor de um nivel de severidade especifico."""
+    _SEVERITY_COLOR_NAMES[severity.lower()] = color_name.upper()
 
 
 def color(text: str, *styles: str) -> str:
@@ -329,18 +409,14 @@ def status_color(status: int) -> str:
     return Cyber.GRAY
 
 
-_SEVERITY_COLOR_MAP: dict[str, str] = {
-    "critical": Cyber.RED,
-    "high": Cyber.ORANGE,
-    "medium": Cyber.YELLOW,
-    "low": Cyber.BLUE,
-    "info": Cyber.GRAY,
-}
-
-
 def severity_color(severity: str) -> str:
-    """Retorna a cor ANSI correspondente a severidade CVSS."""
-    return _SEVERITY_COLOR_MAP.get(severity.lower(), Cyber.GRAY)
+    """Retorna a cor ANSI correspondente a severidade CVSS.
+
+    Usa _SEVERITY_COLOR_NAMES para mapear severidade → nome do atributo Cyber.
+    Dinâmico: reflete tema atual e overrides individuais.
+    """
+    color_name = _SEVERITY_COLOR_NAMES.get(severity.lower(), "GRAY")
+    return getattr(Cyber, color_name)
 
 
 def header_get(headers: Mapping[str, str], name: str) -> str:
@@ -532,6 +608,8 @@ def add_base_args(parser: argparse.ArgumentParser, timeout_default: float = 5.0)
     parser.add_argument("-q", "--quiet", action="store_true", help="Modo silencioso: sem banner/progresso. Requer -o.")
     parser.add_argument("--color", action="store_true", default=None, dest="color", help="Forca cores no terminal.")
     parser.add_argument("--no-color", action="store_false", dest="color", help="Desabilita cores no terminal.")
+    parser.add_argument("--theme", choices=sorted(THEMES), default="cyber", help="Tema de cores. Padrao: cyber")
+    parser.add_argument("--severity-override", help="Sobrescreve cores de severidade. Ex: critical=RED,high=ORANGE")
     parser.add_argument("--retries", type=int, default=3, help="Numero de tentativas em caso de falha HTTP. Padrao: 3")
     parser.add_argument("--dry-run", action="store_true", help="Mostra o que faria sem executar nada.")
     parser.add_argument("--verify", action="store_true", default=False, help="Verifica certificados SSL/TLS. Padrao: desabilitado.")

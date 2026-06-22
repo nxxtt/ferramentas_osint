@@ -10,6 +10,7 @@ import pytest
 import respx
 
 from utils import (
+    THEMES,
     Cyber,
     FetchError,
     RateLimiter,
@@ -17,6 +18,7 @@ from utils import (
     add_base_args,
     add_common_args,
     apply_session_auth,
+    apply_theme,
     color,
     create_async_client,
     ensure_output_dir,
@@ -24,6 +26,7 @@ from utils import (
     extract_title,
     header_get,
     normalize_url,
+    override_severity,
     parse_auth,
     parse_extra_headers,
     parse_int_range,
@@ -32,6 +35,7 @@ from utils import (
     resolve_target_urls,
     set_color,
     setup_logging,
+    severity_color,
     status_color,
 )
 
@@ -603,6 +607,66 @@ class TestSetColor:
         set_color(True)
         import utils
         assert utils._USE_COLOR is True
+
+
+class TestThemes:
+    def test_all_themes_have_same_keys(self):
+        expected = set(THEMES["cyber"])
+        for name, theme in THEMES.items():
+            assert set(theme) == expected, f"Theme {name} has different keys"
+
+    def test_apply_theme_changes_cyber_attrs(self):
+        apply_theme("dracula")
+        assert THEMES["dracula"]["RED"] == Cyber.RED
+        assert THEMES["dracula"]["GREEN"] == Cyber.GREEN
+        apply_theme("cyber")
+
+    def test_apply_theme_cyber_is_identity(self):
+        original = {k: getattr(Cyber, k) for k in THEMES["cyber"]}
+        try:
+            apply_theme("cyber")
+            for k, v in original.items():
+                assert getattr(Cyber, k) == v
+        finally:
+            apply_theme("cyber")
+
+    def test_invalid_theme_raises_key_error(self):
+        with pytest.raises(KeyError):
+            apply_theme("nonexistent")
+
+    def test_status_color_follows_theme(self):
+        apply_theme("dracula")
+        assert status_color(200) == Cyber.GREEN
+        apply_theme("cyber")
+
+
+class TestSeverityColor:
+    def test_default_mapping(self):
+        assert severity_color("critical") == Cyber.RED
+        assert severity_color("high") == Cyber.ORANGE
+        assert severity_color("medium") == Cyber.YELLOW
+        assert severity_color("low") == Cyber.BLUE
+        assert severity_color("info") == Cyber.GRAY
+
+    def test_case_insensitive(self):
+        assert severity_color("CRITICAL") == Cyber.RED
+        assert severity_color("High") == Cyber.ORANGE
+
+    def test_unknown_falls_back_to_gray(self):
+        assert severity_color("unknown") == Cyber.GRAY
+
+    def test_override_changes_mapping(self):
+        try:
+            override_severity("critical", "BLUE")
+            assert severity_color("critical") == Cyber.BLUE
+        finally:
+            from utils import _SEVERITY_COLOR_NAMES
+            _SEVERITY_COLOR_NAMES["critical"] = "RED"
+
+    def test_severity_follows_theme(self):
+        apply_theme("dracula")
+        assert severity_color("high") == Cyber.ORANGE
+        apply_theme("cyber")
 
 
 class TestPrintTable:
