@@ -10,6 +10,8 @@ import respx
 
 from attackaudit import (
     _ERROR_INFO_SEVERITY,
+    _VERBOSE_ERROR_HEADERS,
+    _WAF_SIGNATURES,
     CSRF_FIELD_NAMES_LOWER,
     DEFAULT_INJECT_PARAMS,
     ERROR_INFO_PATTERNS,
@@ -27,6 +29,7 @@ from attackaudit import (
     _async_run_once,
     _extract_query_params,
     analyze_error_response,
+    analyze_headers_findings,
     build_findings,
     build_parser,
     check_sqli_errors,
@@ -516,6 +519,86 @@ class TestAnalyzeErrorResponse:
         findings = analyze_error_response(body)
         assert len(findings) > 0
         assert len(findings[0].evidence) <= 200
+
+
+class TestAnalyzeHeadersFindings:
+    def test_cloudflare_waf_detected(self):
+        headers = {"cf-ray": "abc123", "server": "cloudflare"}
+        findings = analyze_headers_findings(headers)
+        assert any(f.category == "waf" and "cloudflare" in f.item for f in findings)
+
+    def test_aws_cloudfront_detected(self):
+        headers = {"via": "1.1 cloudfront (CloudFront)", "x-amz-cf-id": "xyz"}
+        findings = analyze_headers_findings(headers)
+        assert any(f.category == "waf" and "cloudfront" in f.item for f in findings)
+
+    def test_sucuri_waf_detected(self):
+        headers = {"x-sucuri-id": "12345", "server": "Sucuri/CloudProxy"}
+        findings = analyze_headers_findings(headers)
+        assert any(f.category == "waf" and "sucuri" in f.item for f in findings)
+
+    def test_waf_via_cookies(self):
+        raw = {"set-cookie": ["incap_ses_123=abc; path=/"]}
+        findings = analyze_headers_findings({}, raw)
+        assert any(f.category == "waf" and "incapsula" in f.item for f in findings)
+
+    def test_no_waf_clean_headers(self):
+        headers = {"server": "nginx/1.18.0", "content-type": "text/html"}
+        findings = analyze_headers_findings(headers)
+        waf_findings = [f for f in findings if f.category == "waf"]
+        assert len(waf_findings) == 0
+
+    def test_x_debug_header(self):
+        headers = {"x-debug": "true"}
+        findings = analyze_headers_findings(headers)
+        assert any(f.category == "info_leak" and "x-debug" in f.item for f in findings)
+
+    def test_x_debug_toolbar_high_severity(self):
+        headers = {"x-debug-toolbar": "http://debug.local"}
+        findings = analyze_headers_findings(headers)
+        toolbar = [f for f in findings if "x-debug-toolbar" in f.item]
+        assert len(toolbar) == 1
+        assert toolbar[0].severity == "high"
+
+    def test_x_aspnet_version(self):
+        headers = {"x-aspnet-version": "4.0.30319"}
+        findings = analyze_headers_findings(headers)
+        assert any("x-aspnet-version" in f.item for f in findings)
+
+    def test_x_powered_by(self):
+        headers = {"x-powered-by": "Express"}
+        findings = analyze_headers_findings(headers)
+        assert any("x-powered-by" in f.item for f in findings)
+
+    def test_clean_headers_no_findings(self):
+        headers = {"content-type": "text/html", "content-length": "1234"}
+        findings = analyze_headers_findings(headers)
+        assert len(findings) == 0
+
+    def test_waf_and_debug_combined(self):
+        headers = {"cf-ray": "abc", "x-debug": "1"}
+        findings = analyze_headers_findings(headers)
+        waf = [f for f in findings if f.category == "waf"]
+        debug = [f for f in findings if f.category == "info_leak"]
+        assert len(waf) >= 1
+        assert len(debug) >= 1
+
+    def test_case_insensitive_header_match(self):
+        headers = {"X-Debug-Token": "abc123"}
+        findings = analyze_headers_findings(headers)
+        assert any("x-debug-token" in f.item for f in findings)
+
+    def test_waf_signatures_structure(self):
+        assert isinstance(_WAF_SIGNATURES, dict)
+        for _name, rules in _WAF_SIGNATURES.items():
+            assert "headers" in rules or "cookies" in rules
+
+    def test_verbose_error_headers_structure(self):
+        assert isinstance(_VERBOSE_ERROR_HEADERS, dict)
+        for _header, (sev, cat, rec) in _VERBOSE_ERROR_HEADERS.items():
+            assert sev in ("low", "medium", "high", "critical", "info")
+            assert cat in ("fingerprint", "info_leak")
+            assert isinstance(rec, str)
 
 
 class TestCheckTLSVersions:

@@ -197,6 +197,47 @@ _ERROR_INFO_RECOMMENDATIONS: dict[str, str] = {
     "config_leak": "Nunca exponha credenciais ou chaves em respostas HTTP.",
 }
 
+_WAF_SIGNATURES: dict[str, dict[str, str | list[tuple[str, str]]]] = {
+    "cloudflare": {
+        "headers": [("cf-ray", ".+"), ("cf-cache-status", ".+"), ("server", "cloudflare")],
+    },
+    "akamai": {
+        "headers": [("server", "AkamaiGHost")],
+    },
+    "aws_cloudfront": {
+        "headers": [("via", "cloudfront"), ("x-amz-cf-id", ".+")],
+    },
+    "aws_waf": {
+        "headers": [("server", "awselb|awselb/2.0")],
+    },
+    "incapsula": {
+        "headers": [("x-iinfo", ".+")],
+        "cookies": [("incap_ses", ".+"), ("visid_incap", ".+")],
+    },
+    "sucuri": {
+        "headers": [("x-sucuri-id", ".+"), ("server", "Sucuri")],
+    },
+    "f5_bigip": {
+        "headers": [("bigip", ".+"), ("bip", ".+")],
+    },
+    "barracuda": {
+        "headers": [("x-barracuda", ".+")],
+    },
+}
+
+_VERBOSE_ERROR_HEADERS: dict[str, tuple[str, str, str]] = {
+    "x-debug": ("medium", "info_leak", "Desabilite headers de debug em producao."),
+    "x-debug-token": ("medium", "info_leak", "Desabilite headers de debug em producao."),
+    "x-debug-token-link": ("medium", "info_leak", "Desabilite headers de debug em producao."),
+    "x-debug-toolbar": ("high", "info_leak", "Toolbar de debug exposta — remova em producao."),
+    "x-debugger": ("medium", "info_leak", "Debugger ativo — desabilite em producao."),
+    "x-trace": ("medium", "info_leak", "Trace header ativo — desabilite em producao."),
+    "x-aspnet-version": ("low", "fingerprint", "Remova versao ASP.NET dos headers."),
+    "x-aspnetmvc-version": ("low", "fingerprint", "Remova versao ASP.NET MVC dos headers."),
+    "x-powered-by": ("low", "fingerprint", "Remova o header para reduzir fingerprinting."),
+    "x-generator": ("low", "fingerprint", "Remova header X-Generator para reduzir fingerprinting."),
+}
+
 
 def _extract_query_params(url: str) -> list[str]:
     """Extrai nomes dos query params de uma URL para injecao XSS/SQLi."""
@@ -229,6 +270,55 @@ def analyze_error_response(body: str) -> list[Finding]:
                     _ERROR_INFO_RECOMMENDATIONS[category],
                 ))
                 break
+    return findings
+
+
+def analyze_headers_findings(
+    headers: Mapping[str, str],
+    raw_headers: dict[str, list[str]] | None = None,
+) -> list[Finding]:
+    """Analisa headers HTTP em busca de WAF/CDN e headers verbose/debug.
+
+    Detecta signatures de WAF via headers e cookies, e identifica headers
+    que vazam informacoes de debug ou versao. Retorna uma lista de Findings.
+    """
+    findings: list[Finding] = []
+    lower_headers = {k.lower(): v for k, v in headers.items()}
+
+    for waf_name, waf_rules in _WAF_SIGNATURES.items():
+        header_rules: list[tuple[str, str]] = waf_rules.get("headers", [])  # type: ignore[assignment]
+        matched = False
+        for hdr, pattern in header_rules:
+            if re.search(pattern, lower_headers.get(hdr, ""), re.IGNORECASE):
+                matched = True
+                break
+        if not matched:
+            cookie_rules: list[tuple[str, str]] = waf_rules.get("cookies", [])  # type: ignore[assignment]
+            all_cookies = " ".join(
+                (raw_headers or {}).get("set-cookie", [])
+            )
+            for cookie_name, cookie_pat in cookie_rules:
+                if re.search(cookie_name, all_cookies, re.IGNORECASE) and re.search(cookie_pat, all_cookies):
+                    matched = True
+                    break
+        if matched:
+            findings.append(Finding(
+                "info", "waf", f"WAF/CDN detectado: {waf_name}",
+                f"WAF {waf_name} detectado via headers/cookies.",
+                "Considere o impacto no escaneamento e ajuste payloads conforme necessario.",
+                "",
+            ))
+
+    for header_name, (severity, category, recommendation) in _VERBOSE_ERROR_HEADERS.items():
+        if header_name in lower_headers:
+            value = lower_headers[header_name]
+            findings.append(Finding(
+                severity, category, f"Header verbose/exposto: {header_name}",
+                f"{header_name}: {value[:120]}",
+                recommendation,
+                f"curl -I {{url}} 2>/dev/null | grep -i '{header_name}'",
+            ))
+
     return findings
 
 
@@ -796,14 +886,12 @@ def build_findings(
                 exploit_cmd,
             ))
 
+    findings.extend(analyze_headers_findings(headers, raw_headers))
+
     server = header_get(headers, "server")
-    powered_by = header_get(headers, "x-powered-by")
     if server:
         findings.append(Finding("low", "fingerprint", "Server exposto", server, "Reduza versao/banner quando possivel.",
                                 f"curl -I {url} 2>/dev/null | grep -i server"))
-    if powered_by:
-        findings.append(Finding("low", "fingerprint", "X-Powered-By exposto", powered_by, "Remova o header para reduzir fingerprinting.",
-                                f"curl -I {url} 2>/dev/null | grep -i x-powered-by"))
 
     cors = header_get(headers, "access-control-allow-origin")
     if cors == "*":
