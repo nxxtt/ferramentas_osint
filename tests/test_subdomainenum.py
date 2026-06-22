@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 from unittest.mock import MagicMock, patch
 
 import dns.exception
@@ -8,16 +9,24 @@ import dns.resolver
 import pytest
 
 from subdomainenum import (
+    _PASSIVE_SOURCES,
     BANNER_ART,
     BUILTIN_WORDLIST,
     DEFAULT_THREADS,
     DEFAULT_TIMEOUT,
     SubdomainResult,
+    _parse_crtsh,
+    _parse_otx,
+    _parse_securitytrails,
+    _parse_shodan,
+    _parse_urlscan,
+    _parse_virustotal,
     _resolve_subdomain,
     build_parser,
     enumerate_subdomains,
     load_wordlist,
     main,
+    passive_enumeration,
     run_enum_scan,
     run_once,
 )
@@ -34,6 +43,10 @@ def _make_args(**kwargs):
         "quiet": False,
         "color": None,
         "log_file": None,
+        "passive": False,
+        "vt_api_key": None,
+        "st_api_key": None,
+        "shodan_api_key": None,
     }
     defaults.update(kwargs)
     return argparse.Namespace(**defaults)
@@ -270,7 +283,7 @@ class TestRunEnumScan:
 
         results = run_enum_scan("example.com", wordlist_path=None, threads=10, timeout=5.0)
         mock_load.assert_called_once_with(None)
-        mock_enum.assert_called_once_with("example.com", ["www"], threads=10, timeout=5.0)
+        mock_enum.assert_called_once_with("example.com", ["www"], threads=10, timeout=5.0, skip_names=None)
         assert results == []
 
     @patch("subdomainenum.enumerate_subdomains")
@@ -474,3 +487,182 @@ class TestDryRun:
         captured = capsys.readouterr()
         assert "DRY-RUN" in captured.out
         assert "Nenhuma consulta" in captured.out
+
+
+class TestPassiveSources:
+    def test_has_expected_sources(self):
+        expected = {"crtsh", "otx", "urlscan", "virustotal", "securitytrails", "shodan"}
+        assert set(_PASSIVE_SOURCES.keys()) == expected
+
+    def test_all_have_url(self):
+        for name, cfg in _PASSIVE_SOURCES.items():
+            assert "url" in cfg, f"{name} missing url"
+            assert "{domain}" in cfg["url"], f"{name} url must contain {{domain}}"
+
+    def test_crtsh_no_auth(self):
+        assert _PASSIVE_SOURCES["crtsh"]["auth_type"] == "none"
+
+    def test_virustotal_needs_api_key(self):
+        assert _PASSIVE_SOURCES["virustotal"]["auth_type"] == "api_key"
+        assert _PASSIVE_SOURCES["virustotal"]["auth_header"] == "x-apikey"
+
+    def test_shodan_uses_query_param(self):
+        assert _PASSIVE_SOURCES["shodan"]["auth_type"] == "query_param"
+
+
+class TestParseCrtsh:
+    def test_extracts_subdomains(self):
+        data = [
+            {"name_value": "www.example.com\nexample.com"},
+            {"name_value": "mail.example.com"},
+        ]
+        body = json.dumps(data).encode()
+        result = _parse_crtsh(body, "example.com")
+        assert "www.example.com" in result
+        assert "mail.example.com" in result
+        assert "example.com" not in result
+
+    def test_strips_wildcards(self):
+        data = [{"name_value": "*.example.com"}]
+        body = json.dumps(data).encode()
+        result = _parse_crtsh(body, "example.com")
+        assert "*.example.com" not in result
+        assert "example.com" not in result
+
+    def test_invalid_json_returns_empty(self):
+        result = _parse_crtsh(b"not json", "example.com")
+        assert result == []
+
+    def test_empty_array(self):
+        result = _parse_crtsh(b"[]", "example.com")
+        assert result == []
+
+
+class TestParseOtx:
+    def test_extracts_subdomains(self):
+        data = {"passive_dns": [{"hostname": "www.example.com"}, {"hostname": "mail.example.com"}]}
+        body = json.dumps(data).encode()
+        result = _parse_otx(body, "example.com")
+        assert "www.example.com" in result
+        assert "mail.example.com" in result
+
+    def test_filters_non_matching(self):
+        data = {"passive_dns": [{"hostname": "www.other.com"}]}
+        body = json.dumps(data).encode()
+        result = _parse_otx(body, "example.com")
+        assert result == []
+
+    def test_invalid_json(self):
+        result = _parse_otx(b"bad", "example.com")
+        assert result == []
+
+
+class TestParseUrlscan:
+    def test_extracts_subdomains(self):
+        data = {"results": [{"page": {"domain": "www.example.com"}}]}
+        body = json.dumps(data).encode()
+        result = _parse_urlscan(body, "example.com")
+        assert "www.example.com" in result
+
+    def test_empty_results(self):
+        data = {"results": []}
+        body = json.dumps(data).encode()
+        result = _parse_urlscan(body, "example.com")
+        assert result == []
+
+
+class TestParseVirustotal:
+    def test_extracts_subdomains(self):
+        data = {"data": [{"id": "www.example.com"}, {"id": "api.example.com"}]}
+        body = json.dumps(data).encode()
+        result = _parse_virustotal(body, "example.com")
+        assert "www.example.com" in result
+        assert "api.example.com" in result
+
+
+class TestParseSecuritytrails:
+    def test_extracts_subdomains(self):
+        data = {"subdomains": ["www", "api", "mail"]}
+        body = json.dumps(data).encode()
+        result = _parse_securitytrails(body, "example.com")
+        assert "www.example.com" in result
+        assert "api.example.com" in result
+        assert "mail.example.com" in result
+
+
+class TestParseShodan:
+    def test_extracts_subdomains(self):
+        data = {"data": [{"subdomain": "www"}, {"subdomain": "api"}]}
+        body = json.dumps(data).encode()
+        result = _parse_shodan(body, "example.com")
+        assert "www.example.com" in result
+        assert "api.example.com" in result
+
+    def test_empty_data(self):
+        data = {"data": []}
+        body = json.dumps(data).encode()
+        result = _parse_shodan(body, "example.com")
+        assert result == []
+
+
+class TestBuildParserPassive:
+    def test_has_passive_flag(self):
+        parser = build_parser()
+        args = parser.parse_args(["example.com", "--passive"])
+        assert args.passive is True
+
+    def test_passive_default_false(self):
+        parser = build_parser()
+        args = parser.parse_args(["example.com"])
+        assert args.passive is False
+
+    def test_has_vt_api_key(self):
+        parser = build_parser()
+        args = parser.parse_args(["example.com", "--vt-api-key", "abc123"])
+        assert args.vt_api_key == "abc123"
+
+    def test_has_st_api_key(self):
+        parser = build_parser()
+        args = parser.parse_args(["example.com", "--st-api-key", "xyz789"])
+        assert args.st_api_key == "xyz789"
+
+    def test_has_shodan_api_key(self):
+        parser = build_parser()
+        args = parser.parse_args(["example.com", "--shodan-api-key", "key123"])
+        assert args.shodan_api_key == "key123"
+
+
+class TestPassiveEnumeration:
+    def test_empty_sources_returns_empty(self):
+        result = passive_enumeration("example.com", [])
+        assert result == []
+
+    @patch("subdomainenum.safe_asyncio_run")
+    def test_calls_with_correct_sources(self, mock_run):
+        mock_run.return_value = ["www.example.com"]
+        results = passive_enumeration("example.com", ["crtsh"], timeout=5.0)
+        assert len(results) == 1
+        assert results[0].subdomain == "www.example.com"
+        assert results[0].status == "passive"
+
+    @patch("subdomainenum.safe_asyncio_run")
+    def test_deduplicates_results(self, mock_run):
+        mock_run.return_value = ["www.example.com", "www.example.com"]
+        results = passive_enumeration("example.com", ["crtsh"])
+        assert len(results) == 1
+
+    @patch("subdomainenum.safe_asyncio_run")
+    def test_returns_sorted(self, mock_run):
+        mock_run.return_value = ["z.example.com", "a.example.com"]
+        results = passive_enumeration("example.com", ["crtsh"])
+        assert results[0].subdomain == "a.example.com"
+        assert results[1].subdomain == "z.example.com"
+
+
+class TestRunOncePassive:
+    def test_passive_flag_in_dry_run(self, capsys):
+        args = _make_args(passive=False, dry_run=True)
+        result = run_once(args)
+        assert result == 0
+        captured = capsys.readouterr()
+        assert "DRY-RUN" in captured.out

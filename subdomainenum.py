@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
-"""Enumerador de subdominios via DNS brute-force.
+"""Enumerador de subdominios via DNS brute-force e enumeracao passiva.
 
 Fluxo principal:
-  1. Carrega wordlist (built-in com ~170 subdominios ou customizada)
-  2. Faz prefetch de registros MX e CNAME para subdominios rapidos
-  3. Para cada subdominio da wordlist, tenta resolver A record
-  4. Subdominios resolvidos sao listados com seus IPs
+  1. (Opcional) Enumeracao passiva: consulta crt.sh, OTX, URLScan, VirusTotal,
+     SecurityTrails, Shodan para subdominios ja conhecidos
+  2. Carrega wordlist (built-in com ~170 subdominios ou customizada)
+  3. Faz prefetch de registros MX e CNAME para subdominios rapidos
+  4. Para cada subdominio da wordlist, tenta resolver A record
+  5. Subdominios resolvidos sao listados com seus IPs
 
 Estrategia de otimizacao:
+  - Enumeracao passiva: encontra subdominios sem brute-force via CT logs e OSINT
   - Prefetch MX/CNAME: muitos subdominios sao revelados por registros
     MX (mail.example.com) e CNAME (www.example.com -> cdn.example.com)
-    Isso encontra subdominios rapidamente sem brute-force
   - ThreadPoolExecutor: resolve subdominios em paralelo
   - Resolver compartilhado: cache de resolucoes DNS entre threads
   - Progress bar: mostra progresso a cada 20 subdominios
@@ -22,23 +24,31 @@ Wordlist built-in:
 from __future__ import annotations
 
 import argparse
+import asyncio
+import json
 import logging
 import sys
 import time
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict, dataclass, field
 
 import dns.exception
 import dns.resolver
+import httpx
 
 from utils import (
     Cyber,
+    FetchError,
     add_base_args,
     color,
+    create_async_client,
     create_banner,
+    fetch,
     init_scanner,
     read_target_lines,
     run_main_loop,
+    safe_asyncio_run,
     write_output,
 )
 
@@ -197,11 +207,235 @@ def _prefetch_records(domain: str, resolver: dns.resolver.Resolver) -> list[Subd
     return prefetched
 
 
+# ── Enumeracao passiva (fontes externas) ─────────────────────────────
+
+_PASSIVE_SOURCES: dict[str, dict[str, str]] = {
+    "crtsh": {
+        "url": "https://crt.sh/?q=%25.{domain}&output=json",
+        "auth_header": "",
+        "auth_type": "none",
+    },
+    "otx": {
+        "url": "https://otx.alienvault.com/api/v1/indicators/domain/{domain}/passive_dns",
+        "auth_header": "",
+        "auth_type": "none",
+    },
+    "urlscan": {
+        "url": "https://urlscan.io/api/v1/search/?q=domain:{domain}",
+        "auth_header": "",
+        "auth_type": "none",
+    },
+    "virustotal": {
+        "url": "https://www.virustotal.com/api/v3/domains/{domain}/subdomains",
+        "auth_header": "x-apikey",
+        "auth_type": "api_key",
+    },
+    "securitytrails": {
+        "url": "https://api.securitytrails.com/v1/domain/{domain}/subdomains",
+        "auth_header": "apikey",
+        "auth_type": "api_key",
+    },
+    "shodan": {
+        "url": "https://api.shodan.io/dns/domain/{domain}?key={api_key}",
+        "auth_header": "",
+        "auth_type": "query_param",
+    },
+}
+
+DEFAULT_PASSIVE_TIMEOUT = 10.0
+
+
+def _parse_crtsh(body: bytes, domain: str) -> list[str]:
+    """Extrai subdominios do JSON do crt.sh."""
+    try:
+        data = json.loads(body)
+    except (json.JSONDecodeError, ValueError):
+        return []
+    seen: set[str] = set()
+    for entry in data:
+        raw = entry.get("name_value", "")
+        for name in raw.split("\n"):
+            name = name.strip().lower()
+            if name.startswith("*."):
+                name = name[2:]
+            if name and name.endswith(f".{domain}") and name != domain:
+                seen.add(name)
+    return sorted(seen)
+
+
+def _parse_otx(body: bytes, domain: str) -> list[str]:
+    """Extrai subdominios do JSON do AlienVault OTX."""
+    try:
+        data = json.loads(body)
+    except (json.JSONDecodeError, ValueError):
+        return []
+    seen: set[str] = set()
+    for entry in data.get("passive_dns", []):
+        hostname = entry.get("hostname", "").strip().lower()
+        if hostname and hostname.endswith(f".{domain}") and hostname != domain:
+            seen.add(hostname)
+    return sorted(seen)
+
+
+def _parse_urlscan(body: bytes, domain: str) -> list[str]:
+    """Extrai subdominios do JSON do URLScan.io."""
+    try:
+        data = json.loads(body)
+    except (json.JSONDecodeError, ValueError):
+        return []
+    seen: set[str] = set()
+    for result in data.get("results", []):
+        page = result.get("page", {})
+        hostname = page.get("domain", "").strip().lower()
+        if hostname and hostname.endswith(f".{domain}") and hostname != domain:
+            seen.add(hostname)
+    return sorted(seen)
+
+
+def _parse_virustotal(body: bytes, domain: str) -> list[str]:
+    """Extrai subdominios do JSON do VirusTotal."""
+    try:
+        data = json.loads(body)
+    except (json.JSONDecodeError, ValueError):
+        return []
+    seen: set[str] = set()
+    for entry in data.get("data", []):
+        sub = entry.get("id", "").strip().lower()
+        if sub and sub.endswith(f".{domain}") and sub != domain:
+            seen.add(sub)
+    return sorted(seen)
+
+
+def _parse_securitytrails(body: bytes, domain: str) -> list[str]:
+    """Extrai subdominios do JSON do SecurityTrails."""
+    try:
+        data = json.loads(body)
+    except (json.JSONDecodeError, ValueError):
+        return []
+    seen: set[str] = set()
+    for sub in data.get("subdomains", []):
+        fqdn = f"{sub.strip().lower()}.{domain}"
+        if fqdn != domain:
+            seen.add(fqdn)
+    return sorted(seen)
+
+
+def _parse_shodan(body: bytes, domain: str) -> list[str]:
+    """Extrai subdominios do JSON do Shodan."""
+    try:
+        data = json.loads(body)
+    except (json.JSONDecodeError, ValueError):
+        return []
+    seen: set[str] = set()
+    for sub in data.get("data", []):
+        name = sub.get("subdomain", "").strip().lower()
+        fqdn = f"{name}.{domain}" if name else domain
+        if fqdn != domain and fqdn.endswith(f".{domain}"):
+            seen.add(fqdn)
+    return sorted(seen)
+
+
+_PASSIVE_PARSERS: dict[str, Callable[[bytes, str], list[str]]] = {
+    "crtsh": _parse_crtsh,
+    "otx": _parse_otx,
+    "urlscan": _parse_urlscan,
+    "virustotal": _parse_virustotal,
+    "securitytrails": _parse_securitytrails,
+    "shodan": _parse_shodan,
+}
+
+
+async def _query_source(
+    source: str,
+    domain: str,
+    api_key: str | None,
+    timeout: float,
+) -> list[str]:
+    """Consulta uma fonte passiva e retorna subdominios encontrados."""
+    cfg = _PASSIVE_SOURCES[source]
+    url = cfg["url"].format(domain=domain, api_key=api_key or "")
+
+    headers: dict[str, str] = {}
+    if cfg["auth_type"] == "api_key" and api_key:
+        headers[cfg["auth_header"]] = api_key
+
+    client = create_async_client(timeout=timeout)
+    try:
+        status, _headers, body, _raw = await fetch(
+            client, url, timeout=timeout, max_retries=1, allow_redirects=True,
+        )
+        if status != 200:
+            logger.debug("%s returned HTTP %d for %s", source, status, domain)
+            return []
+        parser = _PASSIVE_PARSERS[source]
+        return parser(body, domain)
+    except (FetchError, httpx.RequestError) as error:
+        logger.debug("%s failed for %s: %s", source, domain, error)
+        return []
+    finally:
+        await client.aclose()
+
+
+async def _passive_enumerate_async(
+    domain: str,
+    sources: list[str],
+    api_keys: dict[str, str | None],
+    timeout: float,
+) -> list[str]:
+    """Executa enumeracao passiva em paralelo via asyncio."""
+    tasks = []
+    for source in sources:
+        api_key = api_keys.get(source)
+        tasks.append(_query_source(source, domain, api_key, timeout))
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    seen: set[str] = set()
+    for result in results:
+        if not isinstance(result, list):
+            continue
+        for fqdn in result:
+            seen.add(fqdn)
+    return sorted(seen)
+
+
+def passive_enumeration(
+    domain: str,
+    sources: list[str],
+    api_keys: dict[str, str | None] | None = None,
+    timeout: float = DEFAULT_PASSIVE_TIMEOUT,
+) -> list[SubdomainResult]:
+    """Executa enumeracao passiva e retorna SubdomainResult com status 'passive'.
+
+    Args:
+        domain: Dominio alvo.
+        sources: Lista de nomes de fontes (ex: ['crtsh', 'otx']).
+        api_keys: Dict mapeando nome da fonte para API key (ou None).
+        timeout: Timeout por requisicao em segundos.
+
+    Returns:
+        Lista de SubdomainResult com subdominios encontrados.
+    """
+    if not sources:
+        return []
+
+    keys = api_keys or {}
+    fqdns = safe_asyncio_run(
+        _passive_enumerate_async(domain, sources, keys, timeout)
+    )
+    seen: set[str] = set()
+    unique: list[SubdomainResult] = []
+    for fqdn in sorted(fqdns):
+        if fqdn not in seen:
+            seen.add(fqdn)
+            unique.append(SubdomainResult(subdomain=fqdn, status="passive"))
+    return unique
+
+
 def enumerate_subdomains(
     domain: str,
     wordlist: list[str],
     threads: int = DEFAULT_THREADS,
     timeout: float = DEFAULT_TIMEOUT,
+    skip_names: set[str] | None = None,
 ) -> list[SubdomainResult]:
     """Executa enumeracao de subdominios via DNS brute-force.
 
@@ -210,6 +444,7 @@ def enumerate_subdomains(
         wordlist: Lista de subdominios para testar.
         threads: Numero de threads simultaneas.
         timeout: Timeout DNS em segundos.
+        skip_names: FQDNs ja encontrados (passive) para pular no brute-force.
 
     Returns:
         Lista de SubdomainResult apenas para subdominios resolvidos.
@@ -218,11 +453,18 @@ def enumerate_subdomains(
     if not domain:
         raise ValueError("informe um dominio valido")
 
+    skipped = skip_names or set()
+
     print(
         color("[*]", Cyber.CYAN, Cyber.BOLD),
         f"Testando {color(str(len(wordlist)), Cyber.WHITE, Cyber.BOLD)} subdominios "
         f"em {color(domain, Cyber.WHITE, Cyber.BOLD)} com {color(str(threads), Cyber.WHITE, Cyber.BOLD)} threads...",
     )
+    if skipped:
+        print(
+            color("[*]", Cyber.CYAN, Cyber.BOLD),
+            f"Pulando {color(str(len(skipped)), Cyber.GREEN, Cyber.BOLD)} subdominios ja encontrados (passive).",
+        )
     print()
 
     resolved: list[SubdomainResult] = []
@@ -237,7 +479,8 @@ def enumerate_subdomains(
     prefetched_names = {r.subdomain for r in prefetched}
 
     with ThreadPoolExecutor(max_workers=threads) as executor:
-        remaining = [w for w in wordlist if f"{w}.{domain}" not in prefetched_names]
+        skip_all = prefetched_names | skipped
+        remaining = [w for w in wordlist if f"{w}.{domain}" not in skip_all]
         futures = {
             executor.submit(_resolve_subdomain, word, domain, timeout, resolver): word
             for word in remaining
@@ -276,6 +519,7 @@ def run_enum_scan(
     wordlist_path: str | None = None,
     threads: int = DEFAULT_THREADS,
     timeout: float = DEFAULT_TIMEOUT,
+    skip_names: set[str] | None = None,
 ) -> list[SubdomainResult]:
     """Orquestra a enumeracao de subdominios.
 
@@ -284,18 +528,19 @@ def run_enum_scan(
         wordlist_path: Caminho para wordlist customizada. None usa embutida.
         threads: Numero de threads.
         timeout: Timeout DNS.
+        skip_names: FQDNs ja encontrados (passive) para pular.
 
     Returns:
         Lista de subdominios resolvidos.
     """
     wordlist = load_wordlist(wordlist_path)
-    return enumerate_subdomains(domain, wordlist, threads=threads, timeout=timeout)
+    return enumerate_subdomains(domain, wordlist, threads=threads, timeout=timeout, skip_names=skip_names)
 
 
 def build_parser() -> argparse.ArgumentParser:
     """Constrói e retorna o parser de argumentos CLI."""
     parser = argparse.ArgumentParser(
-        description="Enumerador de subdominios via DNS brute-force.",
+        description="Enumerador de subdominios via DNS brute-force e enumeracao passiva.",
     )
     parser.add_argument(
         "domain",
@@ -312,6 +557,27 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=DEFAULT_THREADS,
         help=f"Numero de threads. Padrao: {DEFAULT_THREADS}",
+    )
+    parser.add_argument(
+        "-P", "--passive",
+        action="store_true",
+        default=False,
+        help="Ativa enumeracao passiva (crt.sh, OTX, URLScan). Use --vt-api-key etc. para mais fontes.",
+    )
+    parser.add_argument(
+        "--vt-api-key",
+        dest="vt_api_key",
+        help="API key do VirusTotal (ativa fonte VirusTotal no modo passivo).",
+    )
+    parser.add_argument(
+        "--st-api-key",
+        dest="st_api_key",
+        help="API key do SecurityTrails (ativa fonte SecurityTrails no modo passivo).",
+    )
+    parser.add_argument(
+        "--shodan-api-key",
+        dest="shodan_api_key",
+        help="API key do Shodan (ativa fonte Shodan no modo passivo).",
     )
     add_base_args(parser, timeout_default=DEFAULT_TIMEOUT)
     return parser
@@ -331,22 +597,62 @@ def run_once(args: argparse.Namespace) -> int:
     domain = args.domain.strip().lower()
     wordlist = load_wordlist(getattr(args, "wordlist", None))
 
+    passive_results: list[SubdomainResult] = []
+    if getattr(args, "passive", False):
+        sources = ["crtsh", "otx", "urlscan"]
+        api_keys: dict[str, str | None] = {}
+        if getattr(args, "vt_api_key", None):
+            sources.append("virustotal")
+            api_keys["virustotal"] = args.vt_api_key
+        if getattr(args, "st_api_key", None):
+            sources.append("securitytrails")
+            api_keys["securitytrails"] = args.st_api_key
+        if getattr(args, "shodan_api_key", None):
+            sources.append("shodan")
+            api_keys["shodan"] = args.shodan_api_key
+
+        print(
+            color("[*]", Cyber.CYAN, Cyber.BOLD),
+            f"Enumeracao passiva: {color(', '.join(sources), Cyber.WHITE, Cyber.BOLD)}...",
+        )
+        passive_results = passive_enumeration(
+            domain, sources, api_keys, timeout=args.timeout,
+        )
+        passive_names = {r.subdomain for r in passive_results}
+        for r in passive_results:
+            print(
+                color("[+]", Cyber.GREEN, Cyber.BOLD),
+                f"{color(r.subdomain, Cyber.WHITE, Cyber.BOLD)} {color('(passive)', Cyber.GRAY)}",
+            )
+        print(
+            color("[*]", Cyber.CYAN, Cyber.BOLD),
+            f"Passive: {color(str(len(passive_results)), Cyber.GREEN, Cyber.BOLD)} subdominios encontrados.",
+        )
+        print()
+
     if getattr(args, "dry_run", False):
         print(color("[DRY-RUN]", Cyber.YELLOW, Cyber.BOLD), "Nenhuma consulta DNS sera realizada.")
         print(color("[*]", Cyber.CYAN, Cyber.BOLD), f"Dominio: {color(domain, Cyber.WHITE, Cyber.BOLD)}")
         print(color("[*]", Cyber.CYAN, Cyber.BOLD), f"Wordlist: {color(str(len(wordlist)), Cyber.WHITE, Cyber.BOLD)} subdominios")
         print(color("[*]", Cyber.CYAN, Cyber.BOLD), f"Threads: {color(str(threads), Cyber.WHITE, Cyber.BOLD)} | Timeout: {color(f'{args.timeout}s', Cyber.YELLOW)}")
+        if passive_results:
+            print(color("[*]", Cyber.CYAN, Cyber.BOLD), f"Passive: {color(str(len(passive_results)), Cyber.GREEN, Cyber.BOLD)} subdominios (ja resolvidos via DNS)")
         return 0
+
+    passive_names = {r.subdomain for r in passive_results}
 
     results = run_enum_scan(
         domain,
         wordlist_path=getattr(args, "wordlist", None),
         threads=threads,
         timeout=args.timeout,
+        skip_names=passive_names,
     )
 
+    all_results = passive_results + results
+
     if args.output:
-        rows = [asdict(r) for r in results]
+        rows = [asdict(r) for r in all_results]
         write_output(
             args.output,
             rows,
