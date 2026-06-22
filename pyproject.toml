@@ -30,6 +30,7 @@ mytools-recon = "webrecon:main"
 mytools-audit = "attackaudit:main"
 mytools-dnsxfer = "dnstransfer:main"
 mytools-subenum = "subdomainenum:main"
+mytools-dnshistory = "dnshistory:main"
 mytools-reconall = "reconall:main"
 
 [build-system]
