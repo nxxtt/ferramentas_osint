@@ -1,12 +1,586 @@
 # MyTools Roadmap
-# Itens pendentes e futuro identificados na auditoria de otimizacoes
+1. Subfinder / passive DNS lookup
+Atualmente subdomainenum é só brute-force DNS. Uma feature de passive subdomain enumeration usando fontes públicas (crt.sh, VirusTotal, SecurityTrails) encontraria muito mais subdomínios sem brute-force.
 
-## 1. asyncio.run() no shell interativo (resolvido)
-# Adicionado safe_asyncio_run() em utils.py que detecta event loop ativo
-# e executa coroutine em thread separada quando necessario.
-# Afeta: dirscanner.py, webrecon.py, attackaudit.py.
+2. HTTP screenshot / visual diff
+Tirar screenshot das páginas encontradas (via playwright headless) e comparar visualmente. Útil para identificar:
+Portais de login ocultos
+Diferenças entre ambientes (prod/staging)
+Aplicações que mudam conteúdo dinamicamente
 
-## 2. Modo --all / wrapper script (resolvido)
-# Criado reconall.py (mytools-reconall) que executa portscanner, dirscanner,
-# webrecon, attackaudit, dnstransfer e subenum contra um alvo.
-# Suporta --skip, --deep, --cve, --test-vulns, --dry-run, -o (output dir).
+5. Screenshot + JS rendering para dirscanner
+O dirscanner não renderiza JavaScript. SPAs retornam o mesmo shell para todos os paths (detectado por detect_spa_fallback). Usar Playwright para renderizar JS resolveria falsos negativos.
+
+6. Subdomain takeover check
+Verificar se subdomínios apontam para CNAMEs de serviços (GitHub Pages, Heroku, S3, etc.) que estão livres — vulnerabilidade comum e fácil de automatizar.
+
+7. HTTP request smuggling básico
+Testar CL.TE e TE.CL smuggling entre proxy e backend. Atualmente não há nada similar.
+
+8. Credential leak em respostas
+Varredura de padrões de credenciais em bodies: AWS keys, tokens JWT, private keys PEM, connection strings de banco. O attackaudit.py tem path probing mas não regex de credenciais.
+
+9. Multi-wordlist support no subenum
+Hoje suporta uma wordlist customizada. Suportar múltiplas wordlists e merge automático (内置 + custom) seria útil.
+
+11. API server (REST)
+Expor os módulos como API HTTP para integração com outros tools (Slack bots, dashboards, CI pipelines).
+
+12. Geolocation de IPs
+Enriquecer portscanner com geolocation dos IPs encontrados (usando db gratuita como MaxMind GeoLite2).
+
+13. DNS over HTTPS (DoH) support
+Alternativa ao DNS tradicional, útil em ambientes com DNS filtering.
+
+14. WebSocket scanner
+Testar endpoints WebSocket para vulnerabilities (CSWSH, cross-site WebSocket hijacking).
+
+Open Redirect	Detectar redirecionamentos abusáveis (/redirect?url=http://evil.com)
+
+Host Header Injection	Testar injeção via Host header em responses	
+
+CRLF Injection	Injeção de headers via \r\n em parâmetros 	SSTI (Server-Side Template Injection)	Testar Jinja2, Twig, Freemarker, etc.	SSRF básico	Detectar endpoints que fazem requests internos (via parâmetros com URL)	XXE Detection	Testar uploads de XML com entidades externas	
+
+JWT Analysis	Analisar tokens JWT: algoritmo fraco (none), key confusion, expiração	
+
+GraphQL Introspection	Descobrir schema GraphQL e testar endpoints expostos	
+
+Cloud Metadata	Testar acesso a 169.254.169.254 (AWS/GCP/Azure) via SSRF	
+
+Subdomain Takeover	Verificar CNAMEs apontando para serviços não reclamados	
+
+WAF Bypass	Técnicas de bypass: encoding, case variation, double encoding	
+
+HTTP Request Smuggling	CL.TE e TE.CL smuggling básico	
+
+WebSocket Hijacking	Cross-site WebSocket hijacking via origin check	
+
+OAuth/SAML Misconfig	Detectar configurações incorretas em fluxos de auth	
+
+Proxy rotation	Rotacionar entre múltiplos proxies automaticamente	
+
+Tor support	Scans via rede Tor (.onion e IPs públicos)	
+
+Rate limit auto-adjust	Detectar 429 e ajustar automaticamente	
+
+Custom User-Agent rotation	Rodar com múltiplos user-agents para evitar bloqueio	
+
+Tab completion	Auto-complete de comandos no shell interativo	
+
+Colored output per-severity	Já tem, mas pode ser mais granular (CSS-like themes)	
+
+Passive Subdomain Enum	crt.sh, VirusTotal, SecurityTrails, Shodan
+
+Google Dorking	Gerar dorks e coletar resultados via scraping	
+
+Email Breach Check	Verificar se emails do alvo apareceram em vazamentos (HaveIBeenPwned)	
+
+Technology Fingerprint aprofundado	Versões exatas via headers, meta tags, scripts	
+
+DNS History	Histórico de registros DNS (mudanças de IP, nameservers)	
+
+IP ASN/ISP Info	Enriquecer IPs com dados BGP (ASN, organização, país)	
+
+WHOIS History	Histórico de mudanças de ownership do domínio	
+
+Blind XSS via callback	Injetar payloads que disparam webhook quando renderizados em painéis internos (ex: <script src=http://evil.com/xss.js>)	
+
+CORS Misconfiguration profundo	Testar null origin, subdomain wildcard, credenciais com *	
+
+Cache Poisoning	Detectar cache key poisoning via headers não-normalizados	
+
+Race Condition Scanner	Enviar requests simultâneos e detectar estados inconsistentes	
+
+Prototype Pollution	Testar parâmetros de URL que afetam objetos JS internos	
+
+Deserialization (PHP/Java/Python)	Testar endpoints que recebem objetos serializados	
+
+NoSQL Injection	Payloads para MongoDB/Redis/CouchDB ({"$gt":""}, {"$ne":null})	
+
+LDAP Injection	Injeção em filtros LDAP via parâmetros de busca	
+
+XPath Injection	Injeção em consultas XPath	
+
+Header Injection via URL params	Injetar headers via parâmetros que aparecem em redirect/location	
+
+HTTP/2 Downgrade	Testar se servidor aceita downgrade para HTTP/1.1 com smuggling	
+
+Web Cache Deception	Paths que o cache armazena mas a app não deveria cache	
+
+Exposed Debug Endpoints	Detectar /debug, /actuator, /console, /adminer, /phpmyadmin avançado	
+
+Server-Side Includes (SSI)	Testar injeção de SSI em servidores Apache/Nginx	
+
+Log Injection	Injetar conteúdo em logs via User-Agent, headers customizados	
+
+TLS Fingerprint (JA3/JA4)	Identificar clientes/servidores via fingerprint TLS	
+
+HTTP/2 Fingerprint	Detectar tecnologias via padrões HTTP/2	
+
+Certificate Chain Analysis	Verificar cadeia completa, intermediate CA, pinning	
+
+HSTS Preload Check	Verificar se domínio está no preload list do Chrome	
+
+Mixed Content Detection	Detectar HTTP resources em páginas HTTPS	
+
+Deprecated Cipher Suites	Listar cipher suites suportados e marcar os fracos	
+
+DNSSEC Validation	Verificar se DNSSEC está configurado corretamente	
+
+CAA Record Check	Verificar registros CAA (Certificate Authority Authorization)	
+
+DMARC/SPF/DKIM	Verificar configuração de email security	
+
+Stealth Mode avançado	Jitter, random delay, source port randomization, fragmentation	
+
+Anti-detection	Evitar assinaturas de IDS/IPS/WAF (fragmentation, encoding)	
+
+Credential Store seguro	Armazenar API keys em keyring do SO, não em texto	
+
+Attack path visualization	Gerar grafo de possíveis caminhos de ataque baseado nos findings
+
+Auto-exploit suggestions	Para cada finding, sugerir exploit específico com comando pronto
+
+Kubernetes API Enumeration	Testar /api/v1, /apis, service discovery via DNS	
+
+Docker Registry Exposure	Detectar registries públicos sem autenticação	
+
+Terraform State Leak	Buscar terraform.tfstate exposto (contém credenciais)	
+
+Vault Secret Engine	Detectar Hashicorp Vault exposto	
+
+CI/CD Pipeline Leak	Buscar .gitlab-ci.yml, Jenkinsfile, .github/workflows expostos	
+
+Kubernetes Dashboard	Detectar dashboard exposto sem auth	
+
+Elastic/Kibana Exposed	Detectar Elasticsearch/Kibana sem autenticação	
+
+Redis/MongoDB Unauth	Testar acesso sem credenciais a bancos expostos	
+
+Modbus TCP Scanner	Detectar dispositivos Modbus (porta 502)	
+
+OPC UA Discovery	Enumerar servidores OPC UA	
+
+BACnet Scanner	Discovery de sistemas de automação predial	
+
+SNMP Community Brute	Testar communities SNMP padrão (public, private, etc.)	
+
+MQTT Enumeration	Enumerar tópicos MQTT expostos	
+
+Key Exchange Analysis	Verificar se usa DH key exchange fraco (<2048 bits)	
+
+OCSP Stapling Check	Verificar se servidor usa OCSP stapling	
+
+Certificate Transparency SCT	Verificar se certificado tem SCTs válidos	
+
+TLS Fingerprint Replay	Reutilizar TLS fingerprint de browsers conhecidos	
+
+Certificate Transparency Split-World	Detectar certificados emitidos apenas para CAs específicas (para censura)	
+
+Phishing Domain Detection	Buscar domínios parecidos (typosquatting, homoglyphs)	
+
+Watering Hole Detection	Identificar sites que o alvo frequentemente acessa	
+
+Social Engineering Recon	Coletar emails, nomes, cargos de funcionários do alvo	
+
+Paste/Leak Monitoring	Monitorar pastebin, GitHub, gitlab por credenciais do alvo	
+
+Dark Web Monitoring	Buscar menções do domínio em forums underground	
+
+Credential Stuffing	Testar credenciais vazadas em login endpoints (com aviso legal)	
+
+Session Fixation	Testar se sessão é fixa após login	
+
+Clickjacking via Embedded Frames	Testar se X-Frame-Options/CSP pode ser bypassado	
+
+Hidden Fields Analysis	Analisar campos hidden em forms para dados sensíveis	
+
+JavaScript Analysis	Extrair chaves API, tokens, endpoints de JS minificado	
+
+Source Map Discovery	Buscar .map files de JavaScript (revelam código fonte)	
+
+Backup File Detection	Buscar backups com extensões variadas (.bak, .old, .save, ~)	
+
+Version Control Leak	Detectar .git, .svn, .hg expostos	
+
+Config File Detection	Buscar .env, config.json, settings.py, web.config	
+
+Debug Mode Detection	Detectar Django Debug Toolbar, Flask Debug, ASP.NET maximo	
+
+DNS Rebinding	Testar se servidor é vulnerável a DNS rebinding (SSRF)	
+
+HTTP Request Splitting	HTTP/1.1 request splitting via CRLF	
+
+WebSocket Upgrade Abuse	Forçar upgrade para WebSocket em endpoints não previstos	
+
+HTTP/2 Stream Multiplexing Abuse	Explorar stream multiplexing para smuggling	
+
+Content-Length Mismatch	Detectar discrepâncias entre Content-Length e body real	
+
+Chunked Transfer Encoding Abuse	Explorar parsing de chunked encoding	
+
+Transfer-Encoding Obfuscation	Bypass de WAF via encoding alternativos de Transfer-Encoding	
+
+HTTP Parameter Pollution	Testar HPP em diferentes positions (query, body, headers)	
+
+Unicode Normalization Bypass	Usar Unicode para bypassar filtros (ex: admin → ⓐⓓⓜⓘⓝ)	
+
+Null Byte Injection	Injetar %00 em URLs, headers, parâmetros	
+
+Double URL Encoding	Bypass de filtros com encoding duplo	
+
+Path Traversal via Encoding	..%252f, ..%c0%af, etc.	
+
+Case Variation Bypass	Admin, ADMIN, aDmIn em paths e parâmetros	
+
+CI/CD Secret Detection	Buscar tokens/keys em pipelines expostos	
+
+HTTP/2 Reset Attack	Enviar RST_STREAM após request para confundir WAF	
+
+HTTP/2 SETTINGS Abuse	Manipular SETTINGS frame para causar comportamento inesperado	
+
+HTTP/3 QUIC Fingerprinting	Fingerprinting via QUIC version e transport parameters	
+
+Prioritization Attack	Usar Priority frames para afetar processamento de outros requests	
+
+Server Push Abuse	Explorar HTTP/2 Server Push para consumo de recursos	
+
+Introspection Depth Abuse	Queries de introspecção deeply nested para causar DoS	
+
+Batch Query Abuse	Enviar batch queries para bypass rate limiting	
+
+Alias Overloading	Usar aliases massivos para bypass de limites de query	
+
+Schema Stitching Attack	Explorar schema stitching para acessar schemas não expostos	
+
+Persisted Queries Abuse	Explorar automatic persisted queries para bypass de validação	
+
+Resolver Analysis	Analisar resolvers para encontrar caminhos de execução inseguros	
+
+Token Substitution	Trocar tokens entre contas para testar validação	
+
+Redirect URI Manipulation	Testar bypasses de redirect URI validation	
+
+PKCE Bypass	Verificar se PKCE é obrigatório em todas as flows	
+
+JWT Alg None Attack	Testar se servidor aceita alg: none	
+
+JWT Key Confusion	Usar public key como HMAC secret	
+
+SAML Assertion Replay	Testar se assertions podem ser reutilizadas	
+
+SAML XML Signature Wrapping	Bypass de validação de assinatura XML	
+
+OIDC Discovery Abuse	Explorar endpoints de discovery para informações	
+
+Refresh Token Rotation Bypass	Verificar se refresh tokens são realmente invalidados	
+
+Cookie Domain Boundary	Verificar se cookies vazam para subdomínios maliciosos	
+
+Cookie Path Traversal	Testar se cookies vazam entre paths diferentes	
+
+Session Fixation via Subdomain	Fixar sessão via subdomínio controlado	
+
+CSRF via Subdomain	Usar subdomínio para bypass de CSRF protection	
+
+Double Submit Cookie	Verificar se Double Submit Cookie pattern é bypassável	
+
+SameSite Bypass via DNS	Usar DNS rebinding para bypass SameSite=Lax	
+
+Polyglot Upload	Upload de arquivos que são válidos em múltiplos formatos	
+
+SVG XXE via Upload	Upload de SVG com XXE embutido	
+
+Image Magic Overflow	Explorar vulnerabilidades em processamento de imagem	
+
+ZIP Slip via Upload	Upload de ZIP com paths maliciosos	
+
+Filename Injection	Injetar comandos no nome do arquivo	
+
+Content-Type Mismatch	Upload com Content-Type diferente do conteúdo real	
+
+Multipart Boundary Abuse	Manipular boundary do multipart para bypass	
+
+SSTI via Headers	Injetar template syntax em User-Agent, Referer, etc.	
+
+SSTI via HTTP Methods	Injetar em PUT/POST/PATCH bodies	
+
+Log Injection via User-Agent	Injetar logs falsos via User-Agent malicioso	
+
+Log4Shell via HTTP Headers	Testar JNDI injection em headers customizados	
+
+CRLF → Request Smuggling	Usar CRLF injection para criar requests smuggled	
+
+SSRF via DNS Rebinding	DNS rebinding para bypass de allow-lists	
+
+SSRF via URL Parsers	Usar diferenças de parsing de URLs para bypass	
+
+XXE via SVG Upload	XXE embutido em SVGs uploadados	
+
+XXE via DOCX/XLSX	XXE embutido em documentos Office	
+
+XXE via SOAP	XXE em endpoints SOAP/WSDL	
+
+Race Condition (Multi-Step)	Race conditions em fluxos de múltiplos passos	
+
+Integer Overflow em Preços	Testar overflow em cálculos de preço/desconto	
+
+Negative Quantity Abuse	Enviar quantidades negativas para obter crédito	
+
+Coupon Code Enumeration	Brute-force de cupons de desconto	
+
+Loyalty Points Transfer	Transferir pontos entre contas (se não deveria)	
+
+Gift Card Balance Check	Verificar saldo de gift cards sem autenticação	
+
+Refund Amount Manipulation	Manipular valores de reembolso	
+
+Subscription Bypass	Bypass de paywalls via manipulação de cookies/headers	
+
+Timing Attack em Login	Medir tempo de resposta para inferir se usuário existe	
+
+Timing Attack em Tokens	Comparação de tokens com tempo variável (vulnerável a timing)	
+
+Cache Timing	Inferir conteúdo de cache via timing de responses	
+
+DNS Timing	Inferir informações via tempo de resolução DNS	
+
+Error-Based Info Leakage	Extrair informações de mensagens de erro detalhadas	
+
+Verbose Error Analysis	Analisar stack traces e erros detalhados para info leak	
+
+Tenant ID Manipulation	Trocar tenant ID em requests para acessar outros tenants	
+
+JWT Tenant Claim	Verificar se tenant claim é validado corretamente	
+
+Subdomain Tenant Isolation	Verificar isolamento entre tenants via subdomínios	
+
+Shared Resource Access	Acessar recursos compartilhados entre tenants	
+
+Cross-Tenant SSRF	SSRF que atinge outros tenants na mesma infra	
+
+HTTP/2 to HTTP/1.1 Downgrade Mismatch	Enviar request HTTP/2 que é parseado diferente em HTTP/1.1 downstream	
+
+Content-Length vs Transfer-Encoding Conflict	Enviar ambos headers para ver qual o servidor respeita	
+
+Transfer-Encoding Chunked + Content-Length	Enviar chunked com CL para causar desincronização	
+
+Transfer-Encoding Obfuscation	chunked, Chunked, CHUNKED, chunKed, tabs/spaces entre tokens	
+
+CL.TE / TE.CL / TE.TE Variants	Todas as variantes de smuggling entre proxies	
+
+HTTP Pipeline Desync	Enviar requests pipelineadas que causam desincronização	
+
+Null Request Byte	Injetar byte null no início do request para confundir parser	
+
+Malformed HTTP Version	HTTP/1.3, HTTP/2.0, HTTP/9.9 para testar parsing	
+
+Duplicate Headers	Host: a.com\r\nHost: b.com para testar qual é usado	
+
+Whitespace in Header Names	Host : a.com com espaço extra	
+
+Header Name Case Sensitivity	CONTENT-TYPE vs Content-Type vs content-type	
+
+Cookie Quoting Edge Cases	Aspas, backslashes, null bytes em cookies	
+
+Cookie Separator Variants	; vs , como separador de cookies	
+
+URL Encoding Edge Cases	%2f, %2F, %c0%af, %e0%80%af, double encoding	
+
+Path Traversal Variants	..;/, ..%2f, ..%252f, ....//, ..\\	
+
+Host Header Variants	Host: a.com@b.com, Host: a.com:443@b.com, IPv6 notation	
+
+Absolute URI in Request	GET http://b.com/path HTTP/1.1 para testar proxy behavior	
+
+HTTP/0.9 Request	Request sem headers para testar behavior legado	
+
+Unicode Normalization Bypass	Usar Unicode Normalization para bypass de filtros (NFC, NFD, NFKC, NFKD)	
+
+Homoglyph Detection	Detectar confusão visual em domain names (а vs a, 0 vs O)	
+
+Full-Width Characters	Usar caracteres full-width para bypass de filtros	
+
+RTL Override	Usar Right-to-Left Override para confundir display de URLs	
+
+Zero-Width Characters	Injetar zero-width joiners/spaces em tokens	
+
+Combining Characters	Usar combining marks para bypass de filtros	
+
+Null Byte in Unicode	%00 em diferentes contextos de encoding	
+
+Overlong UTF-8 Encoding	Usar overlong encoding para bypass de filtros	
+
+BOM Injection	Byte Order Mark em início de arquivos/requests	
+
+Charset Detection Bypass	Forçar detecção de charset errada para bypass	
+
+Content-Type Charset Mismatch	Content-Type com charset diferente do body	
+
+DOM Clobbering via Named Access	Usar <a name="id"> para sobrescrever variáveis JS	
+
+Mutation XSS	XSS que só aparece após mutação do DOM pelo browser	
+
+CSS Injection via Style	Injetar CSS para extrair dados (ex: background: url(...))	
+
+XSS via SVG Scripts	<script> embutido em SVG	
+
+XSS via <math> / <svg> MathML	Vetores de XSS via MathML/SVG	
+
+XSS via <details open ontoggle>	XSS sem interação do usuário	
+
+XSS via <img src=x onerror>	Vetores clássicos mas eficazes	
+
+XSS via <video> <source>	XSS via eventos de mídia	
+
+XSS via <link> <a> CSS	XSS via CSS import	
+
+XSS via <base> Tag	Manipular base URL para redirecionar requests	
+
+XSS via javascript: URI	Navegação via javascript: em diferentes contextos	
+
+XSS via data: URI	Injetar data:text/html em diferentes contextos	
+
+XSS via <iframe srcdoc>	XSS via iframe srcdoc	
+
+XSS via <template>	XSS via conteúdo de template elements	
+
+XSS via Custom Elements	XSS via web components customizados	
+
+XSS via Shadow DOM	XSS via shadow roots	
+
+XSS via <slot>	XSS via slot elements em shadow DOM	
+
+XSS via <use> href	XSS via SVG use element	
+
+Lambda Environment Variables Leak	Verificar se env vars vazam via erros	
+
+Lambda Layer Enumeration	Enumerar layers disponíveis em uma Lambda	
+
+Lambda Temp File Persistence	Verificar se arquivos temporários persistem entre invocations	
+
+Azure Function App Settings Leak	Verificar se app settings vazam via endpoints	
+
+GCP Cloud Functions IAM Bypass	Testar bypasses de IAM em Cloud Functions	
+
+Vercel Edge Function Leak	Verificar se secrets vazam em edge functions	
+
+Cloudflare Workers KV Leak	Verificar se dados do KV store vazam	
+
+Edge Function Code Injection	Injetar código em edge functions via headers/params	
+
+Serverless Cold Start Info Leak	Extrair informações durante cold start	
+
+Serverless Timeout Abuse	Enviar requests que causam timeout e consomem recursos	
+
+Mass Assignment	Enviar campos extras em JSON para alterar dados não previstos	
+
+HTTP Method Override	X-HTTP-Method-Override, _method para bypass de ACL	
+
+API Versioning Bypass	Usar versões antigas da API com vulnerabilidades	
+
+Rate Limit via Pagination	Usar paginação para bypass de rate limiting	
+
+Batch Request Abuse	Enviar batch requests para bypass de rate limiting	
+
+GraphQL persisted queries enum	Enumerar persisted queries para encontrar queries não expostas	
+
+REST to GraphQL Migration Leak	Verificar se endpoints REST antigos ainda existem	
+
+API Gateway Bypass	Acessar backend diretamente sem passar pelo gateway	
+
+Webhook Injection	Injetar webhook URLs maliciosas em configurações	
+
+OAuth Scope Escalation	Tentar obter scopes mais amplos que o necessário	
+
+API Key in URL Leakage	Verificar se API keys aparecem em URLs (logs, referer)	
+
+OpenAPI/Swagger Discovery	Buscar spec exposta em /swagger.json, /openapi.yaml, etc.	
+
+GraphQL Playground Exposure	Detectar GraphQL Playground/GraphiQL exposto	
+
+gRPC Reflection Abuse	Explorar gRPC server reflection para discovery	
+
+gRPC Reflection Enumeration	Enumerar todos os métodos e serviços via reflection	
+
+gRPC Server Streaming Abuse	Enviar requests em streaming que consomem recursos	
+
+gRPC Client Streaming Abuse	Enviar streams massivos para causar DoS	
+
+gRPC Bidirectional Abuse	Explorar bidirectional streaming para consumo de recursos	
+
+Thrift Method Enumeration	Enumerar métodos disponíveis em servers Thrift	
+
+Thrift Binary Protocol Manipulation	Manipular protocolo binário para bypass de validação	
+
+gRPC-Web Bypass	Bypass de restrições gRPC-Web para acessar backend	
+
+Protobuf Field Manipulation	Manipular campos protobuf para bypass de validação	
+
+WebSocket Origin Bypass	Testar se servidor valida Origin corretamente	
+
+WebSocket Cross-Site Hijacking	Hijack de WebSocket connections cross-site	
+
+WebSocket Message Injection	Injetar mensagens em WebSocket connections existentes	
+
+WebSocket Denial of Service	Enviar frames maliciosos para causar DoS	
+
+WebSocket Frame Size Abuse	Enviar frames gigantes para consumo de memória	
+
+WebSocket Compression Bomb	Usar compressão para causar bomba de dados (zip bomb)	
+
+WebSocket Multiplexing Abuse	Explorar multiplexing se suportado	
+
+WebSocket Protocol Violation	Enviar frames que violam o protocolo para causar comportamento inesperado	
+
+SMTP Header Injection	Injetar headers em campos de email (To, Subject, etc.)	
+
+Email Address Quoting Bypass	"user"@domain.com vs user@domain.com	
+
+SMTP Downgrade Attack	Forçar downgrade de STARTTLS para SMTP plaintext	
+
+Email Spoofing via DNS	Verificar se SPF/DKIM/DMARC previne spoofing	
+
+Email Template Injection	Injetar código em templates de email (Handlebars, Jinja)	
+
+Email Attachment Bypass	Bypass de filtros de anexos (double extensions, polyglots)	
+
+Email Link Tracking Bypass	Bypass de tracking pixels e link redirects	
+
+DNS Rebinding via TTL	Usar TTL zero para rebinding rápido	
+
+DNS Rebinding via IPv6	Usar records AAAA para rebinding	
+
+DNS Rebinding via CNAME	Usar CNAME chains para rebinding	
+
+DNS Water Torture	Enviar queries para subdomínios aleatórios para consumir recursos DNS	
+
+DNS Amplification Detection	Detectar se servidor pode ser usado para amplificação	
+
+DNS Tunnel Detection	Detectar DNS tunneling em queries	
+
+DNS-over-HTTPS Proxy	Usar DoH para evadir monitoramento DNS	
+
+DNS-over-TLS Proxy	Usar DoT para evadir monitoramento DNS	
+
+NSEC Walking	Enumerar zone via NSEC records em DNSSEC	
+
+DNSSEC Zone Walking	Enumerar records via DNSSEC proof of non-existence	
+
+SSRF via DNS Rebinding	Usar DNS rebinding para bypass de allow-lists	
+
+SSRF via URL Parsers	Explorar diferenças entre parsers de URL	
+
+SSRF via Redirect Chains	Usar redirects em cadeia para bypass de proteções	
+
+SSRF via IPv4-mapped IPv6	Usar ::ffff:127.0.0.1 para bypass	
+
+SSRF via URL Shorteners	Usar bit.ly, etc. para bypass de allow-lists	
+
+SSRF via PDF Generation	SSRF via geração de PDF com imagens remotas	
+
+SSRF via HTML to Image	SSRF via conversão HTML para imagem	
+
+SSRF via Markdown Rendering	SSRF via renderização de Markdown com imagens	
+
+SSRF via CSV Injection	Injetar fórmulas CSV que causam requests externos	
