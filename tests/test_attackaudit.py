@@ -10,6 +10,8 @@ import respx
 
 from attackaudit import (
     _ERROR_INFO_SEVERITY,
+    _SENSITIVE_HIDDEN_FIELDS,
+    _SENSITIVE_VALUE_PATTERNS,
     _VERBOSE_ERROR_HEADERS,
     _WAF_SIGNATURES,
     CSRF_FIELD_NAMES_LOWER,
@@ -30,6 +32,7 @@ from attackaudit import (
     _extract_query_params,
     analyze_error_response,
     analyze_headers_findings,
+    analyze_hidden_fields,
     build_findings,
     build_parser,
     check_sqli_errors,
@@ -599,6 +602,112 @@ class TestAnalyzeHeadersFindings:
             assert sev in ("low", "medium", "high", "critical", "info")
             assert cat in ("fingerprint", "info_leak")
             assert isinstance(rec, str)
+
+
+class TestAnalyzeHiddenFields:
+    def test_credential_field_name_detected(self):
+        fields = [("password", "hunter2")]
+        findings = analyze_hidden_fields(fields)
+        assert any("password" in f.item for f in findings)
+        assert any(f.severity == "critical" for f in findings)
+
+    def test_api_key_field_name_detected(self):
+        fields = [("api_key", "")]
+        findings = analyze_hidden_fields(fields)
+        assert any("api_key" in f.item for f in findings)
+        assert any(f.severity == "high" for f in findings)
+
+    def test_token_field_name_detected(self):
+        fields = [("auth_token", "abc123")]
+        findings = analyze_hidden_fields(fields)
+        assert any("auth_token" in f.item for f in findings)
+        assert any(f.severity == "high" for f in findings)
+
+    def test_private_key_field_detected(self):
+        fields = [("private_key", "")]
+        findings = analyze_hidden_fields(fields)
+        assert any("private_key" in f.item for f in findings)
+        assert any(f.severity == "critical" for f in findings)
+
+    def test_internal_id_field_low_severity(self):
+        fields = [("user_id", "12345")]
+        findings = analyze_hidden_fields(fields)
+        assert any("user_id" in f.item for f in findings)
+        assert any(f.severity == "low" for f in findings)
+
+    def test_jwt_value_detected(self):
+        jwt = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U"
+        fields = [("token", jwt)]
+        findings = analyze_hidden_fields(fields)
+        assert any("jwt" in f.evidence.lower() for f in findings)
+
+    def test_aws_key_value_detected(self):
+        fields = [("access", "AKIAIOSFODNN7EXAMPLE")]
+        findings = analyze_hidden_fields(fields)
+        assert any("aws" in f.evidence.lower() for f in findings)
+        assert any(f.severity == "critical" for f in findings)
+
+    def test_hardcoded_password_value_detected(self):
+        fields = [("secret", "changeme")]
+        findings = analyze_hidden_fields(fields)
+        assert any("hidden" in f.item.lower() or "valor" in f.item.lower() for f in findings)
+
+    def test_clean_hidden_fields_no_findings(self):
+        fields = [("csrf_token", "abc123"), ("form_id", "login")]
+        findings = analyze_hidden_fields(fields)
+        assert len(findings) == 0
+
+    def test_multiple_sensitive_fields(self):
+        fields = [("password", "test"), ("api_key", "")]
+        findings = analyze_hidden_fields(fields)
+        assert len(findings) >= 2
+
+    def test_no_duplicate_per_field_type(self):
+        fields = [("password", "a"), ("passwd", "b"), ("pwd", "c")]
+        findings = analyze_hidden_fields(fields)
+        name_findings = [f for f in findings if "Campo hidden" in f.item]
+        assert len(name_findings) == 1
+
+    def test_empty_fields_no_findings(self):
+        findings = analyze_hidden_fields([])
+        assert len(findings) == 0
+
+    def test_sensitive_structure(self):
+        assert isinstance(_SENSITIVE_HIDDEN_FIELDS, dict)
+        for _name, (sev, cat, patterns) in _SENSITIVE_HIDDEN_FIELDS.items():
+            assert sev in ("low", "medium", "high", "critical", "info")
+            assert cat in ("exposure", "info_leak")
+            assert len(patterns) > 0
+
+    def test_value_patterns_structure(self):
+        assert isinstance(_SENSITIVE_VALUE_PATTERNS, dict)
+        for _name, (sev, cat, _pattern) in _SENSITIVE_VALUE_PATTERNS.items():
+            assert sev in ("low", "medium", "high", "critical", "info")
+            assert cat in ("exposure", "info_leak")
+
+
+class TestPageParserHiddenFields:
+    def test_collects_hidden_field(self):
+        parser = PageParser()
+        parser.feed('<form><input type="hidden" name="token" value="abc"></form>')
+        assert len(parser.hidden_fields) == 1
+        assert parser.hidden_fields[0] == ("token", "abc")
+
+    def test_collects_multiple_hidden_fields(self):
+        parser = PageParser()
+        parser.feed('<form><input type="hidden" name="a" value="1"><input type="hidden" name="b" value="2"></form>')
+        assert len(parser.hidden_fields) == 2
+
+    def test_ignores_non_hidden_inputs(self):
+        parser = PageParser()
+        parser.feed('<form><input type="text" name="user"><input type="hidden" name="token" value="x"></form>')
+        assert len(parser.hidden_fields) == 1
+
+    def test_hidden_csrf_still_tracked(self):
+        parser = PageParser()
+        parser.feed('<form method="POST"><input type="hidden" name="csrf_token" value="abc"></form>')
+        assert parser.forms_missing_csrf == 0
+        assert len(parser.hidden_fields) == 1
 
 
 class TestCheckTLSVersions:

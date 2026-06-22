@@ -142,6 +142,39 @@ CSRF_FIELD_NAMES_LOWER = frozenset({
 
 DEFAULT_INJECT_PARAMS = ("q", "id", "search", "page", "name", "user", "cmd", "file", "path", "input")
 
+_SENSITIVE_HIDDEN_FIELDS: dict[str, tuple[str, str, list[re.Pattern[str]]]] = {
+    "credential_field": ("critical", "exposure", [
+        re.compile(r"(?:password|passwd|pwd|pass)\b", re.IGNORECASE),
+    ]),
+    "api_key_field": ("high", "exposure", [
+        re.compile(r"(?:api[_-]?key|apikey|secret[_-]?key|access[_-]?key)\b", re.IGNORECASE),
+    ]),
+    "token_field": ("high", "exposure", [
+        re.compile(r"(?:auth[_-]?token|bearer|jwt|session[_-]?token|access[_-]?token)\b", re.IGNORECASE),
+    ]),
+    "private_key_field": ("critical", "exposure", [
+        re.compile(r"(?:private[_-]?key|ssh[_-]?key|pgp)\b", re.IGNORECASE),
+    ]),
+    "internal_id_field": ("low", "info_leak", [
+        re.compile(r"(?:user[_-]?id|customer[_-]?id|account[_-]?id|employee[_-]?id)\b", re.IGNORECASE),
+    ]),
+}
+
+_SENSITIVE_VALUE_PATTERNS: dict[str, tuple[str, str, re.Pattern[str]]] = {
+    "jwt_token": ("high", "exposure",
+        re.compile(r"eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}")),
+    "aws_access_key": ("critical", "exposure",
+        re.compile(r"(?:AKIA|AGPA|AIDA|AROA|AIPA|ANPA|ANVA|ASIA)[A-Z0-9]{16}")),
+    "hardcoded_password": ("high", "exposure",
+        re.compile(r"^(?:admin|password|123456|secret|changeme|root)$", re.IGNORECASE)),
+    "base64_token": ("medium", "exposure",
+        re.compile(r"^[A-Za-z0-9+/]{40,}={0,2}$")),
+    "hex_token": ("medium", "exposure",
+        re.compile(r"^[0-9a-f]{32,}$", re.IGNORECASE)),
+    "private_key_block": ("critical", "exposure",
+        re.compile(r"-----BEGIN\s+(?:RSA|DSA|EC)?\s*PRIVATE\s+KEY-----")),
+}
+
 ERROR_INFO_PATTERNS: dict[str, list[re.Pattern[str]]] = {
     "stack_trace": [
         re.compile(r"at\s+[\w.]+\([\w.]+\.java:\d+\)"),
@@ -322,6 +355,50 @@ def analyze_headers_findings(
     return findings
 
 
+def analyze_hidden_fields(hidden_fields: list[tuple[str, str]]) -> list[Finding]:
+    """Analisa campos hidden em forms buscando dados sensiveis.
+
+    Verifica nomes de campos contra padroes de credenciais/tokens e
+    valores contra padroes de dados sensiveis (JWT, AWS keys, etc).
+    Retorna no max 1 Finding por nome de campo sensivel.
+    """
+    findings: list[Finding] = []
+    seen_fields: set[str] = set()
+
+    for name, value in hidden_fields:
+        name_lower = name.lower()
+
+        for field_type, (severity, category, patterns) in _SENSITIVE_HIDDEN_FIELDS.items():
+            if field_type in seen_fields:
+                continue
+            for pattern in patterns:
+                if pattern.search(name_lower):
+                    findings.append(Finding(
+                        severity, category,
+                        f"Campo hidden sensivel: {name_lower}",
+                        f"Hidden field '{name}' pode conter dados sensiveis.",
+                        "Nao armazene credenciais ou dados sensiveis em campos hidden.",
+                        f"# Verifique o valor via DevTools (Elements > <input type=\"hidden\">)\n"
+                        f"grep -r '{name}' .",
+                    ))
+                    seen_fields.add(field_type)
+                    break
+
+        if value:
+            for value_type, (severity, category, pattern) in _SENSITIVE_VALUE_PATTERNS.items():
+                if pattern.search(value):
+                    findings.append(Finding(
+                        severity, category,
+                        f"Valor sensiveis em hidden field '{name}'",
+                        f"Valor em hidden field contem {value_type.replace('_', ' ')}.",
+                        "Nunca exponha tokens, keys ou credenciais em campos hidden.",
+                        f"# Valor detectado comecando por: {value[:20]}...",
+                    ))
+                    break
+
+    return findings
+
+
 class PageParser(HTMLParser):
     """Analisa HTML para extrair forms, scripts externos, comentarios e titulo.
 
@@ -344,6 +421,7 @@ class PageParser(HTMLParser):
         self.title_parts: list[str] = []
         self.form_has_csrf: list[bool] = []
         self._current_form_has_csrf = False
+        self.hidden_fields: list[tuple[str, str]] = []
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         attrs_dict = {key.lower(): value or "" for key, value in attrs}
@@ -357,8 +435,12 @@ class PageParser(HTMLParser):
             input_name = attrs_dict.get("name", "").lower()
             if input_type == "password":
                 self.password_inputs += 1
-            if input_type == "hidden" and input_name in CSRF_FIELD_NAMES_LOWER:
-                self._current_form_has_csrf = True
+            if input_type == "hidden":
+                hidden_name = attrs_dict.get("name", "")
+                hidden_value = attrs_dict.get("value", "")
+                self.hidden_fields.append((hidden_name, hidden_value))
+                if input_name in CSRF_FIELD_NAMES_LOWER:
+                    self._current_form_has_csrf = True
         if tag.lower() == "script" and attrs_dict.get("src"):
             self.external_scripts.add(attrs_dict["src"])
 
@@ -1034,6 +1116,8 @@ def build_findings(
             f"    <input type=\"submit\">\n"
             f"  </form>",
         ))
+
+    findings.extend(analyze_hidden_fields(parser.hidden_fields))
 
     if method_results:
         high_methods = [mr for mr in method_results if mr.status in {200, 201, 204} and mr.method in {"PUT", "DELETE", "TRACE"}]
