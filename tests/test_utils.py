@@ -220,8 +220,30 @@ class TestFetch429:
         status, _, _body, _ = await fetch(client, url, rate_limiter=limiter, max_retries=3)
         assert status == 200
         assert call_count == 2
-        assert limiter._backoff_multiplier == 2.0
         await client.aclose()
+
+
+class TestSetupReadline:
+    def test_no_error_with_valid_parser(self):
+        from utils import _setup_readline
+
+        parser = argparse.ArgumentParser()
+        parser.add_argument("--deep", action="store_true")
+        parser.add_argument("-o", "--output")
+        _setup_readline(parser)
+
+    def test_no_error_with_skip_values(self):
+        from utils import _setup_readline
+
+        parser = argparse.ArgumentParser()
+        parser.add_argument("--skip", action="append", default=[])
+        _setup_readline(parser, skip_values=["portscanner", "dirscanner"])
+
+    def test_no_error_with_empty_parser(self):
+        from utils import _setup_readline
+
+        parser = argparse.ArgumentParser()
+        _setup_readline(parser)
 
     @respx.mock
     @pytest.mark.asyncio

@@ -327,7 +327,7 @@ MyTools-main/
 ├── utils.py           # Código compartilhado (cores, helpers, HTTP async)
 ├── KNOW_ISSUES.txt    # Problemas conhecidos
 ├── ROADMAP.txt        # Roadmap de otimizações
-├── tests/             # Testes unitários (730 testes)
+├── tests/             # Testes unitários (733 testes)
 ├── pyproject.toml     # Configuração do projeto
 └── README.MD
 ```

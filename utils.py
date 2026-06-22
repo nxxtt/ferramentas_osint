@@ -23,6 +23,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import base64
+import contextlib
 import csv
 import json
 import logging
@@ -745,6 +746,47 @@ def safe_asyncio_run(coro: Any) -> Any:
             ) from None
 
 
+_BUILTIN_COMMANDS = ("clear", "exit", "help", "quit")
+
+
+def _setup_readline(
+    parser: argparse.ArgumentParser,
+    skip_values: list[str] | None = None,
+) -> None:
+    """Configura tab completion no shell interativo.
+
+    Tenta usar readline (stdlib) ou pyreadline3 (Windows).
+    Se nenhum disponivel, retorna silenciosamente.
+    """
+    try:
+        try:
+            import readline as _readline
+        except ModuleNotFoundError:
+            import pyreadline3 as _readline  # type: ignore[no-redef]
+    except ModuleNotFoundError:
+        return
+
+    flag_names: list[str] = []
+    for action in parser._actions:
+        if action.option_strings:
+            flag_names.extend(action.option_strings)
+
+    all_values = list(_BUILTIN_COMMANDS) + flag_names
+    if skip_values:
+        all_values += [f"--skip={v}" for v in skip_values]
+
+    def completer(text: str, state: int) -> str | None:
+        if state == 0:
+            completer.matches = [v for v in all_values if v.startswith(text)]  # type: ignore[attr-defined]
+        matches = getattr(completer, "matches", [])
+        return matches[state] if state < len(matches) else None
+
+    _readline.set_completer(completer)  # type: ignore[attr-defined]
+    _readline.set_completer_delims(" \t")  # type: ignore[attr-defined]
+    with contextlib.suppress(Exception):
+        _readline.parse_and_bind("tab: complete")  # type: ignore[attr-defined]
+
+
 def run_interactive_shell(
     parser: argparse.ArgumentParser,
     prompt: str,
@@ -756,6 +798,7 @@ def run_interactive_shell(
     contextual_help: str | None = None,
 ) -> int:
     """Inicia shell interativo generico com loop de comandos."""
+    _setup_readline(parser)
     if banner_fn:
         banner_fn()
     print(color(description, Cyber.WHITE, Cyber.BOLD), "Digite 'help', 'clear' ou 'exit'.")
