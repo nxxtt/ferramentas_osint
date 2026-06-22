@@ -17,25 +17,23 @@ import httpx
 import whois
 from bs4 import BeautifulSoup
 
-from net import (
-    FetchError,
-    apply_session_auth,
-    create_async_client,
-    extract_title,
-    fetch,
-    header_get,
-    normalize_url,
-)
 from utils import (
     SECURITY_HEADERS,
     Cyber,
+    FetchError,
     __version__,
     add_common_args,
+    apply_session_auth,
     color,
+    create_async_client,
     create_banner,
     ensure_output_dir,
     extract_hostname,
+    extract_title,
+    fetch,
+    header_get,
     init_scanner,
+    normalize_url,
     query_nvd,
     resolve_target_urls,
     run_main_loop,

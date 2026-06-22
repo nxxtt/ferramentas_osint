@@ -24,6 +24,7 @@ import functools
 import ipaddress
 import logging
 import socket
+import sys
 import time
 from collections.abc import Iterable
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
@@ -333,6 +334,10 @@ def run_once(args: argparse.Namespace) -> int:
             "--threads e deprecated, use --workers",
             DeprecationWarning,
             stacklevel=2,
+        )
+        print(
+            color("AVISO: --threads esta deprecated, use --workers", Cyber.YELLOW),
+            file=sys.stderr,
         )
         args.workers = args.threads
 

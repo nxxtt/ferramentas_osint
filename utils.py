@@ -736,7 +736,13 @@ def safe_asyncio_run(coro: Any) -> Any:
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
         future = pool.submit(asyncio.run, coro)
-        return future.result()
+        try:
+            return future.result(timeout=300)
+        except concurrent.futures.TimeoutError:
+            raise RuntimeError(
+                "Timeout ao executar coroutine em thread separada (300s). "
+                "Se estiver usando Jupyter, considere nest_asyncio."
+            ) from None
 
 
 def run_interactive_shell(
@@ -791,3 +797,67 @@ def run_interactive_shell(
         except Exception as error:
             logger.debug("excecao inesperada no shell interativo", exc_info=True)
             print(color(f"Erro: {error}", Cyber.RED))
+
+
+# ---------------------------------------------------------------------------
+# Aliases de conveniência (substitui net.py removido)
+# ---------------------------------------------------------------------------
+
+http = httpx
+Client = httpx.AsyncClient
+
+
+async def fetch_bytes(
+    client: httpx.AsyncClient,
+    url: str,
+    *,
+    timeout: float = 5.0,
+    max_retries: int = 3,
+    rate_limiter: RateLimiter | None = None,
+) -> bytes:
+    """Busca o conteúdo bruto de uma URL como bytes.
+
+    Wrapper sobre fetch() que retorna apenas o corpo da resposta.
+    Levanta FetchError em caso de falha.
+    """
+    _, _, body, _ = await fetch(
+        client, url, timeout=timeout, max_retries=max_retries, rate_limiter=rate_limiter,
+    )
+    return body
+
+
+async def read_response_text(
+    client: httpx.AsyncClient,
+    url: str,
+    *,
+    timeout: float = 5.0,
+    max_retries: int = 3,
+    encoding: str = "utf-8",
+    rate_limiter: RateLimiter | None = None,
+) -> str:
+    """Busca uma URL e decodifica o corpo como texto.
+
+    Útil para arquivos de texto (robots.txt, sitemap.xml, HTML).
+    Levanta FetchError em caso de falha.
+    """
+    _, _, body, _ = await fetch(
+        client, url, timeout=timeout, max_retries=max_retries, rate_limiter=rate_limiter,
+    )
+    return body.decode(encoding, errors="replace")
+
+
+def classify_by_content_type(headers: Mapping[str, str]) -> str:
+    """Classifica a resposta como 'html', 'json', 'xml', 'text' ou 'binary'.
+
+    Baseado no header Content-Type.
+    """
+    content_type = header_get(headers, "content-type").lower()
+    if "text/html" in content_type:
+        return "html"
+    if "application/json" in content_type or "+json" in content_type:
+        return "json"
+    if "text/xml" in content_type or "application/xml" in content_type:
+        return "xml"
+    if "text/" in content_type:
+        return "text"
+    return "binary"

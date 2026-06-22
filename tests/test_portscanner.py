@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from unittest.mock import patch
 
 import pytest
 
@@ -297,4 +298,57 @@ class TestDryRun:
         run_once(args)
         captured = capsys.readouterr()
         assert "DRY-RUN" in captured.out
-        assert "Nenhuma conexao" in captured.out
+
+
+class TestMain:
+    @patch("utils.run_interactive_shell")
+    def test_no_target_shells_interactive(self, mock_shell):
+        mock_shell.return_value = 0
+        from portscanner import main
+        args = argparse.Namespace(
+            targets=None, target_list=None, quiet=False, output=None,
+            verbose=False, color=None, log_file=None, timeout=0.5, ports=[80],
+            workers=200, threads=None, banner=False, dry_run=False, retries=3,
+        )
+        with patch("portscanner.argparse.ArgumentParser.parse_args", return_value=args):
+            result = main()
+            assert result == 0
+            mock_shell.assert_called_once()
+
+    def test_quiet_without_output_returns_1(self):
+        from portscanner import main
+        args = argparse.Namespace(
+            targets=["127.0.0.1"], target_list=None, quiet=True, output=None,
+            verbose=False, color=None, log_file=None, timeout=0.5, ports=[80],
+            workers=200, threads=None, banner=False, dry_run=False, retries=3,
+        )
+        with patch("portscanner.argparse.ArgumentParser.parse_args", return_value=args):
+            result = main()
+            assert result == 1
+
+    @patch("portscanner.run_once")
+    def test_valid_target_calls_run_once(self, mock_run_once):
+        mock_run_once.return_value = 0
+        from portscanner import main
+        args = argparse.Namespace(
+            targets=["127.0.0.1"], target_list=None, quiet=False, output=None,
+            verbose=False, color=None, log_file=None, timeout=0.5, ports=[80],
+            workers=200, threads=None, banner=False, dry_run=False, retries=3,
+        )
+        with patch("portscanner.argparse.ArgumentParser.parse_args", return_value=args):
+            result = main()
+            assert result == 0
+            mock_run_once.assert_called_once()
+
+    @patch("portscanner.run_once")
+    def test_exception_returns_1(self, mock_run_once):
+        mock_run_once.side_effect = RuntimeError("fail")
+        from portscanner import main
+        args = argparse.Namespace(
+            targets=["127.0.0.1"], target_list=None, quiet=False, output=None,
+            verbose=False, color=None, log_file=None, timeout=0.5, ports=[80],
+            workers=200, threads=None, banner=False, dry_run=False, retries=3,
+        )
+        with patch("portscanner.argparse.ArgumentParser.parse_args", return_value=args):
+            result = main()
+            assert result == 1

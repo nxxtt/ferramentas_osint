@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import functools
 import logging
 import os
 import sys
@@ -13,24 +12,22 @@ from urllib.parse import urljoin
 
 import httpx
 
-from net import (
-    FetchError,
-    RateLimiter,
-    create_async_client,
-    extract_title,
-    fetch,
-    normalize_url,
-)
 from utils import (
     Cyber,
+    FetchError,
+    RateLimiter,
     __version__,
     add_common_args,
     color,
+    create_async_client,
     create_banner,
     detect_spa_fallback,
     ensure_output_dir,
     extract_hostname,
+    extract_title,
+    fetch,
     init_scanner,
+    normalize_url,
     parse_extra_headers,
     parse_int_range,
     print_table,
@@ -138,9 +135,8 @@ def parse_range(value: str | None) -> tuple[int, int] | None:
     return (min_val, max_val)
 
 
-@functools.lru_cache(maxsize=8)
 def _read_wordlist(wordlist: str) -> list[str]:
-    """Le e cacheia o conteudo bruto de uma wordlist."""
+    """Le o conteudo bruto de uma wordlist."""
     return read_target_lines(wordlist)
 
 

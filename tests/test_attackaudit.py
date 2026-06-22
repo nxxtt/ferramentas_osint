@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import re
+from unittest.mock import patch
 
 import httpx
 import pytest
@@ -937,3 +938,69 @@ class TestDryRun:
         captured = capsys.readouterr()
         assert "DRY-RUN" in captured.out
         assert "Nenhuma requisicao" in captured.out
+
+
+class TestMain:
+    @patch("utils.run_interactive_shell")
+    def test_no_target_shells_interactive(self, mock_shell):
+        mock_shell.return_value = 0
+        from attackaudit import main
+        args = argparse.Namespace(
+            url=None, target_list=None, quiet=False, output=None,
+            verbose=False, color=None, log_file=None, timeout=5.0,
+            deep=False, test_vulns=False, test_methods=False,
+            paths_file=None, params=None, retries=3, dry_run=False,
+            verify=False, proxy=None, auth=None, bearer_token=None,
+            cookie=None, header=[], delay=0.0, cve=False, nvd_api_key=None,
+        )
+        with patch("attackaudit.argparse.ArgumentParser.parse_args", return_value=args):
+            result = main()
+            assert result == 0
+            mock_shell.assert_called_once()
+
+    def test_quiet_without_output_returns_1(self):
+        from attackaudit import main
+        args = argparse.Namespace(
+            url="https://example.com", target_list=None, quiet=True, output=None,
+            verbose=False, color=None, log_file=None, timeout=5.0,
+            deep=False, test_vulns=False, test_methods=False,
+            paths_file=None, params=None, retries=3, dry_run=False,
+            verify=False, proxy=None, auth=None, bearer_token=None,
+            cookie=None, header=[], delay=0.0, cve=False, nvd_api_key=None,
+        )
+        with patch("attackaudit.argparse.ArgumentParser.parse_args", return_value=args):
+            result = main()
+            assert result == 1
+
+    @patch("attackaudit.run_once")
+    def test_valid_url_calls_run_once(self, mock_run_once):
+        mock_run_once.return_value = 0
+        from attackaudit import main
+        args = argparse.Namespace(
+            url="https://example.com", target_list=None, quiet=False, output=None,
+            verbose=False, color=None, log_file=None, timeout=5.0,
+            deep=False, test_vulns=False, test_methods=False,
+            paths_file=None, params=None, retries=3, dry_run=False,
+            verify=False, proxy=None, auth=None, bearer_token=None,
+            cookie=None, header=[], delay=0.0, cve=False, nvd_api_key=None,
+        )
+        with patch("attackaudit.argparse.ArgumentParser.parse_args", return_value=args):
+            result = main()
+            assert result == 0
+            mock_run_once.assert_called_once()
+
+    @patch("attackaudit.run_once")
+    def test_exception_returns_1(self, mock_run_once):
+        mock_run_once.side_effect = RuntimeError("fail")
+        from attackaudit import main
+        args = argparse.Namespace(
+            url="https://example.com", target_list=None, quiet=False, output=None,
+            verbose=False, color=None, log_file=None, timeout=5.0,
+            deep=False, test_vulns=False, test_methods=False,
+            paths_file=None, params=None, retries=3, dry_run=False,
+            verify=False, proxy=None, auth=None, bearer_token=None,
+            cookie=None, header=[], delay=0.0, cve=False, nvd_api_key=None,
+        )
+        with patch("attackaudit.argparse.ArgumentParser.parse_args", return_value=args):
+            result = main()
+            assert result == 1

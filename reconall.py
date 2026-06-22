@@ -137,7 +137,7 @@ def run_all(args: argparse.Namespace) -> int:
         extensions=[],
         filter_size=None,
         filter_words=None,
-        output_dir=None,
+        output_dir=args.output_dir,
         threads=None,
         workers=200,
         banner=False,
@@ -177,13 +177,12 @@ def run_all(args: argparse.Namespace) -> int:
 
     modules: list[tuple[str, Callable[..., object], argparse.Namespace]] = []
 
-    if not is_url:
-        if "dnstransfer" not in skipped:
-            modules.append(("dnstransfer", dnstransfer.run_once,
-                            _make_args(domain, {"domain": domain, "output": _out("dnstransfer")}, base_ns)))
-        if "subenum" not in skipped:
-            modules.append(("subenum", subdomainenum.run_once,
-                            _make_args(domain, {"domain": domain, "output": _out("subenum")}, base_ns)))
+    if "dnstransfer" not in skipped:
+        modules.append(("dnstransfer", dnstransfer.run_once,
+                        _make_args(domain, {"domain": domain, "output": _out("dnstransfer")}, base_ns)))
+    if "subenum" not in skipped:
+        modules.append(("subenum", subdomainenum.run_once,
+                        _make_args(domain, {"domain": domain, "output": _out("subenum")}, base_ns)))
 
     if "portscanner" not in skipped:
         modules.append(("portscanner", portscanner.run_once,

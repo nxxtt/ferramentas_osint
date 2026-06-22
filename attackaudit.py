@@ -18,25 +18,23 @@ from urllib.parse import parse_qs, urljoin, urlparse
 
 import httpx
 
-from net import (
-    FetchError,
-    RateLimiter,
-    apply_session_auth,
-    create_async_client,
-    fetch,
-    header_get,
-    normalize_url,
-)
 from utils import (
     Cyber,
+    FetchError,
+    RateLimiter,
     __version__,
     add_common_args,
+    apply_session_auth,
     color,
+    create_async_client,
     create_banner,
     detect_spa_fallback,
     ensure_output_dir,
     extract_hostname,
+    fetch,
+    header_get,
     init_scanner,
+    normalize_url,
     read_target_lines,
     resolve_target_urls,
     run_main_loop,

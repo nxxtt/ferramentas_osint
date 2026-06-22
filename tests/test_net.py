@@ -4,7 +4,7 @@ import httpx
 import pytest
 import respx
 
-from net import (
+from utils import (
     Client,
     FetchError,
     classify_by_content_type,
