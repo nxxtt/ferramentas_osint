@@ -637,22 +637,25 @@ class TestPassiveEnumeration:
         result = passive_enumeration("example.com", [])
         assert result == []
 
+    @patch("subdomainenum._passive_enumerate_async", new_callable=MagicMock)
     @patch("subdomainenum.safe_asyncio_run")
-    def test_calls_with_correct_sources(self, mock_run):
+    def test_calls_with_correct_sources(self, mock_run, mock_async):
         mock_run.return_value = ["www.example.com"]
         results = passive_enumeration("example.com", ["crtsh"], timeout=5.0)
         assert len(results) == 1
         assert results[0].subdomain == "www.example.com"
         assert results[0].status == "passive"
 
+    @patch("subdomainenum._passive_enumerate_async", new_callable=MagicMock)
     @patch("subdomainenum.safe_asyncio_run")
-    def test_deduplicates_results(self, mock_run):
+    def test_deduplicates_results(self, mock_run, mock_async):
         mock_run.return_value = ["www.example.com", "www.example.com"]
         results = passive_enumeration("example.com", ["crtsh"])
         assert len(results) == 1
 
+    @patch("subdomainenum._passive_enumerate_async", new_callable=MagicMock)
     @patch("subdomainenum.safe_asyncio_run")
-    def test_returns_sorted(self, mock_run):
+    def test_returns_sorted(self, mock_run, mock_async):
         mock_run.return_value = ["z.example.com", "a.example.com"]
         results = passive_enumeration("example.com", ["crtsh"])
         assert results[0].subdomain == "a.example.com"
