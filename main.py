@@ -5,6 +5,7 @@ import sys
 
 import attackaudit
 import dirscanner
+import dnshistory
 import dnstransfer
 import portscanner
 import reconall
@@ -21,7 +22,8 @@ Painel interativo central que permite alternar entre:
   4. AttackAudit  - Red/blue web audit (XSS, SQLi, TLS)
   5. DNS Xfer     - DNS zone transfer (AXFR)
   6. SubEnum      - Subdomain enumeration (DNS brute-force)
-  7. ReconAll     - Todos os modulos contra um alvo
+  7. DNS History  - DNS history via OSINT APIs
+  8. ReconAll     - Todos os modulos contra um alvo
 
 Cada modulo e lancado em modo interativo com seu proprio shell de comandos.
 O usuario pode usar argumentos CLI normalmente dentro de cada shell.
@@ -39,7 +41,7 @@ def banner() -> None:
 /_/  /_/\__, /   /_/  \____/\____/_/____/
        /____/
 """
-    create_banner(art, "   port scanner + dir scanner + web recon + attack audit + dns xfer + subenum",
+    create_banner(art, "   port scanner + dir scanner + web recon + attack audit + dns xfer + subenum + dnshistory",
                   extra=lambda: print(color("   by Default\n", Cyber.GRAY)))()
 
 
@@ -52,9 +54,10 @@ def menu() -> None:
     print(f"  {color('4', Cyber.GREEN, Cyber.BOLD)} {color('AttackAudit', Cyber.CYAN)}      red/blue web audit pesado, score, JSON/CSV")
     print(f"  {color('5', Cyber.GREEN, Cyber.BOLD)} {color('DNS Xfer', Cyber.CYAN)}         DNS zone transfer (AXFR)")
     print(f"  {color('6', Cyber.GREEN, Cyber.BOLD)} {color('SubEnum', Cyber.CYAN)}          Subdomain enumeration (DNS brute-force)")
-    print(f"  {color('7', Cyber.GREEN, Cyber.BOLD)} {color('ReconAll', Cyber.CYAN)}          Todos os modulos contra um alvo")
-    print(f"  {color('8', Cyber.GREEN, Cyber.BOLD)} {color('Ajuda', Cyber.CYAN)}            exemplos rapidos")
-    print(f"  {color('9', Cyber.GREEN, Cyber.BOLD)} {color('Limpar', Cyber.CYAN)}           limpar terminal")
+    print(f"  {color('7', Cyber.GREEN, Cyber.BOLD)} {color('DNS History', Cyber.CYAN)}      DNS history via OSINT APIs")
+    print(f"  {color('8', Cyber.GREEN, Cyber.BOLD)} {color('ReconAll', Cyber.CYAN)}          Todos os modulos contra um alvo")
+    print(f"  {color('9', Cyber.GREEN, Cyber.BOLD)} {color('Ajuda', Cyber.CYAN)}            exemplos rapidos")
+    print(f"  {color('10', Cyber.GREEN, Cyber.BOLD)} {color('Limpar', Cyber.CYAN)}           limpar terminal")
     print(f"  {color('0', Cyber.RED, Cyber.BOLD)} {color('Sair', Cyber.CYAN)}")
 
 
@@ -79,6 +82,9 @@ def help_screen() -> None:
     print(color("\nSubEnum:", Cyber.CYAN))
     print("  python3 subdomainenum.py example.com")
     print("  python3 subdomainenum.py example.com -w wordlist.txt -o subs.json")
+    print(color("\nDNS History:", Cyber.CYAN))
+    print("  mytools-dnshistory example.com")
+    print("  mytools-dnshistory example.com --source securitytrails --st-api-key KEY")
     print(color("\nReconAll:", Cyber.CYAN))
     print("  python3 reconall.py example.com")
     print("  python3 reconall.py example.com --deep --skip dnstransfer")
@@ -200,6 +206,24 @@ def launch_subdomainenum() -> None:
     )
 
 
+def launch_dnshistory() -> None:
+    """Inicia o módulo DNS History em modo interativo."""
+    parser = dnshistory.build_parser()
+    run_interactive_shell(
+        parser, "dns-history> ", dnshistory.run_once,
+        description="DNS History interativo — consulta historico de registros DNS via OSINT.",
+        example="example.com --source dnslytics",
+        banner_fn=create_banner(dnshistory.BANNER_ART, "DNS History"),
+        contextual_help=(
+            "Uso: <dominio> [opcoes]\n"
+            "Exemplos:\n"
+            "  example.com\n"
+            "  example.com --source securitytrails --st-api-key KEY\n"
+            "  example.com --record-types a,mx,ns -o history.json"
+        ),
+    )
+
+
 def launch_reconall() -> None:
     """Inicia o módulo ReconAll em modo interativo."""
     parser = reconall.build_parser()
@@ -248,12 +272,14 @@ def main() -> int:
             launch_dnstransfer()
         elif choice in {"6", "sub", "subenum", "subdomainenum"}:
             launch_subdomainenum()
-        elif choice in {"7", "recon", "reconall"}:
+        elif choice in {"7", "dns-history", "dnshistory", "history"}:
+            launch_dnshistory()
+        elif choice in {"8", "recon", "reconall"}:
             launch_reconall()
-        elif choice in {"8", "help", "ajuda", "h"}:
+        elif choice in {"9", "help", "ajuda", "h"}:
             help_screen()
             input(color("Enter para voltar...", Cyber.GRAY))
-        elif choice in {"9", "clear", "limpar", "cls"}:
+        elif choice in {"10", "clear", "limpar", "cls"}:
             clear_console()
             continue
         else:

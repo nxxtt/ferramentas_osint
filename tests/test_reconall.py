@@ -4,6 +4,7 @@ import argparse
 from unittest.mock import patch
 
 from reconall import (
+    ALL_MODULES,
     _extract_domain,
     _is_url,
     _make_args,
@@ -92,6 +93,14 @@ class TestBuildParser:
         parser = build_parser()
         args = parser.parse_args(["https://example.com", "--cve"])
         assert args.cve is True
+
+    def test_dnshistory_in_all_modules(self):
+        assert "dnshistory" in ALL_MODULES
+
+    def test_skip_dnshistory(self):
+        parser = build_parser()
+        args = parser.parse_args(["example.com", "--skip", "dnshistory"])
+        assert "dnshistory" in args.skip
 
 
 class TestRunAll:
@@ -263,6 +272,35 @@ class TestNamespaceConstruction:
             ns = mock_fn.call_args[0][0]
             assert ns.output is not None
             assert "portscanner" in ns.output
+
+    def test_dnshistory_runs_for_domain(self):
+        parser = build_parser()
+        args = parser.parse_args(["example.com", "--skip", "dnstransfer", "--skip", "subenum", "--skip", "portscanner"])
+        with patch("reconall.dnshistory.run_once", return_value=0) as mock_fn:
+            result = run_all(args)
+            assert result == 0
+            mock_fn.assert_called_once()
+            ns = mock_fn.call_args[0][0]
+            assert ns.domain == "example.com"
+
+    def test_dnshistory_runs_for_url(self):
+        parser = build_parser()
+        args = parser.parse_args(["https://example.com", "--skip", "portscanner", "--skip", "dirscanner", "--skip", "webrecon", "--skip", "attackaudit"])
+        with patch("reconall.dnshistory.run_once", return_value=0) as mock_fn:
+            result = run_all(args)
+            assert result == 0
+            mock_fn.assert_called_once()
+            ns = mock_fn.call_args[0][0]
+            assert ns.domain == "example.com"
+
+    def test_dnshistory_has_required_attrs(self):
+        parser = build_parser()
+        args = parser.parse_args(["example.com", "--skip", "dnstransfer", "--skip", "subenum", "--skip", "portscanner"])
+        with patch("reconall.dnshistory.run_once", return_value=0) as mock_fn:
+            run_all(args)
+            ns = mock_fn.call_args[0][0]
+            for attr in ("source", "record_types", "dnslytics_key", "st_api_key", "viewdns_key"):
+                assert hasattr(ns, attr), f"dnshistory missing attribute: {attr}"
 
 
 class TestAuthArgs:

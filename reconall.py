@@ -17,6 +17,7 @@ Fluxo:
 Modulos disponiveis:
   - dnstransfer: DNS zone transfer (AXFR)
   - subenum: subdomain enumeration (DNS brute-force)
+  - dnshistory: DNS history via OSINT APIs (A, AAAA, MX, NS, TXT)
   - portscanner: TCP port scan
   - dirscanner: HTTP directory brute-force
   - webrecon: HTTP passive recon (headers, CVE, WHOIS, emails)
@@ -33,6 +34,7 @@ from urllib.parse import urlparse
 
 import attackaudit
 import dirscanner
+import dnshistory
 import dnstransfer
 import portscanner
 import subdomainenum
@@ -47,7 +49,7 @@ from utils import (
     setup_logging,
 )
 
-ALL_MODULES = ["portscanner", "dnstransfer", "subenum", "dirscanner", "webrecon", "attackaudit"]
+ALL_MODULES = ["portscanner", "dnstransfer", "subenum", "dnshistory", "dirscanner", "webrecon", "attackaudit"]
 
 """Recon completo: executa portscanner, dirscanner, webrecon, attackaudit, dnstransfer e subenum contra um alvo."""
 
@@ -61,7 +63,7 @@ def banner() -> None:
 /_/  /_/\__, /   /_/  \____/\____/_/____/
        /____/
 """
-    create_banner(art, "   recon all-in-one: port + dir + web + audit + dns + subenum")()
+    create_banner(art, "   recon all-in-one: port + dir + web + audit + dns + subenum + dnshistory")()
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -116,7 +118,7 @@ def _build_base_ns(args: argparse.Namespace) -> argparse.Namespace:
     ele aparece automaticamente aqui via build_parser().parse_args([]).
     """
     all_defaults: dict[str, object] = {}
-    for mod in (dirscanner, portscanner, dnstransfer, subdomainenum, webrecon, attackaudit):
+    for mod in (dirscanner, portscanner, dnstransfer, subdomainenum, dnshistory, webrecon, attackaudit):
         parser = mod.build_parser()
         all_defaults.update(vars(parser.parse_args([])))
 
@@ -182,6 +184,10 @@ def run_all(args: argparse.Namespace) -> int:
     if "subenum" not in skipped:
         modules.append(("subenum", subdomainenum.run_once,
                         _make_args(domain, {"domain": domain, "output": _out("subenum")}, base_ns)))
+
+    if "dnshistory" not in skipped:
+        modules.append(("dnshistory", dnshistory.run_once,
+                        _make_args(domain, {"domain": domain, "output": _out("dnshistory")}, base_ns)))
 
     if "portscanner" not in skipped:
         modules.append(("portscanner", portscanner.run_once,
