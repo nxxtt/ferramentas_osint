@@ -11,6 +11,7 @@ import ipasninfo
 import portscanner
 import reconall
 import subdomainenum
+import techfingerprint
 import webrecon
 import whoishistory
 from utils import Cyber, __version__, clear_console, color, create_banner, run_interactive_shell
@@ -60,9 +61,10 @@ def menu() -> None:
     print(f"  {color('7', Cyber.GREEN, Cyber.BOLD)} {color('DNS History', Cyber.CYAN)}      DNS history via OSINT APIs")
     print(f"  {color('8', Cyber.GREEN, Cyber.BOLD)} {color('WHOIS History', Cyber.CYAN)}   WHOIS history via OSINT APIs")
     print(f"  {color('9', Cyber.GREEN, Cyber.BOLD)} {color('IP ASN Info', Cyber.CYAN)}     IP -> ASN/org/ISP/country enrichment")
-    print(f"  {color('10', Cyber.GREEN, Cyber.BOLD)} {color('ReconAll', Cyber.CYAN)}          Todos os modulos contra um alvo")
-    print(f"  {color('11', Cyber.GREEN, Cyber.BOLD)} {color('Ajuda', Cyber.CYAN)}            exemplos rapidos")
-    print(f"  {color('12', Cyber.GREEN, Cyber.BOLD)} {color('Limpar', Cyber.CYAN)}           limpar terminal")
+    print(f"  {color('10', Cyber.GREEN, Cyber.BOLD)} {color('Tech Fingerprint', Cyber.CYAN)} Detecta tecnologias com versoes exatas")
+    print(f"  {color('11', Cyber.GREEN, Cyber.BOLD)} {color('ReconAll', Cyber.CYAN)}          Todos os modulos contra um alvo")
+    print(f"  {color('12', Cyber.GREEN, Cyber.BOLD)} {color('Ajuda', Cyber.CYAN)}            exemplos rapidos")
+    print(f"  {color('13', Cyber.GREEN, Cyber.BOLD)} {color('Limpar', Cyber.CYAN)}           limpar terminal")
     print(f"  {color('0', Cyber.RED, Cyber.BOLD)} {color('Sair', Cyber.CYAN)}")
 
 
@@ -97,6 +99,10 @@ def help_screen() -> None:
     print(color("\nIP ASN Info:", Cyber.CYAN))
     print("  mytools-ipasn 8.8.8.8 1.1.1.1")
     print("  mytools-ipasn -f ips.txt -o results.json")
+    print(color("\nTech Fingerprint:", Cyber.CYAN))
+    print("  mytools-techfp https://example.com")
+    print("  mytools-techfp https://example.com -o tech.json")
+    print("  mytools-techfp -l urls.txt -o results.json")
     print(color("\nReconAll:", Cyber.CYAN))
     print("  python3 reconall.py example.com")
     print("  python3 reconall.py example.com --deep --skip dnstransfer")
@@ -274,6 +280,24 @@ def launch_ipasninfo() -> None:
     )
 
 
+def launch_techfingerprint() -> None:
+    """Inicia o modulo Tech Fingerprint em modo interativo."""
+    parser = techfingerprint.build_parser()
+    run_interactive_shell(
+        parser, "techfp> ", techfingerprint.run_once,
+        description="Tech Fingerprint interativo — detecta tecnologias com versoes exatas.",
+        example="https://example.com -o tech.json",
+        banner_fn=create_banner(techfingerprint.BANNER_ART, "Technology Fingerprint"),
+        contextual_help=(
+            "Uso: <url> [opcoes]\n"
+            "Exemplos:\n"
+            "  https://example.com\n"
+            "  https://example.com -o tech.json\n"
+            "  -l urls.txt -o results.json"
+        ),
+    )
+
+
 def launch_reconall() -> None:
     """Inicia o módulo ReconAll em modo interativo."""
     parser = reconall.build_parser()
@@ -328,12 +352,14 @@ def main() -> int:
             launch_whoishistory()
         elif choice in {"9", "ip-asn", "ipasn", "asn"}:
             launch_ipasninfo()
-        elif choice in {"10", "recon", "reconall"}:
+        elif choice in {"10", "tech", "techfp", "fingerprint"}:
+            launch_techfingerprint()
+        elif choice in {"11", "recon", "reconall"}:
             launch_reconall()
-        elif choice in {"11", "help", "ajuda", "h"}:
+        elif choice in {"12", "help", "ajuda", "h"}:
             help_screen()
             input(color("Enter para voltar...", Cyber.GRAY))
-        elif choice in {"12", "clear", "limpar", "cls"}:
+        elif choice in {"13", "clear", "limpar", "cls"}:
             clear_console()
             continue
         else:

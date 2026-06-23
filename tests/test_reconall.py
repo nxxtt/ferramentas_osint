@@ -374,6 +374,31 @@ class TestNamespaceConstruction:
             for attr in ("ips", "output"):
                 assert hasattr(ns, attr), f"ipasninfo missing attribute: {attr}"
 
+    def test_techfingerprint_in_all_modules(self):
+        assert "techfingerprint" in ALL_MODULES
+
+    def test_skip_techfingerprint(self):
+        parser = build_parser()
+        args = parser.parse_args(["example.com", "--skip", "techfingerprint"])
+        assert "techfingerprint" in args.skip
+
+    def test_techfingerprint_runs_for_url(self):
+        parser = build_parser()
+        args = parser.parse_args(["https://example.com", "--skip", "portscanner", "--skip", "dirscanner", "--skip", "webrecon", "--skip", "attackaudit"])
+        with patch("reconall.techfingerprint.run_once", return_value=0) as mock_fn:
+            result = run_all(args)
+            assert result == 0
+            mock_fn.assert_called_once()
+
+    def test_techfingerprint_has_required_attrs(self):
+        parser = build_parser()
+        args = parser.parse_args(["https://example.com", "--skip", "portscanner", "--skip", "dirscanner", "--skip", "webrecon", "--skip", "attackaudit"])
+        with patch("reconall.techfingerprint.run_once", return_value=0) as mock_fn:
+            run_all(args)
+            ns = mock_fn.call_args[0][0]
+            assert hasattr(ns, "urls")
+            assert hasattr(ns, "output")
+
 
 class TestAuthArgs:
     """Testes para argumentos de auth no reconall."""
