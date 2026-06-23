@@ -39,6 +39,7 @@ import dnstransfer
 import portscanner
 import subdomainenum
 import webrecon
+import whoishistory
 from portscanner import parse_ports
 from utils import (
     Cyber,
@@ -49,7 +50,7 @@ from utils import (
     setup_logging,
 )
 
-ALL_MODULES = ["portscanner", "dnstransfer", "subenum", "dnshistory", "dirscanner", "webrecon", "attackaudit"]
+ALL_MODULES = ["portscanner", "dnstransfer", "subenum", "dnshistory", "whoishistory", "dirscanner", "webrecon", "attackaudit"]
 
 """Recon completo: executa portscanner, dirscanner, webrecon, attackaudit, dnstransfer e subenum contra um alvo."""
 
@@ -63,7 +64,7 @@ def banner() -> None:
 /_/  /_/\__, /   /_/  \____/\____/_/____/
        /____/
 """
-    create_banner(art, "   recon all-in-one: port + dir + web + audit + dns + subenum + dnshistory")()
+    create_banner(art, "   recon all-in-one: port + dir + web + audit + dns + subenum + dnshistory + whoishistory")()
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -118,7 +119,7 @@ def _build_base_ns(args: argparse.Namespace) -> argparse.Namespace:
     ele aparece automaticamente aqui via build_parser().parse_args([]).
     """
     all_defaults: dict[str, object] = {}
-    for mod in (dirscanner, portscanner, dnstransfer, subdomainenum, dnshistory, webrecon, attackaudit):
+    for mod in (dirscanner, portscanner, dnstransfer, subdomainenum, dnshistory, whoishistory, webrecon, attackaudit):
         parser = mod.build_parser()
         all_defaults.update(vars(parser.parse_args([])))
 
@@ -188,6 +189,10 @@ def run_all(args: argparse.Namespace) -> int:
     if "dnshistory" not in skipped:
         modules.append(("dnshistory", dnshistory.run_once,
                         _make_args(domain, {"domain": domain, "output": _out("dnshistory")}, base_ns)))
+
+    if "whoishistory" not in skipped:
+        modules.append(("whoishistory", whoishistory.run_once,
+                        _make_args(domain, {"domain": domain, "output": _out("whoishistory")}, base_ns)))
 
     if "portscanner" not in skipped:
         modules.append(("portscanner", portscanner.run_once,

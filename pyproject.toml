@@ -31,6 +31,7 @@ mytools-audit = "attackaudit:main"
 mytools-dnsxfer = "dnstransfer:main"
 mytools-subenum = "subdomainenum:main"
 mytools-dnshistory = "dnshistory:main"
+mytools-whoishistory = "whoishistory:main"
 mytools-reconall = "reconall:main"
 
 [build-system]

@@ -11,6 +11,7 @@ import portscanner
 import reconall
 import subdomainenum
 import webrecon
+import whoishistory
 from utils import Cyber, __version__, clear_console, color, create_banner, run_interactive_shell
 
 """Modulo principal que integra as ferramentas de segurança.
@@ -23,7 +24,8 @@ Painel interativo central que permite alternar entre:
   5. DNS Xfer     - DNS zone transfer (AXFR)
   6. SubEnum      - Subdomain enumeration (DNS brute-force)
   7. DNS History  - DNS history via OSINT APIs
-  8. ReconAll     - Todos os modulos contra um alvo
+  8. WHOIS History - WHOIS history via OSINT APIs
+  9. ReconAll     - Todos os modulos contra um alvo
 
 Cada modulo e lancado em modo interativo com seu proprio shell de comandos.
 O usuario pode usar argumentos CLI normalmente dentro de cada shell.
@@ -41,7 +43,7 @@ def banner() -> None:
 /_/  /_/\__, /   /_/  \____/\____/_/____/
        /____/
 """
-    create_banner(art, "   port scanner + dir scanner + web recon + attack audit + dns xfer + subenum + dnshistory",
+    create_banner(art, "   port scanner + dir scanner + web recon + attack audit + dns xfer + subenum + dnshistory + whoishistory",
                   extra=lambda: print(color("   by Default\n", Cyber.GRAY)))()
 
 
@@ -55,9 +57,10 @@ def menu() -> None:
     print(f"  {color('5', Cyber.GREEN, Cyber.BOLD)} {color('DNS Xfer', Cyber.CYAN)}         DNS zone transfer (AXFR)")
     print(f"  {color('6', Cyber.GREEN, Cyber.BOLD)} {color('SubEnum', Cyber.CYAN)}          Subdomain enumeration (DNS brute-force)")
     print(f"  {color('7', Cyber.GREEN, Cyber.BOLD)} {color('DNS History', Cyber.CYAN)}      DNS history via OSINT APIs")
-    print(f"  {color('8', Cyber.GREEN, Cyber.BOLD)} {color('ReconAll', Cyber.CYAN)}          Todos os modulos contra um alvo")
-    print(f"  {color('9', Cyber.GREEN, Cyber.BOLD)} {color('Ajuda', Cyber.CYAN)}            exemplos rapidos")
-    print(f"  {color('10', Cyber.GREEN, Cyber.BOLD)} {color('Limpar', Cyber.CYAN)}           limpar terminal")
+    print(f"  {color('8', Cyber.GREEN, Cyber.BOLD)} {color('WHOIS History', Cyber.CYAN)}   WHOIS history via OSINT APIs")
+    print(f"  {color('9', Cyber.GREEN, Cyber.BOLD)} {color('ReconAll', Cyber.CYAN)}          Todos os modulos contra um alvo")
+    print(f"  {color('10', Cyber.GREEN, Cyber.BOLD)} {color('Ajuda', Cyber.CYAN)}            exemplos rapidos")
+    print(f"  {color('11', Cyber.GREEN, Cyber.BOLD)} {color('Limpar', Cyber.CYAN)}           limpar terminal")
     print(f"  {color('0', Cyber.RED, Cyber.BOLD)} {color('Sair', Cyber.CYAN)}")
 
 
@@ -85,6 +88,10 @@ def help_screen() -> None:
     print(color("\nDNS History:", Cyber.CYAN))
     print("  mytools-dnshistory example.com")
     print("  mytools-dnshistory example.com --source securitytrails --st-api-key KEY")
+    print(color("\nWHOIS History:", Cyber.CYAN))
+    print("  mytools-whoishistory example.com")
+    print("  mytools-whoishistory example.com --source securitytrails --st-api-key KEY")
+    print("  mytools-whoishistory example.com --source whoisxml --whoisxml-api-key KEY")
     print(color("\nReconAll:", Cyber.CYAN))
     print("  python3 reconall.py example.com")
     print("  python3 reconall.py example.com --deep --skip dnstransfer")
@@ -224,6 +231,25 @@ def launch_dnshistory() -> None:
     )
 
 
+def launch_whoishistory() -> None:
+    """Inicia o módulo WHOIS History em modo interativo."""
+    parser = whoishistory.build_parser()
+    run_interactive_shell(
+        parser, "whois-history> ", whoishistory.run_once,
+        description="WHOIS History interativo — consulta historico de WHOIS via OSINT.",
+        example="example.com --source securitytrails",
+        banner_fn=create_banner(whoishistory.BANNER_ART, "WHOIS History"),
+        contextual_help=(
+            "Uso: <dominio> [opcoes]\n"
+            "Exemplos:\n"
+            "  example.com\n"
+            "  example.com --source securitytrails --st-api-key KEY\n"
+            "  example.com --source whoisxml --whoisxml-api-key KEY\n"
+            "  example.com -o whois-history.json"
+        ),
+    )
+
+
 def launch_reconall() -> None:
     """Inicia o módulo ReconAll em modo interativo."""
     parser = reconall.build_parser()
@@ -274,12 +300,14 @@ def main() -> int:
             launch_subdomainenum()
         elif choice in {"7", "dns-history", "dnshistory", "history"}:
             launch_dnshistory()
-        elif choice in {"8", "recon", "reconall"}:
+        elif choice in {"8", "whois-history", "whoishistory", "whois"}:
+            launch_whoishistory()
+        elif choice in {"9", "recon", "reconall"}:
             launch_reconall()
-        elif choice in {"9", "help", "ajuda", "h"}:
+        elif choice in {"10", "help", "ajuda", "h"}:
             help_screen()
             input(color("Enter para voltar...", Cyber.GRAY))
-        elif choice in {"10", "clear", "limpar", "cls"}:
+        elif choice in {"11", "clear", "limpar", "cls"}:
             clear_console()
             continue
         else:

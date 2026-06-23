@@ -302,6 +302,43 @@ class TestNamespaceConstruction:
             for attr in ("source", "record_types", "dnslytics_key", "st_api_key", "viewdns_key"):
                 assert hasattr(ns, attr), f"dnshistory missing attribute: {attr}"
 
+    def test_whoishistory_in_all_modules(self):
+        assert "whoishistory" in ALL_MODULES
+
+    def test_skip_whoishistory(self):
+        parser = build_parser()
+        args = parser.parse_args(["example.com", "--skip", "whoishistory"])
+        assert "whoishistory" in args.skip
+
+    def test_whoishistory_runs_for_domain(self):
+        parser = build_parser()
+        args = parser.parse_args(["example.com", "--skip", "dnstransfer", "--skip", "subenum", "--skip", "portscanner", "--skip", "dnshistory"])
+        with patch("reconall.whoishistory.run_once", return_value=0) as mock_fn:
+            result = run_all(args)
+            assert result == 0
+            mock_fn.assert_called_once()
+            ns = mock_fn.call_args[0][0]
+            assert ns.domain == "example.com"
+
+    def test_whoishistory_runs_for_url(self):
+        parser = build_parser()
+        args = parser.parse_args(["https://example.com", "--skip", "portscanner", "--skip", "dirscanner", "--skip", "webrecon", "--skip", "attackaudit", "--skip", "dnshistory"])
+        with patch("reconall.whoishistory.run_once", return_value=0) as mock_fn:
+            result = run_all(args)
+            assert result == 0
+            mock_fn.assert_called_once()
+            ns = mock_fn.call_args[0][0]
+            assert ns.domain == "example.com"
+
+    def test_whoishistory_has_required_attrs(self):
+        parser = build_parser()
+        args = parser.parse_args(["example.com", "--skip", "dnstransfer", "--skip", "subenum", "--skip", "portscanner", "--skip", "dnshistory"])
+        with patch("reconall.whoishistory.run_once", return_value=0) as mock_fn:
+            run_all(args)
+            ns = mock_fn.call_args[0][0]
+            for attr in ("st_api_key", "whoisxml_key", "source"):
+                assert hasattr(ns, attr), f"whoishistory missing attribute: {attr}"
+
 
 class TestAuthArgs:
     """Testes para argumentos de auth no reconall."""
