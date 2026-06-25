@@ -2,8 +2,7 @@
 """Wrapper que executa todos os modulos MyTools contra um alvo de uma vez.
 
 Orquestracao:
-  - DNS modules (dnstransfer, subenum): rodam em paralelo via ThreadPoolExecutor
-  - HTTP modules (portscanner, dirscanner, webrecon, attackaudit): rodam em paralelo
+  - Todos os modulos rodam em paralelo via asyncio.gather + asyncio.to_thread
   - Cada modulo e independente: cria seu proprio event loop e AsyncClient
   - Thread-safe: args e copiado (vars() -> Namespace), saida e atomic (print)
 
@@ -11,7 +10,7 @@ Fluxo:
   1. Determina se alvo e URL ou dominio
   2. Cria namespace base com argumentos compartilhados
   3. Monta lista de modulos para executar (respeitando --skip)
-  4. Executa todos em paralelo via ThreadPoolExecutor(max_workers=6)
+  4. Executa todos em paralelo via asyncio.gather
   5. Coleta erros e retorna total
 
 Modulos disponiveis:
@@ -26,7 +25,7 @@ Modulos disponiveis:
 from __future__ import annotations
 
 import argparse
-import concurrent.futures
+import asyncio
 import os
 import time
 from collections.abc import Callable
@@ -53,6 +52,7 @@ from utils import (
     color,
     create_banner,
     parse_auth,
+    safe_asyncio_run,
     setup_logging,
 )
 
@@ -167,22 +167,6 @@ def run_all(args: argparse.Namespace) -> int:
             return None
         return os.path.join(args.output_dir, f"{module_name}.json")
 
-    def _run(name: str, fn, module_args: argparse.Namespace) -> int:
-        color_name = color(f"[{name}]", Cyber.CYAN, Cyber.BOLD)
-        print(f"\n{'='*60}")
-        print(f" {color_name} Iniciando {name}")
-        print(f"{'='*60}")
-        start = time.monotonic()
-        try:
-            result = fn(module_args)
-        except Exception as exc:
-            print(color(f"  Erro em {name}: {exc}", Cyber.RED))
-            return 1
-        elapsed = time.monotonic() - start
-        status = color("OK", Cyber.GREEN, Cyber.BOLD) if result == 0 else color(f"FALHA ({result})", Cyber.RED, Cyber.BOLD)
-        print(f" {color_name} {status} ({elapsed:.1f}s)")
-        return result
-
     modules: list[tuple[str, Callable[[argparse.Namespace], int], argparse.Namespace]] = []
 
     if "dnstransfer" not in skipped:
@@ -243,13 +227,35 @@ def run_all(args: argparse.Namespace) -> int:
     if not modules:
         return 0
 
-    total_errors = 0
-    with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(modules), 6)) as executor:
-        futures = {executor.submit(_run, name, fn, a): name for name, fn, a in modules}
-        for future in concurrent.futures.as_completed(futures):
-            total_errors += future.result()
+    async def _run_all_async() -> int:
+        total_errors = 0
 
-    return total_errors
+        async def _run_one(name: str, fn: Callable[[argparse.Namespace], int], a: argparse.Namespace) -> int:
+            color_name = color(f"[{name}]", Cyber.CYAN, Cyber.BOLD)
+            print(f"\n{'='*60}")
+            print(f" {color_name} Iniciando {name}")
+            print(f"{'='*60}")
+            start = time.monotonic()
+            try:
+                result = await asyncio.to_thread(fn, a)
+            except Exception as exc:
+                print(color(f"  Erro em {name}: {exc}", Cyber.RED))
+                return 1
+            elapsed = time.monotonic() - start
+            status = color("OK", Cyber.GREEN, Cyber.BOLD) if result == 0 else color(f"FALHA ({result})", Cyber.RED, Cyber.BOLD)
+            print(f" {color_name} {status} ({elapsed:.1f}s)")
+            return result
+
+        tasks = [_run_one(name, fn, a) for name, fn, a in modules]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        for r in results:
+            if isinstance(r, BaseException):
+                total_errors += 1
+            else:
+                total_errors += r
+        return total_errors
+
+    return safe_asyncio_run(_run_all_async())
 
 
 def main() -> int:

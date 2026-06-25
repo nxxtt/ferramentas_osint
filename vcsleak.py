@@ -33,6 +33,7 @@ from utils import (
     create_banner,
     extract_hostname,
     fetch,
+    header_get,
     init_scanner,
     normalize_url,
     print_table,
@@ -215,6 +216,28 @@ async def _probe_path(
     full_url = urljoin(base_url, path)
     await rate_limiter.wait()
 
+    try:
+        head_status, head_headers, _, _ = await fetch(
+            client, full_url, timeout=timeout, method="HEAD",
+            max_retries=1, rate_limiter=rate_limiter,
+        )
+    except FetchError:
+        return None
+
+    if head_status == 405:
+        pass
+    elif head_status not in STATUS_OK:
+        return None
+    else:
+        cl = header_get(head_headers, "content-length")
+        if cl:
+            try:
+                if int(cl) > 5 * 1024 * 1024:
+                    return None
+            except ValueError:
+                pass
+
+    await rate_limiter.wait()
     try:
         status, _headers, content, _ = await fetch(
             client, full_url, timeout=timeout, method="GET",

@@ -208,7 +208,7 @@ class TestBuildParserV3:
     def test_default_workers(self):
         parser = build_parser()
         args = parser.parse_args(["127.0.0.1"])
-        assert args.workers == 200
+        assert args.workers == 100
 
 
 class TestResolveTargetsIPv6:
@@ -308,7 +308,7 @@ class TestMain:
         args = argparse.Namespace(
             targets=None, target_list=None, quiet=False, output=None,
             verbose=False, color=None, log_file=None, timeout=0.5, ports=[80],
-            workers=200, threads=None, banner=False, dry_run=False, retries=3,
+            workers=100, threads=None, banner=False, dry_run=False, retries=3,
         )
         with patch("portscanner.argparse.ArgumentParser.parse_args", return_value=args):
             result = main()
@@ -320,7 +320,7 @@ class TestMain:
         args = argparse.Namespace(
             targets=["127.0.0.1"], target_list=None, quiet=True, output=None,
             verbose=False, color=None, log_file=None, timeout=0.5, ports=[80],
-            workers=200, threads=None, banner=False, dry_run=False, retries=3,
+            workers=100, threads=None, banner=False, dry_run=False, retries=3,
         )
         with patch("portscanner.argparse.ArgumentParser.parse_args", return_value=args):
             result = main()
@@ -333,7 +333,7 @@ class TestMain:
         args = argparse.Namespace(
             targets=["127.0.0.1"], target_list=None, quiet=False, output=None,
             verbose=False, color=None, log_file=None, timeout=0.5, ports=[80],
-            workers=200, threads=None, banner=False, dry_run=False, retries=3,
+            workers=100, threads=None, banner=False, dry_run=False, retries=3,
         )
         with patch("portscanner.argparse.ArgumentParser.parse_args", return_value=args):
             result = main()
@@ -347,7 +347,7 @@ class TestMain:
         args = argparse.Namespace(
             targets=["127.0.0.1"], target_list=None, quiet=False, output=None,
             verbose=False, color=None, log_file=None, timeout=0.5, ports=[80],
-            workers=200, threads=None, banner=False, dry_run=False, retries=3,
+            workers=100, threads=None, banner=False, dry_run=False, retries=3,
         )
         with patch("portscanner.argparse.ArgumentParser.parse_args", return_value=args):
             result = main()

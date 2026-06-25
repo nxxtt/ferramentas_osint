@@ -24,7 +24,7 @@ from utils import (
     RateLimiter,
     __version__,
     add_common_args,
-    apply_session_auth,
+    apply_session_auth_async,
     color,
     create_async_client,
     create_banner,
@@ -1358,7 +1358,7 @@ async def run_audit(
     ip = await resolve_ip(parsed.hostname or "")
     rate_limiter = RateLimiter(requests_per_second)
     client = create_async_client(user_agent=user_agent, proxy=proxy, verify=verify)
-    apply_session_auth(client, auth=auth, bearer_token=bearer_token, cookie=cookie, extra_headers=extra_headers)
+    await apply_session_auth_async(client, auth=auth, bearer_token=bearer_token, cookie=cookie, extra_headers=extra_headers)
 
     logger.info("audit iniciado: %s", target)
     logger.debug("threads=%d, deep=%s, test_vulns=%s, test_methods=%s", threads, deep, test_vulns, test_methods)

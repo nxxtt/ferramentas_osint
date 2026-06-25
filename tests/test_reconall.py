@@ -174,7 +174,7 @@ class TestNamespaceConstruction:
             run_all(args)
             ns = mock_fn.call_args[0][0]
             assert hasattr(ns, "workers")
-            assert ns.workers == 200
+            assert ns.workers == 100
 
     def test_dirscanner_has_required_attrs(self):
         parser = build_parser()

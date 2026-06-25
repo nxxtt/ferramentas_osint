@@ -23,7 +23,7 @@ from utils import (
     FetchError,
     __version__,
     add_common_args,
-    apply_session_auth,
+    apply_session_auth_async,
     color,
     create_async_client,
     create_banner,
@@ -772,7 +772,7 @@ async def run_recon(
     started = time.monotonic()
     errors = []
     client = create_async_client(user_agent=user_agent, proxy=proxy, verify=verify)
-    apply_session_auth(client, auth=auth, bearer_token=bearer_token, cookie=cookie, extra_headers=extra_headers)
+    await apply_session_auth_async(client, auth=auth, bearer_token=bearer_token, cookie=cookie, extra_headers=extra_headers)
 
     logger.info("recon iniciado: %s", url)
 

@@ -305,8 +305,8 @@ def build_parser() -> argparse.ArgumentParser:
         "-w",
         "--workers",
         type=int,
-        default=200,
-        help="Numero de threads. Padrao: 200",
+        default=100,
+        help="Numero de threads. Padrao: 100",
     )
     parser.add_argument(
         "--threads",

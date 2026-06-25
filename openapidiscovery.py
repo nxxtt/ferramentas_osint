@@ -347,12 +347,19 @@ async def scan_specs(
     sem = asyncio.Semaphore(concurrency)
     total = len(paths)
     completed = 0
+    found_event = asyncio.Event()
 
     async def _limited_probe(path: str) -> ApiSpecInfo | None:
         nonlocal completed
+        if found_event.is_set():
+            return None
         async with sem:
+            if found_event.is_set():
+                return None
             result = await probe_spec(client, rate_limiter, base_url, path, timeout, retries)
             completed += 1
+            if result is not None:
+                found_event.set()
             if completed % 10 == 0 or completed == total:
                 sys.stdout.write(f"\r  Progresso: {completed}/{total} paths testados...")
                 sys.stdout.flush()

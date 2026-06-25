@@ -598,6 +598,13 @@ def parse_auth(value: str) -> dict[str, str]:
     return {"Authorization": f"Basic {token}"}
 
 
+async def resolve_cred_async(value: str) -> str:
+    """Resolve valor de credencial do keyring de forma async (nao bloqueia o event loop)."""
+    if not value.startswith("@"):
+        return value
+    return await asyncio.to_thread(resolve_cred, value)
+
+
 def parse_extra_headers(raw_headers: list[str]) -> dict[str, str]:
     """Converte lista de strings 'Name: Value' em dict de headers."""
     headers: dict[str, str] = {}
@@ -689,6 +696,30 @@ def apply_session_auth(
         client.headers["Cookie"] = resolve_cred(cookie)
 
 
+async def apply_session_auth_async(
+    client: httpx.AsyncClient,
+    auth: dict[str, str] | None = None,
+    bearer_token: str | None = None,
+    cookie: str | None = None,
+    extra_headers: list[str] | None = None,
+) -> None:
+    """Aplica headers de autenticacao de forma async (nao bloqueia o event loop).
+
+    Suporta prefixo '@' em bearer_token e cookie para resolver do keyring.
+    """
+    if auth:
+        client.headers.update(auth)
+    if bearer_token:
+        client.headers["Authorization"] = f"Bearer {await resolve_cred_async(bearer_token)}"
+    if extra_headers:
+        resolved = []
+        for h in extra_headers:
+            resolved.append(await resolve_cred_async(h))
+        client.headers.update(parse_extra_headers(resolved))
+    if cookie:
+        client.headers["Cookie"] = await resolve_cred_async(cookie)
+
+
 def extract_hostname(url: str) -> str:
     """Extrai hostname de uma URL para uso em nomes de arquivo."""
     parsed = urlparse(url)
@@ -760,6 +791,9 @@ def ensure_output_dir(output_dir: str | None) -> None:
 
 NVD_API_URL = "https://services.nvd.nist.gov/rest/json/cves/2.0"
 
+_NVD_CACHE_TTL = 300
+_nvd_cache: dict[str, tuple[float, list[dict]]] = {}
+
 
 async def query_nvd(
     keyword: str,
@@ -778,6 +812,14 @@ async def query_nvd(
     Returns:
         Lista de dicts com chaves: id, description, score, severity.
     """
+    cache_key = f"{keyword}|{limit}"
+    now = time.monotonic()
+    if cache_key in _nvd_cache:
+        cached_time, cached_results = _nvd_cache[cache_key]
+        if now - cached_time < _NVD_CACHE_TTL:
+            return cached_results
+        del _nvd_cache[cache_key]
+
     headers: dict[str, str] = {}
     if api_key:
         headers["apiKey"] = api_key
@@ -826,6 +868,7 @@ async def query_nvd(
 
         results.append({"id": cve_id, "description": description, "score": score, "severity": severity})
 
+    _nvd_cache[cache_key] = (time.monotonic(), results)
     return results
 
 
