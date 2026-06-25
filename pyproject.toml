@@ -36,6 +36,7 @@ mytools-ipasn = "ipasninfo:main"
 mytools-techfp = "techfingerprint:main"
 mytools-oas = "openapidiscovery:main"
 mytools-gql = "graphqlplayground:main"
+mytools-sm = "sourcemapdiscovery:main"
 mytools-reconall = "reconall:main"
 
 [build-system]

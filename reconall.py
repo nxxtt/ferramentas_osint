@@ -40,6 +40,7 @@ import graphqlplayground
 import ipasninfo
 import openapidiscovery
 import portscanner
+import sourcemapdiscovery
 import subdomainenum
 import techfingerprint
 import webrecon
@@ -54,7 +55,7 @@ from utils import (
     setup_logging,
 )
 
-ALL_MODULES = ["portscanner", "dnstransfer", "subenum", "dnshistory", "whoishistory", "ipasninfo", "techfingerprint", "openapidiscovery", "graphqlplayground", "dirscanner", "webrecon", "attackaudit"]
+ALL_MODULES = ["portscanner", "dnstransfer", "subenum", "dnshistory", "whoishistory", "ipasninfo", "techfingerprint", "openapidiscovery", "graphqlplayground", "sourcemapdiscovery", "dirscanner", "webrecon", "attackaudit"]
 
 """Recon completo: executa portscanner, dirscanner, webrecon, attackaudit, dnstransfer e subenum contra um alvo."""
 
@@ -68,7 +69,7 @@ def banner() -> None:
 /_/  /_/\__, /   /_/  \____/\____/_/____/
        /____/
 """
-    create_banner(art, "   recon all-in-one: port + dir + web + audit + dns + subenum + dnshistory + whoishistory + ipasn + techfp + oas + gql")()
+    create_banner(art, "   recon all-in-one: port + dir + web + audit + dns + subenum + dnshistory + whoishistory + ipasn + techfp + oas + gql + sm")()
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -123,7 +124,7 @@ def _build_base_ns(args: argparse.Namespace) -> argparse.Namespace:
     ele aparece automaticamente aqui via build_parser().parse_args([]).
     """
     all_defaults: dict[str, object] = {}
-    for mod in (dirscanner, portscanner, dnstransfer, subdomainenum, dnshistory, whoishistory, ipasninfo, techfingerprint, openapidiscovery, graphqlplayground, webrecon, attackaudit):
+    for mod in (dirscanner, portscanner, dnstransfer, subdomainenum, dnshistory, whoishistory, ipasninfo, techfingerprint, openapidiscovery, graphqlplayground, sourcemapdiscovery, webrecon, attackaudit):
         parser = mod.build_parser()
         all_defaults.update(vars(parser.parse_args([])))
 
@@ -216,6 +217,9 @@ def run_all(args: argparse.Namespace) -> int:
         if "graphqlplayground" not in skipped:
             modules.append(("graphqlplayground", graphqlplayground.run_once,
                             _make_args(target, {"url": target, "output": _out("graphqlplayground")}, base_ns)))
+        if "sourcemapdiscovery" not in skipped:
+            modules.append(("sourcemapdiscovery", sourcemapdiscovery.run_once,
+                            _make_args(target, {"url": target, "output": _out("sourcemapdiscovery")}, base_ns)))
         if "dirscanner" not in skipped:
             modules.append(("dirscanner", dirscanner.run_once,
                             _make_args(target, {"url": target, "output": _out("dirscanner"), "extensions": ["php", "txt", "bak", "html"]}, base_ns)))
