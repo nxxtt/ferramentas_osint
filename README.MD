@@ -49,6 +49,11 @@ Isso instala os comandos CLI:
 | `mytools-dir` | Scanner de diretórios HTTP |
 | `mytools-dnsxfer` | DNS Zone Transfer |
 | `mytools-subenum` | Enumeração de subdomínios |
+| `mytools-dnshistory` | Histórico DNS (OSINT) |
+| `mytools-whoishistory` | Histórico WHOIS (OSINT) |
+| `mytools-ipasn` | IP ASN/ISP enrichment |
+| `mytools-techfp` | Technology Fingerprint |
+| `mytools-cred` | Gerenciador de credenciais |
 | `mytools-reconall` | Recon completo (todos os módulos) |
 
 > **Nota:** Após instalar, abra um novo terminal. Se o comando não for encontrado, adicione o diretório `Scripts` do Python ao PATH.
@@ -138,6 +143,42 @@ mytools-subenum example.com -T 50
 mytools-subenum -l domains.txt --output-dir results/
 ```
 
+### 8. DNS History (`mytools-dnshistory`)
+Consulta histórico DNS via fontes OSINT (DNSlytics, SecurityTrails, ViewDNS).
+
+```bash
+mytools-dnshistory example.com
+mytools-dnshistory example.com -o dns-history.json
+mytools-dnshistory example.com --sources dnslytics,viewdns
+```
+
+### 9. WHOIS History (`mytools-whoishistory`)
+Consulta histórico WHOIS via fontes OSINT (SecurityTrails, WhoisXML).
+
+```bash
+mytools-whoishistory example.com
+mytools-whoishistory example.com -o whois-history.json
+mytools-whoishistory example.com --api-key KEY
+```
+
+### 10. IP ASN/ISP Info (`mytools-ipasn`)
+Enriquece IPs com dados BGP: ASN, organização, ISP, país, cidade. Dual API (ipwho.is + ip-api.com), suporte batch.
+
+```bash
+mytools-ipasn 8.8.8.8
+mytools-ipasn 8.8.8.8 1.1.1.1 1.0.0.1
+mytools-ipasn -l ips.txt -o asn.json
+```
+
+### 11. Technology Fingerprint (`mytools-techfp`)
+Fingerprinting tecnológico com 7 sinais: headers, meta tags, scripts, CSS, cookies, body HTML, headers de segurança. 40+ tecnologias, confidence scoring, categorias.
+
+```bash
+mytools-techfp https://example.com
+mytools-techfp https://example.com -o tech.json
+mytools-techfp -l urls.txt --output-dir results/
+```
+
 ---
 
 ## Features v3.2.0
@@ -152,6 +193,10 @@ mytools-audit -l targets.txt --output-dir results/
 mytools-dir -l urls.txt --output-dir results/
 mytools-port -l hosts.txt -p 80,443
 mytools-subenum -l domains.txt --output-dir results/
+mytools-dnshistory -l domains.txt --output-dir results/
+mytools-whoishistory -l domains.txt --output-dir results/
+mytools-ipasn -l ips.txt -o asn.json
+mytools-techfp -l urls.txt --output-dir results/
 ```
 
 Cada alvo gera um arquivo individual (`hostname.json`) no `--output-dir`. Com `-o`, gera saída consolidada.
@@ -203,6 +248,43 @@ Consulta WHOIS automatica para domínios (retorna None para IPs):
 mytools-recon https://example.com  # WHOIS sempre executado
 ```
 
+### DNS History
+Histórico DNS via fontes OSINT (DNSlytics, SecurityTrails, ViewDNS):
+
+```bash
+mytools-dnshistory example.com
+mytools-dnshistory example.com --sources dnslytics,viewdns
+```
+
+### WHOIS History
+Histórico WHOIS via fontes OSINT (SecurityTrails, WhoisXML):
+
+```bash
+mytools-whoishistory example.com
+mytools-whoishistory example.com --api-key KEY
+```
+
+### IP ASN/ISP Enrichment
+Enriquece IPs com dados BGP completos (ASN, organização, ISP, país):
+
+```bash
+mytools-ipasn 8.8.8.8
+mytools-ipasn 8.8.8.8 1.1.1.1 1.0.0.1
+mytools-ipasn -l ips.txt -o asn.json
+```
+
+Dual API: ipwho.is (individual) + ip-api.com (batch 100 IPs).
+
+### Technology Fingerprint
+Fingerprinting tecnológico avançado com 7 sinais e 40+ tecnologias:
+
+```bash
+mytools-techfp https://example.com
+mytools-techfp https://example.com -o tech.json
+```
+
+Sinais analisados: headers HTTP, meta tags, scripts, CSS, cookies, body HTML, headers de segurança. Confidence scoring (high/medium/low) e categorias (server, language, framework, library, cms).
+
 ### Email Harvesting
 Coleta emails do alvo com crawl recursivo:
 
@@ -246,6 +328,10 @@ mytools-port --version
 mytools-dir --version
 mytools-dnsxfer --version
 mytools-subenum --version
+mytools-dnshistory --version
+mytools-whoishistory --version
+mytools-ipasn --version
+mytools-techfp --version
 ```
 
 ---
@@ -256,7 +342,7 @@ mytools-subenum --version
 ```bash
 mytools
 ```
-O menu oferece opções numéricas ou palavras-chave: `port`, `dir`, `recon`, `audit`, `dns/xfer`, `sub/subenum`.
+O menu oferece opções numéricas ou palavras-chave: `port`, `dir`, `recon`, `audit`, `dns/xfer`, `sub/subenum`, `dns-history`, `whois-history`, `ip-asn`, `tech`.
 
 ### Modo interativo
 Cada módulo possui um shell interativo. Dentro dele, digite os argumentos normalmente:
@@ -279,6 +365,10 @@ Use `help` para ver a ajuda, `exit` para voltar ao menu.
 | `mytools-audit https://example.com --test-methods` | Scan de métodos HTTP |
 | `mytools-dnsxfer example.com` | DNS Zone Transfer scan |
 | `mytools-subenum example.com` | Enumeração de subdomínios |
+| `mytools-dnshistory example.com` | Histórico DNS via OSINT |
+| `mytools-whoishistory example.com` | Histórico WHOIS via OSINT |
+| `mytools-ipasn 8.8.8.8` | IP ASN/ISP enrichment |
+| `mytools-techfp https://example.com` | Technology fingerprinting |
 | `mytools-reconall https://example.com --deep` | Recon completo com todos os módulos |
 
 ### Proxy e Rate Limiting
@@ -324,10 +414,15 @@ MyTools-main/
 ├── reconall.py        # Wrapper: executa todos os módulos contra um alvo
 ├── dnstransfer.py     # DNS Zone Transfer
 ├── subdomainenum.py   # Enumeração de subdomínios
+├── dnshistory.py      # Histórico DNS (OSINT)
+├── whoishistory.py    # Histórico WHOIS (OSINT)
+├── ipasninfo.py       # IP ASN/ISP enrichment
+├── techfingerprint.py # Technology Fingerprint (7 sinais)
 ├── utils.py           # Código compartilhado (cores, helpers, HTTP async)
+├── cred.py            # Gerenciador de credenciais (keyring)
 ├── KNOW_ISSUES.txt    # Problemas conhecidos
 ├── ROADMAP.txt        # Roadmap de otimizações
-├── tests/             # Testes unitários (733 testes)
+├── tests/             # Testes unitários (1071 testes)
 ├── pyproject.toml     # Configuração do projeto
 └── README.MD
 ```
@@ -344,6 +439,7 @@ poetry run pytest tests/ -v
 ### Lint
 ```bash
 poetry run ruff check .
+poetry run basedpyright
 ```
 
 ### Adicionar dependências de dev
@@ -366,6 +462,7 @@ poetry install --with dev
 - `pytest-asyncio>=1.4.0` — Testes async
 - `respx>=0.23.1` — Mock de httpx para testes
 - `ruff>=0.15.18` — Linter/formatter
+- `basedpyright` — Type checker
 
 ---
 
