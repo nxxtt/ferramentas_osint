@@ -7,6 +7,7 @@ import attackaudit
 import dirscanner
 import dnshistory
 import dnstransfer
+import graphqlplayground
 import ipasninfo
 import openapidiscovery
 import portscanner
@@ -31,7 +32,8 @@ Painel interativo central que permite alternar entre:
   9. IP ASN Info  - IP -> ASN/org/ISP enrichment
   10. Tech Fingerprint - Detecta tecnologias com versoes exatas
   11. OpenAPI/Swagger  - Busca specs OpenAPI/Swagger expostas
-  12. ReconAll     - Todos os modulos contra um alvo
+  12. GraphQL Playground - Descobre GraphQL playgrounds e introspection
+  13. ReconAll     - Todos os modulos contra um alvo
 
 Cada modulo e lancado em modo interativo com seu proprio shell de comandos.
 O usuario pode usar argumentos CLI normalmente dentro de cada shell.
@@ -67,9 +69,10 @@ def menu() -> None:
     print(f"  {color('9', Cyber.GREEN, Cyber.BOLD)} {color('IP ASN Info', Cyber.CYAN)}     IP -> ASN/org/ISP/country enrichment")
     print(f"  {color('10', Cyber.GREEN, Cyber.BOLD)} {color('Tech Fingerprint', Cyber.CYAN)} Detecta tecnologias com versoes exatas")
     print(f"  {color('11', Cyber.GREEN, Cyber.BOLD)} {color('OpenAPI/Swagger', Cyber.CYAN)}  Busca specs OpenAPI/Swagger expostas")
-    print(f"  {color('12', Cyber.GREEN, Cyber.BOLD)} {color('ReconAll', Cyber.CYAN)}          Todos os modulos contra um alvo")
-    print(f"  {color('13', Cyber.GREEN, Cyber.BOLD)} {color('Ajuda', Cyber.CYAN)}            exemplos rapidos")
-    print(f"  {color('14', Cyber.GREEN, Cyber.BOLD)} {color('Limpar', Cyber.CYAN)}           limpar terminal")
+    print(f"  {color('12', Cyber.GREEN, Cyber.BOLD)} {color('GraphQL Playground', Cyber.CYAN)} Descobre GraphQL playgrounds e introspection")
+    print(f"  {color('13', Cyber.GREEN, Cyber.BOLD)} {color('ReconAll', Cyber.CYAN)}          Todos os modulos contra um alvo")
+    print(f"  {color('14', Cyber.GREEN, Cyber.BOLD)} {color('Ajuda', Cyber.CYAN)}            exemplos rapidos")
+    print(f"  {color('15', Cyber.GREEN, Cyber.BOLD)} {color('Limpar', Cyber.CYAN)}           limpar terminal")
     print(f"  {color('0', Cyber.RED, Cyber.BOLD)} {color('Sair', Cyber.CYAN)}")
 
 
@@ -112,6 +115,10 @@ def help_screen() -> None:
     print("  mytools-oas http://target.com")
     print("  mytools-oas http://target.com --endpoints")
     print("  mytools-oas -l urls.txt -o oas.json")
+    print(color("\nGraphQL Playground:", Cyber.CYAN))
+    print("  mytools-gql http://target.com")
+    print("  mytools-gql http://target.com --introspect")
+    print("  mytools-gql http://target.com --introspect --schema")
     print(color("\nReconAll:", Cyber.CYAN))
     print("  python3 reconall.py example.com")
     print("  python3 reconall.py example.com --deep --skip dnstransfer")
@@ -325,6 +332,25 @@ def launch_openapidiscovery() -> None:
     )
 
 
+def launch_graphqlplayground() -> None:
+    """Inicia o modulo GraphQL Playground Discovery em modo interativo."""
+    parser = graphqlplayground.build_parser()
+    run_interactive_shell(
+        parser, "gql> ", graphqlplayground.run_once,
+        description="GraphQL Playground Discovery interativo — descobre endpoints GraphQL expostos.",
+        example="http://target.com --introspect",
+        banner_fn=graphqlplayground.banner,
+        contextual_help=(
+            "Uso: <url> [opcoes]\n"
+            "Exemplos:\n"
+            "  http://target.com\n"
+            "  http://target.com --introspect\n"
+            "  http://target.com --introspect --schema\n"
+            "  -l urls.txt -o results.json"
+        ),
+    )
+
+
 def launch_reconall() -> None:
     """Inicia o módulo ReconAll em modo interativo."""
     parser = reconall.build_parser()
@@ -383,12 +409,14 @@ def main() -> int:
             launch_techfingerprint()
         elif choice in {"11", "oas", "openapi", "swagger", "openapidiscovery"}:
             launch_openapidiscovery()
-        elif choice in {"12", "recon", "reconall"}:
+        elif choice in {"12", "gql", "graphql", "playground", "graphqlplayground"}:
+            launch_graphqlplayground()
+        elif choice in {"13", "recon", "reconall"}:
             launch_reconall()
-        elif choice in {"13", "help", "ajuda", "h"}:
+        elif choice in {"14", "help", "ajuda", "h"}:
             help_screen()
             input(color("Enter para voltar...", Cyber.GRAY))
-        elif choice in {"14", "clear", "limpar", "cls"}:
+        elif choice in {"15", "clear", "limpar", "cls"}:
             clear_console()
             continue
         else:
