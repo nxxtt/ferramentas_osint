@@ -11,7 +11,7 @@ Suite de ferramentas de auditoria e reconhecimento web/network para ambientes de
 ## Instalação
 
 ### Pré-requisitos
-- **Python 3.10+**
+- **Python 3.12+**
 
 ### Instalacao rapida (recomendado)
 ```bash
@@ -53,6 +53,10 @@ Isso instala os comandos CLI:
 | `mytools-whoishistory` | Histórico WHOIS (OSINT) |
 | `mytools-ipasn` | IP ASN/ISP enrichment |
 | `mytools-techfp` | Technology Fingerprint |
+| `mytools-oas` | OpenAPI/Swagger Discovery |
+| `mytools-gql` | GraphQL Playground Exposure |
+| `mytools-sm` | Source Map Discovery |
+| `mytools-vcs` | VCS Leak Detection |
 | `mytools-cred` | Gerenciador de credenciais |
 | `mytools-reconall` | Recon completo (todos os módulos) |
 
@@ -179,9 +183,48 @@ mytools-techfp https://example.com -o tech.json
 mytools-techfp -l urls.txt --output-dir results/
 ```
 
+### 12. OpenAPI/Swagger Discovery (`mytools-oas`)
+Busca specs OpenAPI/Swagger expostas em paths comuns, faz parse JSON/YAML, extrai endpoints, métodos, tags e schemas.
+
+```bash
+mytools-oas http://target.com
+mytools-oas http://target.com --endpoints
+mytools-oas -l urls.txt -o oas.json
+```
+
+### 13. GraphQL Playground Exposure (`mytools-gql`)
+Descobre GraphQL playgrounds expostos (GraphiQL, Playground, Altair, Voyager, Apollo Sandbox) e opcionalmente executa introspection query para extrair schema.
+
+```bash
+mytools-gql http://target.com
+mytools-gql http://target.com --introspect
+mytools-gql http://target.com --schema
+```
+
+### 14. Source Map Discovery (`mytools-sm`)
+Busca `.map` files de JavaScript expostos por duas abordagens: scan de `<script src>` + probing de paths comuns.
+
+```bash
+mytools-sm http://target.com
+mytools-sm http://target.com --sources
+mytools-sm http://target.com --no-scan-scripts
+```
+
+### 15. VCS Leak Detection (`mytools-vcs`)
+Detecta repositórios versionados expostos (.git, .svn, .hg) com validação de conteúdo para evitar falsos positivos.
+
+```bash
+mytools-vcs http://target.com
+mytools-vcs http://target.com --git-only
+mytools-vcs -l urls.txt -o vcs.json
+```
+
 ---
 
 ## Features v3.2.0
+
+### Python 3.12+ Modernization
+Código utilize as features modernas do Python 3.12+: `asyncio.TaskGroup` para concorrência segura, `match/case` para dispatch, `tomllib` para parsing TOML, `@override` para herança, e f-strings PEP 701.
 
 ### Multi-target
 Execute qualquer ferramenta em múltiplos alvos a partir de um arquivo:
@@ -197,6 +240,10 @@ mytools-dnshistory -l domains.txt --output-dir results/
 mytools-whoishistory -l domains.txt --output-dir results/
 mytools-ipasn -l ips.txt -o asn.json
 mytools-techfp -l urls.txt --output-dir results/
+mytools-oas -l urls.txt -o oas.json
+mytools-gql -l urls.txt -o gql.json
+mytools-sm -l urls.txt -o sm.json
+mytools-vcs -l urls.txt -o vcs.json
 ```
 
 Cada alvo gera um arquivo individual (`hostname.json`) no `--output-dir`. Com `-o`, gera saída consolidada.
@@ -227,7 +274,7 @@ mytools-recon https://target.com --header "X-Token: abc" --header "Authorization
 ```
 
 ### Async HTTP (httpx)
-Todos os módulos HTTP utilizam `httpx.AsyncClient` com `asyncio.gather()` e `Semaphore` para concorrência nativa. Módulos independentes rodam em paralelo via `ThreadPoolExecutor`.
+Todos os módulos HTTP utilizam `httpx.AsyncClient` com `asyncio.TaskGroup` e `Semaphore` para concorrência nativa. Módulos independentes rodam em paralelo via `asyncio.gather` + `asyncio.to_thread`.
 
 ### CVE Lookup (NIST NVD)
 Detecta versões de frameworks/servidores e busca CVEs associadas:
@@ -285,6 +332,38 @@ mytools-techfp https://example.com -o tech.json
 
 Sinais analisados: headers HTTP, meta tags, scripts, CSS, cookies, body HTML, headers de segurança. Confidence scoring (high/medium/low) e categorias (server, language, framework, library, cms).
 
+### OpenAPI/Swagger Discovery
+Busca specs OpenAPI/Swagger expostas em 24 paths comuns, faz parse JSON/YAML, extrai endpoints, métodos, tags e schemas:
+
+```bash
+mytools-oas http://target.com
+mytools-oas http://target.com --endpoints
+```
+
+### GraphQL Playground Exposure
+Detecta 5 ferramentas GraphQL (GraphiQL, Playground, Altair, Voyager, Apollo Sandbox) e opcionalmente executa introspection query:
+
+```bash
+mytools-gql http://target.com
+mytools-gql http://target.com --introspect
+```
+
+### Source Map Discovery
+Busca `.map` files de JavaScript expostos via scan de `<script src>` + probing de 27 paths comuns:
+
+```bash
+mytools-sm http://target.com
+mytools-sm http://target.com --sources
+```
+
+### VCS Leak Detection
+Detecta repositórios versionados expostos (.git, .svn, .hg) com validação de conteúdo e HEAD pre-check:
+
+```bash
+mytools-vcs http://target.com
+mytools-vcs http://target.com --git-only
+```
+
 ### Email Harvesting
 Coleta emails do alvo com crawl recursivo:
 
@@ -332,6 +411,10 @@ mytools-dnshistory --version
 mytools-whoishistory --version
 mytools-ipasn --version
 mytools-techfp --version
+mytools-oas --version
+mytools-gql --version
+mytools-sm --version
+mytools-vcs --version
 ```
 
 ---
@@ -342,7 +425,7 @@ mytools-techfp --version
 ```bash
 mytools
 ```
-O menu oferece opções numéricas ou palavras-chave: `port`, `dir`, `recon`, `audit`, `dns/xfer`, `sub/subenum`, `dns-history`, `whois-history`, `ip-asn`, `tech`.
+O menu oferece opções numéricas ou palavras-chave: `port`, `dir`, `recon`, `audit`, `dns/xfer`, `sub/subenum`, `dns-history`, `whois-history`, `ip-asn`, `tech`, `oas`, `gql`, `sourcemap`, `vcs`.
 
 ### Modo interativo
 Cada módulo possui um shell interativo. Dentro dele, digite os argumentos normalmente:
@@ -369,6 +452,10 @@ Use `help` para ver a ajuda, `exit` para voltar ao menu.
 | `mytools-whoishistory example.com` | Histórico WHOIS via OSINT |
 | `mytools-ipasn 8.8.8.8` | IP ASN/ISP enrichment |
 | `mytools-techfp https://example.com` | Technology fingerprinting |
+| `mytools-oas http://target.com` | OpenAPI/Swagger discovery |
+| `mytools-gql http://target.com` | GraphQL playground discovery |
+| `mytools-sm http://target.com` | Source map discovery |
+| `mytools-vcs http://target.com` | VCS leak detection |
 | `mytools-reconall https://example.com --deep` | Recon completo com todos os módulos |
 
 ### Proxy e Rate Limiting
@@ -386,6 +473,10 @@ mytools-audit https://target.local --deep --proxy http://proxy:8080 --delay 5
 ```
 
 ### PortScanner — Workers
+```bash
+mytools-port 10.0.0.0/24 -w 500          # 500 threads
+mytools-port 10.0.0.0/24 --threads 500   # alias deprecated
+```
 
 ### Controle de Cores
 ```bash
@@ -394,36 +485,34 @@ export NO_COLOR=1
 mytools
 ```
 
-
-```bash
-mytools-port 10.0.0.0/24 -w 500          # 500 threads
-mytools-port 10.0.0.0/24 --threads 500   # alias deprecated
-```
-
 ---
 
 ## Estrutura do Projeto
 
 ```
 MyTools-main/
-├── main.py            # Painel central
-├── portscanner.py     # Scanner de portas TCP
-├── dirscanner.py      # Scanner de diretórios HTTP
-├── webrecon.py        # Reconhecimento passivo + CVE + WHOIS + emails
-├── attackaudit.py     # Auditoria ofensiva/defensiva + métodos HTTP
-├── reconall.py        # Wrapper: executa todos os módulos contra um alvo
-├── dnstransfer.py     # DNS Zone Transfer
-├── subdomainenum.py   # Enumeração de subdomínios
-├── dnshistory.py      # Histórico DNS (OSINT)
-├── whoishistory.py    # Histórico WHOIS (OSINT)
-├── ipasninfo.py       # IP ASN/ISP enrichment
-├── techfingerprint.py # Technology Fingerprint (7 sinais)
-├── utils.py           # Código compartilhado (cores, helpers, HTTP async)
-├── cred.py            # Gerenciador de credenciais (keyring)
-├── KNOW_ISSUES.txt    # Problemas conhecidos
-├── ROADMAP.txt        # Roadmap de otimizações
-├── tests/             # Testes unitários (1071 testes)
-├── pyproject.toml     # Configuração do projeto
+├── main.py                 # Painel central
+├── portscanner.py          # Scanner de portas TCP
+├── dirscanner.py           # Scanner de diretórios HTTP
+├── webrecon.py             # Reconhecimento passivo + CVE + WHOIS + emails
+├── attackaudit.py          # Auditoria ofensiva/defensiva + métodos HTTP
+├── reconall.py             # Wrapper: executa todos os módulos contra um alvo
+├── dnstransfer.py          # DNS Zone Transfer
+├── subdomainenum.py        # Enumeração de subdomínios
+├── dnshistory.py           # Histórico DNS (OSINT)
+├── whoishistory.py         # Histórico WHOIS (OSINT)
+├── ipasninfo.py            # IP ASN/ISP enrichment
+├── techfingerprint.py      # Technology Fingerprint (7 sinais)
+├── openapidiscovery.py     # OpenAPI/Swagger Discovery
+├── graphqlplayground.py    # GraphQL Playground Exposure
+├── sourcemapdiscovery.py   # Source Map Discovery
+├── vcsleak.py              # VCS Leak Detection (.git, .svn, .hg)
+├── utils.py                # Código compartilhado (cores, helpers, HTTP async)
+├── cred.py                 # Gerenciador de credenciais (keyring)
+├── KNOW_ISSUES.txt         # Problemas conhecidos
+├── ROADMAP.txt             # Roadmap de otimizações
+├── tests/                  # Testes unitários (1277 testes)
+├── pyproject.toml          # Configuração do projeto
 └── README.MD
 ```
 
@@ -456,12 +545,13 @@ poetry install --with dev
 - `beautifulsoup4>=4.15.0` — Parser HTML avançado
 - `python-whois>=0.9.6` — Consulta WHOIS
 - `dnspython>=2.8.0` — Resolução DNS, zone transfer e enumeração de subdomínios
+- `pyyaml>=6.0.3` — Parse de YAML (OpenAPI specs)
 
 ### Dev
 - `pytest>=9.1.1` — Framework de testes
 - `pytest-asyncio>=1.4.0` — Testes async
 - `respx>=0.23.1` — Mock de httpx para testes
-- `ruff>=0.15.18` — Linter/formatter
+- `ruff>=0.15.20` — Linter/formatter
 - `basedpyright` — Type checker
 
 ---
