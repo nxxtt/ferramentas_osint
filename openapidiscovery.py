@@ -13,8 +13,6 @@ Fluxo:
   3. Extrai metadados da API e lista de endpoints
   4. Exibe resumo colorido e salva output detalhado
 """
-from __future__ import annotations
-
 import argparse
 import asyncio
 import json

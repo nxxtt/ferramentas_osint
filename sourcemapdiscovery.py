@@ -12,8 +12,6 @@ Fluxo:
   4. Parse do JSON do source map para extrair sources, names
   5. Exibe resumo colorido e salva output detalhado
 """
-from __future__ import annotations
-
 import argparse
 import asyncio
 import json

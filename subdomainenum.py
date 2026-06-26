@@ -21,8 +21,6 @@ Wordlist built-in:
   Inclui subdominios comuns: www, mail, ftp, api, dev, staging, admin,
   jenkins, gitlab, grafana, kibana, redis, docker, k8s, etc.
 """
-from __future__ import annotations
-
 import argparse
 import asyncio
 import json
@@ -201,7 +199,7 @@ def _prefetch_records(domain: str, resolver: dns.resolver.Resolver) -> list[Subd
                         prefetched.append(SubdomainResult(subdomain=fqdn, ip_addresses=ips, status="resolved"))
                     except dns.exception.DNSException:
                         pass
-        except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN, dns.resolver.Timeout, dns.exception.DNSException):
+        except dns.resolver.NoAnswer, dns.resolver.NXDOMAIN, dns.resolver.Timeout, dns.exception.DNSException:
             continue
 
     return prefetched

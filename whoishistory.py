@@ -11,8 +11,6 @@ Fluxo principal:
   3. Consolida, ordena por data e exibe tabela
   4. Salva saida em JSON se --output especificado
 """
-from __future__ import annotations
-
 import argparse
 import contextlib
 import json
@@ -97,7 +95,7 @@ def _parse_securitytrails(body: bytes, domain: str) -> list[WhoisHistoryRecord]:
 
             try:
                 date_str = datetime.fromtimestamp(ended / 1000, tz=UTC).strftime("%Y-%m-%d")
-            except (ValueError, OSError):
+            except ValueError, OSError:
                 date_str = str(ended)
 
         ns_list = item.get("nameServers", [])

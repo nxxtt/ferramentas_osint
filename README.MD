@@ -11,7 +11,7 @@ Suite de ferramentas de auditoria e reconhecimento web/network para ambientes de
 ## Instalação
 
 ### Pré-requisitos
-- **Python 3.12+**
+- **Python 3.14+**
 
 ### Instalacao rapida (recomendado)
 ```bash
@@ -224,7 +224,7 @@ mytools-vcs -l urls.txt -o vcs.json
 ## Features v3.2.0
 
 ### Python 3.12+ Modernization
-Código utilize as features modernas do Python 3.12+: `asyncio.TaskGroup` para concorrência segura, `match/case` para dispatch, `tomllib` para parsing TOML, `@override` para herança, e f-strings PEP 701.
+Código utilize as features modernas do Python 3.14+: `asyncio.TaskGroup` para concorrência segura, `match/case` para dispatch, `tomllib` para parsing TOML, `@override` para herança, PEP 758 `except` sem parênteses, e f-strings PEP 701.
 
 ### Multi-target
 Execute qualquer ferramenta em múltiplos alvos a partir de um arquivo:

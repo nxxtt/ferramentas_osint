@@ -17,8 +17,6 @@ Performance:
   - batch_size = workers*2 para processar resultados em blocos
   - ip_sort_key ordena por versao IP (v4 antes de v6) e endereco
 """
-from __future__ import annotations
-
 import argparse
 import functools
 import ipaddress
@@ -147,7 +145,7 @@ def grab_banner(sock: socket.socket, port: int, timeout: float) -> str:
         if port in BANNER_PROBES:
             sock.sendall(BANNER_PROBES[port])
         data = sock.recv(120)
-    except (TimeoutError, OSError):
+    except TimeoutError, OSError:
         return ""
     return data.decode("utf-8", errors="replace").strip().replace("\r", " ").replace("\n", " ")
 
@@ -184,7 +182,7 @@ def scan_port(
                 service=service_name(port),
                 banner=banner_text,
             )
-    except (ConnectionRefusedError, TimeoutError, OSError):
+    except ConnectionRefusedError, TimeoutError, OSError:
         return None
 
 

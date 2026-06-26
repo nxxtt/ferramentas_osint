@@ -22,8 +22,6 @@ Modulos disponiveis:
   - webrecon: HTTP passive recon (headers, CVE, WHOIS, emails)
   - attackaudit: red/blue web audit (XSS, SQLi, TLS, methods)
 """
-from __future__ import annotations
-
 import argparse
 import asyncio
 import os

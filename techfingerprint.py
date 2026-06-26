@@ -13,8 +13,6 @@ com versao precisa, usando 7 tipos de sinal:
 
 Cada deteccao inclui nivel de confianca (high/medium/low) e evidencia.
 """
-from __future__ import annotations
-
 import argparse
 import logging
 import re

@@ -11,8 +11,6 @@ Fluxo principal:
   3. Para batch (100+ IPs), usa ip-api.com/batch
   4. Consolida e exibe tabela ou salva JSON
 """
-from __future__ import annotations
-
 import argparse
 import json
 import logging

@@ -1,6 +1,4 @@
 #!/usr/bin/env python3
-from __future__ import annotations
-
 import argparse
 import asyncio
 import logging
@@ -757,7 +755,7 @@ def _tls_info_sync(url: str, timeout: float) -> tuple[str, str, str]:
         with socket.create_connection((parsed.hostname or "", port), timeout=timeout) as sock:  # noqa: SIM117
             with context.wrap_socket(sock, server_hostname=parsed.hostname) as tls:
                 cert = tls.getpeercert()
-    except (OSError, ssl.SSLError, TimeoutError):
+    except OSError, ssl.SSLError, TimeoutError:
         return "", "", ""
 
     if cert is None:

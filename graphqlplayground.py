@@ -11,8 +11,6 @@ Fluxo:
   3. Opcionalmente envia introspection query para extrair schema
   4. Exibe resumo colorido e salva output detalhado
 """
-from __future__ import annotations
-
 import argparse
 import asyncio
 import json

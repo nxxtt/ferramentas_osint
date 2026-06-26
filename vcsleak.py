@@ -9,8 +9,6 @@ Fluxo:
   2. Valida o conteudo retornado para confirmar leak real
   3. Exibe resumo colorido e salva output detalhado
 """
-from __future__ import annotations
-
 import argparse
 import asyncio
 import logging

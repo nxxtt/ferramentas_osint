@@ -21,8 +21,6 @@ Uso do dnspython:
   - dns.query.inbound_xfr: tentativa de zone transfer AXFR
   - dns.zone: parsing da zona transferida
 """
-from __future__ import annotations
-
 import argparse
 import logging
 import sys

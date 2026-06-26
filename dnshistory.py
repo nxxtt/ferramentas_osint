@@ -12,8 +12,6 @@ Fluxo principal:
   3. Consolida, ordena por data e exibe tabela
   4. Salva saida em JSON se --output especificado
 """
-from __future__ import annotations
-
 import argparse
 import json
 import logging

@@ -18,8 +18,6 @@ Padroes de design:
   - RateLimiter notificado em 429 aumenta delay com backoff exponencial
   - safe_asyncio_run() funciona mesmo com event loop ativo (Jupyter/REPL)
 """
-from __future__ import annotations
-
 import argparse
 import asyncio
 import base64
@@ -49,7 +47,7 @@ def _read_version() -> str:
         with open(pyproject, "rb") as fh:
             data = tomllib.load(fh)
         return data["tool"]["poetry"]["version"]
-    except (FileNotFoundError, KeyError, ValueError):
+    except FileNotFoundError, KeyError, ValueError:
         pass
     return "0.0.0"
 
@@ -382,7 +380,7 @@ async def fetch(
                 rate_limiter.notify_429()
                 try:
                     retry_after = float(response.headers.get("Retry-After", "5"))
-                except (ValueError, TypeError):
+                except ValueError, TypeError:
                     retry_after = 5.0
                 await asyncio.sleep(min(retry_after, 30))
                 continue
@@ -962,7 +960,7 @@ def run_interactive_shell(
     while True:
         try:
             raw = input(color(prompt, Cyber.GREEN, Cyber.BOLD)).strip()
-        except (EOFError, KeyboardInterrupt):
+        except EOFError, KeyboardInterrupt:
             print()
             return 0
 
