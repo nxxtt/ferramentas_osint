@@ -64,6 +64,7 @@ Isso instala os comandos CLI:
 | `mytools-soceng` | Social Engineering Recon |
 | `mytools-leak` | Paste/Leak Monitoring |
 | `mytools-dark` | Dark Web Monitoring |
+| `mytools-cred` | Gerenciador de credenciais |
 | `mytools-reconall` | Recon completo (todos os módulos) |
 
 > **Nota:** Após instalar, abra um novo terminal. Se o comando não for encontrado, adicione o diretório `Scripts` do Python ao PATH.
