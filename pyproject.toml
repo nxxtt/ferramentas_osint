@@ -43,6 +43,7 @@ mytools-cfg = "configfiledetect:main"
 mytools-bak = "backupfiledetect:main"
 mytools-dork = "googledorking:main"
 mytools-breach = "emailbreachcheck:main"
+mytools-soceng = "socialengrecon:main"
 mytools-reconall = "reconall:main"
 
 [build-system]

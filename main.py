@@ -14,6 +14,7 @@ import ipasninfo
 import openapidiscovery
 import portscanner
 import reconall
+import socialengrecon
 import sourcemapdiscovery
 import subdomainenum
 import techfingerprint
@@ -43,7 +44,8 @@ Painel interativo central que permite alternar entre:
    16. Backup File Detection - Busca .bak, .old, .swp, .sql, .zip expostos
    17. Google Dorking - Gera dorks e busca via DuckDuckGo
    18. Email Breach Check - Verifica emails em vazamentos de dados
-   19. ReconAll     - Todos os modulos contra um alvo
+   19. Social Engineering Recon - Coleta emails, nomes, cargos de funcionarios
+   20. ReconAll     - Todos os modulos contra um alvo
 
 Cada modulo e lancado em modo interativo com seu proprio shell de comandos.
 O usuario pode usar argumentos CLI normalmente dentro de cada shell.
@@ -61,7 +63,7 @@ def banner() -> None:
 /_/  /_/\__, /   /_/  \____/\____/_/____/
        /____/
 """
-    create_banner(art, "   port scanner + dir scanner + web recon + attack audit + dns xfer + subenum + dnshistory + whoishistory + oas + bak + dork + breach",
+    create_banner(art, "   port scanner + dir scanner + web recon + attack audit + dns xfer + subenum + dnshistory + whoishistory + oas + bak + dork + breach + soceng",
                   extra=lambda: print(color("   by Default\n", Cyber.GRAY)))()
 
 
@@ -86,9 +88,10 @@ def menu() -> None:
     print(f"  {color('16', Cyber.GREEN, Cyber.BOLD)} {color('Backup File Detection', Cyber.CYAN)} Busca .bak, .old, .swp, .sql, .zip expostos")
     print(f"  {color('17', Cyber.GREEN, Cyber.BOLD)} {color('Google Dorking', Cyber.CYAN)}       Gera dorks, busca via DuckDuckGo")
     print(f"  {color('18', Cyber.GREEN, Cyber.BOLD)} {color('Email Breach Check', Cyber.CYAN)} Verifica emails em vazamentos")
-    print(f"  {color('19', Cyber.GREEN, Cyber.BOLD)} {color('ReconAll', Cyber.CYAN)}          Todos os modulos contra um alvo")
-    print(f"  {color('20', Cyber.GREEN, Cyber.BOLD)} {color('Ajuda', Cyber.CYAN)}            exemplos rapidos")
-    print(f"  {color('21', Cyber.GREEN, Cyber.BOLD)} {color('Limpar', Cyber.CYAN)}           limpar terminal")
+    print(f"  {color('19', Cyber.GREEN, Cyber.BOLD)} {color('Social Eng Recon', Cyber.CYAN)}  Coleta emails, nomes, cargos")
+    print(f"  {color('20', Cyber.GREEN, Cyber.BOLD)} {color('ReconAll', Cyber.CYAN)}          Todos os modulos contra um alvo")
+    print(f"  {color('21', Cyber.GREEN, Cyber.BOLD)} {color('Ajuda', Cyber.CYAN)}            exemplos rapidos")
+    print(f"  {color('22', Cyber.GREEN, Cyber.BOLD)} {color('Limpar', Cyber.CYAN)}           limpar terminal")
     print(f"  {color('0', Cyber.RED, Cyber.BOLD)} {color('Sair', Cyber.CYAN)}")
 
 
@@ -164,6 +167,11 @@ def help_screen() -> None:
     print("  mytools-breach user1@test.com user2@test.com")
     print("  mytools-breach user@example.com --source hibp --hibp-api-key KEY")
     print("  mytools-breach -f emails.txt -o results.json")
+    print(color("\nSocial Engineering Recon:", Cyber.CYAN))
+    print("  mytools-soceng example.com")
+    print("  mytools-soceng example.com --source github --source hunter")
+    print("  mytools-soceng example.com --hunter-api-key KEY")
+    print("  mytools-soceng -l domains.txt -o results.json")
     print(color("\nReconAll:", Cyber.CYAN))
     print("  python3 reconall.py example.com")
     print("  python3 reconall.py example.com --deep --skip dnstransfer")
@@ -511,6 +519,25 @@ def launch_emailbreachcheck() -> None:
     )
 
 
+def launch_socialengrecon() -> None:
+    """Inicia o modulo Social Engineering Recon em modo interativo."""
+    parser = socialengrecon.build_parser()
+    run_interactive_shell(
+        parser, "soceng> ", socialengrecon.run_once,
+        description="Social Engineering Recon interativo — coleta emails, nomes, cargos de funcionarios.",
+        example="example.com --source github",
+        banner_fn=socialengrecon.banner,
+        contextual_help=(
+            "Uso: <dominio> [opcoes]\n"
+            "Exemplos:\n"
+            "  example.com\n"
+            "  example.com --source github --source hunter\n"
+            "  example.com --hunter-api-key KEY\n"
+            "  -l domains.txt -o results.json"
+        ),
+    )
+
+
 def launch_reconall() -> None:
     """Inicia o módulo ReconAll em modo interativo."""
     parser = reconall.build_parser()
@@ -584,12 +611,14 @@ def main() -> int:
                 launch_googledorking()
             case "18" | "breach" | "email" | "hibp" | "emailbreachcheck":
                 launch_emailbreachcheck()
-            case "19" | "reconall" | "all" | "full":
+            case "19" | "soceng" | "social" | "employee" | "socialengrecon":
+                launch_socialengrecon()
+            case "20" | "reconall" | "all" | "full":
                 launch_reconall()
-            case "20" | "help" | "ajuda" | "h":
+            case "21" | "help" | "ajuda" | "h":
                 help_screen()
                 input(color("Enter para voltar...", Cyber.GRAY))
-            case "21" | "clear" | "limpar" | "cls":
+            case "22" | "clear" | "limpar" | "cls":
                 clear_console()
                 continue
             case _:
