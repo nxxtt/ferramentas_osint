@@ -7,6 +7,7 @@ import configfiledetect
 import dirscanner
 import dnshistory
 import dnstransfer
+import googledorking
 import graphqlplayground
 import ipasninfo
 import openapidiscovery
@@ -39,7 +40,8 @@ Painel interativo central que permite alternar entre:
   14. VCS Leak Detection - Detecta .git, .svn, .hg expostos
    15. Config File Detection - Busca .env, config.json, settings.py expostos
    16. Backup File Detection - Busca .bak, .old, .swp, .sql, .zip expostos
-   17. ReconAll     - Todos os modulos contra um alvo
+   17. Google Dorking - Gera dorks e busca via DuckDuckGo
+   18. ReconAll     - Todos os modulos contra um alvo
 
 Cada modulo e lancado em modo interativo com seu proprio shell de comandos.
 O usuario pode usar argumentos CLI normalmente dentro de cada shell.
@@ -57,7 +59,7 @@ def banner() -> None:
 /_/  /_/\__, /   /_/  \____/\____/_/____/
        /____/
 """
-    create_banner(art, "   port scanner + dir scanner + web recon + attack audit + dns xfer + subenum + dnshistory + whoishistory + oas + bak",
+    create_banner(art, "   port scanner + dir scanner + web recon + attack audit + dns xfer + subenum + dnshistory + whoishistory + oas + bak + dork",
                   extra=lambda: print(color("   by Default\n", Cyber.GRAY)))()
 
 
@@ -80,9 +82,10 @@ def menu() -> None:
     print(f"  {color('14', Cyber.GREEN, Cyber.BOLD)} {color('VCS Leak Detection', Cyber.CYAN)} Detecta .git, .svn, .hg expostos")
     print(f"  {color('15', Cyber.GREEN, Cyber.BOLD)} {color('Config File Detection', Cyber.CYAN)} Busca .env, config.json, settings.py expostos")
     print(f"  {color('16', Cyber.GREEN, Cyber.BOLD)} {color('Backup File Detection', Cyber.CYAN)} Busca .bak, .old, .swp, .sql, .zip expostos")
-    print(f"  {color('17', Cyber.GREEN, Cyber.BOLD)} {color('ReconAll', Cyber.CYAN)}          Todos os modulos contra um alvo")
-    print(f"  {color('18', Cyber.GREEN, Cyber.BOLD)} {color('Ajuda', Cyber.CYAN)}            exemplos rapidos")
-    print(f"  {color('19', Cyber.GREEN, Cyber.BOLD)} {color('Limpar', Cyber.CYAN)}           limpar terminal")
+    print(f"  {color('17', Cyber.GREEN, Cyber.BOLD)} {color('Google Dorking', Cyber.CYAN)}       Gera dorks, busca via DuckDuckGo")
+    print(f"  {color('18', Cyber.GREEN, Cyber.BOLD)} {color('ReconAll', Cyber.CYAN)}          Todos os modulos contra um alvo")
+    print(f"  {color('19', Cyber.GREEN, Cyber.BOLD)} {color('Ajuda', Cyber.CYAN)}            exemplos rapidos")
+    print(f"  {color('20', Cyber.GREEN, Cyber.BOLD)} {color('Limpar', Cyber.CYAN)}           limpar terminal")
     print(f"  {color('0', Cyber.RED, Cyber.BOLD)} {color('Sair', Cyber.CYAN)}")
 
 
@@ -147,6 +150,12 @@ def help_screen() -> None:
     print("  mytools-bak http://target.com --type sql")
     print("  mytools-bak http://target.com --type archive")
     print("  mytools-bak -l urls.txt -o results.json")
+    print(color("\nGoogle Dorking:", Cyber.CYAN))
+    print("  mytools-dork example.com")
+    print("  mytools-dork example.com --category filetype")
+    print("  mytools-dork example.com --category sensitive --search")
+    print("  mytools-dork example.com --custom-dork 'inurl:api v1'")
+    print("  mytools-dork -l domains.txt -o results.json")
     print(color("\nReconAll:", Cyber.CYAN))
     print("  python3 reconall.py example.com")
     print("  python3 reconall.py example.com --deep --skip dnstransfer")
@@ -455,6 +464,26 @@ def launch_backupfiledetect() -> None:
     )
 
 
+def launch_googledorking() -> None:
+    """Inicia o modulo Google Dorking em modo interativo."""
+    parser = googledorking.build_parser()
+    run_interactive_shell(
+        parser, "dork> ", googledorking.run_once,
+        description="Google Dorking interativo — gera dorks e busca via DuckDuckGo.",
+        example="example.com --category sensitive",
+        banner_fn=googledorking.banner,
+        contextual_help=(
+            "Uso: <dominio> [opcoes]\n"
+            "Exemplos:\n"
+            "  example.com\n"
+            "  example.com --category filetype\n"
+            "  example.com --category sensitive --search\n"
+            "  example.com --custom-dork 'inurl:api v1'\n"
+            "  -l domains.txt -o results.json"
+        ),
+    )
+
+
 def launch_reconall() -> None:
     """Inicia o módulo ReconAll em modo interativo."""
     parser = reconall.build_parser()
@@ -524,12 +553,14 @@ def main() -> int:
                 launch_configfiledetect()
             case "16" | "bak" | "backup" | "backupfiledetect":
                 launch_backupfiledetect()
-            case "17" | "reconall" | "all" | "full":
+            case "17" | "dork" | "google" | "googledorking":
+                launch_googledorking()
+            case "18" | "reconall" | "all" | "full":
                 launch_reconall()
-            case "18" | "help" | "ajuda" | "h":
+            case "19" | "help" | "ajuda" | "h":
                 help_screen()
                 input(color("Enter para voltar...", Cyber.GRAY))
-            case "19" | "clear" | "limpar" | "cls":
+            case "20" | "clear" | "limpar" | "cls":
                 clear_console()
                 continue
             case _:

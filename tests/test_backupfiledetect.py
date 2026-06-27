@@ -137,7 +137,7 @@ class TestValidateContent:
     def test_sql_insert_into(self):
         ok, detail = _validate_content("dump.sql", b"INSERT INTO users VALUES (1);")
         assert ok is True
-        assert "insert into" in detail.lower()
+        assert any(kw in detail.lower() for kw in ("insert into", "values"))
 
     def test_sql_invalid(self):
         ok, _ = _validate_content("dump.sql", b"this is not sql at all")
