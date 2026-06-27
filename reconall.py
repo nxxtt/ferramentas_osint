@@ -30,6 +30,7 @@ from collections.abc import Callable
 from urllib.parse import urlparse
 
 import attackaudit
+import configfiledetect
 import dirscanner
 import dnshistory
 import dnstransfer
@@ -54,7 +55,7 @@ from utils import (
     setup_logging,
 )
 
-ALL_MODULES = ["portscanner", "dnstransfer", "subenum", "dnshistory", "whoishistory", "ipasninfo", "techfingerprint", "openapidiscovery", "graphqlplayground", "sourcemapdiscovery", "vcsleak", "dirscanner", "webrecon", "attackaudit"]
+ALL_MODULES = ["portscanner", "dnstransfer", "subenum", "dnshistory", "whoishistory", "ipasninfo", "techfingerprint", "openapidiscovery", "graphqlplayground", "sourcemapdiscovery", "vcsleak", "configfiledetect", "dirscanner", "webrecon", "attackaudit"]
 
 """Recon completo: executa portscanner, dirscanner, webrecon, attackaudit, dnstransfer e subenum contra um alvo."""
 
@@ -68,7 +69,7 @@ def banner() -> None:
 /_/  /_/\__, /   /_/  \____/\____/_/____/
        /____/
 """
-    create_banner(art, "   recon all-in-one: port + dir + web + audit + dns + subenum + dnshistory + whoishistory + ipasn + techfp + oas + gql + sm + vcs")()
+    create_banner(art, "   recon all-in-one: port + dir + web + audit + dns + subenum + dnshistory + whoishistory + ipasn + techfp + oas + gql + sm + vcs + cfg")()
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -123,7 +124,7 @@ def _build_base_ns(args: argparse.Namespace) -> argparse.Namespace:
     ele aparece automaticamente aqui via build_parser().parse_args([]).
     """
     all_defaults: dict[str, object] = {}
-    for mod in (dirscanner, portscanner, dnstransfer, subdomainenum, dnshistory, whoishistory, ipasninfo, techfingerprint, openapidiscovery, graphqlplayground, sourcemapdiscovery, vcsleak, webrecon, attackaudit):
+    for mod in (dirscanner, portscanner, dnstransfer, subdomainenum, dnshistory, whoishistory, ipasninfo, techfingerprint, openapidiscovery, graphqlplayground, sourcemapdiscovery, vcsleak, configfiledetect, webrecon, attackaudit):
         parser = mod.build_parser()
         all_defaults.update(vars(parser.parse_args([])))
 
@@ -206,6 +207,9 @@ def run_all(args: argparse.Namespace) -> int:
         if "vcsleak" not in skipped:
             modules.append(("vcsleak", vcsleak.run_once,
                             _make_args(target, {"url": target, "output": _out("vcsleak")}, base_ns)))
+        if "configfiledetect" not in skipped:
+            modules.append(("configfiledetect", configfiledetect.run_once,
+                            _make_args(target, {"url": target, "output": _out("configfiledetect")}, base_ns)))
         if "dirscanner" not in skipped:
             modules.append(("dirscanner", dirscanner.run_once,
                             _make_args(target, {"url": target, "output": _out("dirscanner"), "extensions": ["php", "txt", "bak", "html"]}, base_ns)))
