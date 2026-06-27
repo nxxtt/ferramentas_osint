@@ -4,6 +4,7 @@ import sys
 import attackaudit
 import backupfiledetect
 import configfiledetect
+import darkwebmonitor
 import dirscanner
 import dnshistory
 import dnstransfer
@@ -47,7 +48,8 @@ Painel interativo central que permite alternar entre:
    18. Email Breach Check - Verifica emails em vazamentos de dados
    19. Social Engineering Recon - Coleta emails, nomes, cargos de funcionarios
    20. Paste/Leak Monitor - Busca credenciais em pastes e repos publicos
-   21. ReconAll     - Todos os modulos contra um alvo
+   21. Dark Web Monitor - Busca mencoes em sites .onion
+   22. ReconAll     - Todos os modulos contra um alvo
 
 Cada modulo e lancado em modo interativo com seu proprio shell de comandos.
 O usuario pode usar argumentos CLI normalmente dentro de cada shell.
@@ -92,9 +94,10 @@ def menu() -> None:
     print(f"  {color('18', Cyber.GREEN, Cyber.BOLD)} {color('Email Breach Check', Cyber.CYAN)} Verifica emails em vazamentos")
     print(f"  {color('19', Cyber.GREEN, Cyber.BOLD)} {color('Social Eng Recon', Cyber.CYAN)}  Coleta emails, nomes, cargos")
     print(f"  {color('20', Cyber.GREEN, Cyber.BOLD)} {color('Paste/Leak Monitor', Cyber.CYAN)} Busca credenciais em pastes/repos")
-    print(f"  {color('21', Cyber.GREEN, Cyber.BOLD)} {color('ReconAll', Cyber.CYAN)}          Todos os modulos contra um alvo")
-    print(f"  {color('22', Cyber.GREEN, Cyber.BOLD)} {color('Ajuda', Cyber.CYAN)}            exemplos rapidos")
-    print(f"  {color('23', Cyber.GREEN, Cyber.BOLD)} {color('Limpar', Cyber.CYAN)}           limpar terminal")
+    print(f"  {color('21', Cyber.GREEN, Cyber.BOLD)} {color('Dark Web Monitor', Cyber.CYAN)}  Mencoes em sites .onion")
+    print(f"  {color('22', Cyber.GREEN, Cyber.BOLD)} {color('ReconAll', Cyber.CYAN)}          Todos os modulos contra um alvo")
+    print(f"  {color('23', Cyber.GREEN, Cyber.BOLD)} {color('Ajuda', Cyber.CYAN)}            exemplos rapidos")
+    print(f"  {color('24', Cyber.GREEN, Cyber.BOLD)} {color('Limpar', Cyber.CYAN)}           limpar terminal")
     print(f"  {color('0', Cyber.RED, Cyber.BOLD)} {color('Sair', Cyber.CYAN)}")
 
 
@@ -180,6 +183,11 @@ def help_screen() -> None:
     print("  mytools-leak example.com --source github_gists --source pastebin_rss")
     print("  mytools-leak example.com --github-token ghp_xxx")
     print("  mytools-leak -l domains.txt -o results.json")
+    print(color("\nDark Web Monitoring:", Cyber.CYAN))
+    print("  mytools-dark example.com")
+    print("  mytools-dark example.com --source ahmia --source darksearch")
+    print("  mytools-dark example.com --intelx-key KEY")
+    print("  mytools-dark -l domains.txt -o results.json")
     print(color("\nReconAll:", Cyber.CYAN))
     print("  python3 reconall.py example.com")
     print("  python3 reconall.py example.com --deep --skip dnstransfer")
@@ -565,6 +573,25 @@ def launch_pasteleak() -> None:
     )
 
 
+def launch_darkwebmonitor() -> None:
+    """Inicia o módulo Dark Web Monitoring em modo interativo."""
+    parser = darkwebmonitor.build_parser()
+    run_interactive_shell(
+        parser, "darkweb> ", darkwebmonitor.run_once,
+        description="Dark Web Monitoring interativo.",
+        example="example.com --source ahmia",
+        banner_fn=darkwebmonitor.banner,
+        contextual_help=(
+            "Uso: <dominio> [opcoes]\n"
+            "Exemplos:\n"
+            "  example.com\n"
+            "  example.com --source ahmia --source darksearch\n"
+            "  example.com --intelx-key KEY\n"
+            "  -l domains.txt -o results.json"
+        ),
+    )
+
+
 def launch_reconall() -> None:
     """Inicia o módulo ReconAll em modo interativo."""
     parser = reconall.build_parser()
@@ -642,12 +669,14 @@ def main() -> int:
                 launch_socialengrecon()
             case "20" | "leak" | "paste" | "pasteleak" | "monitor":
                 launch_pasteleak()
-            case "21" | "reconall" | "all" | "full":
+            case "21" | "dark" | "darkweb" | "darkwebmonitor":
+                launch_darkwebmonitor()
+            case "22" | "reconall" | "all" | "full":
                 launch_reconall()
-            case "22" | "help" | "ajuda" | "h":
+            case "23" | "help" | "ajuda" | "h":
                 help_screen()
                 input(color("Enter para voltar...", Cyber.GRAY))
-            case "23" | "clear" | "limpar" | "cls":
+            case "24" | "clear" | "limpar" | "cls":
                 clear_console()
                 continue
             case _:

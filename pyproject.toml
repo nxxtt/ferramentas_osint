@@ -45,6 +45,7 @@ mytools-dork = "googledorking:main"
 mytools-breach = "emailbreachcheck:main"
 mytools-soceng = "socialengrecon:main"
 mytools-leak = "pasteleak:main"
+mytools-dark = "darkwebmonitor:main"
 mytools-reconall = "reconall:main"
 
 [build-system]
