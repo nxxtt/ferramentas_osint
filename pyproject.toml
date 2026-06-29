@@ -47,6 +47,7 @@ mytools-soceng = "socialengrecon:main"
 mytools-leak = "pasteleak:main"
 mytools-dark = "darkwebmonitor:main"
 mytools-rebind = "dnsrebinding:main"
+mytools-dwt = "dnswatorture:main"
 mytools-reconall = "reconall:main"
 
 [build-system]

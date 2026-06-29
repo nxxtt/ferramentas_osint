@@ -9,6 +9,7 @@ import dirscanner
 import dnshistory
 import dnsrebinding
 import dnstransfer
+import dnswatorture
 import emailbreachcheck
 import googledorking
 import graphqlplayground
@@ -51,7 +52,8 @@ Painel interativo central que permite alternar entre:
    20. Paste/Leak Monitor - Busca credenciais em pastes e repos publicos
    21. Dark Web Monitor - Busca mencoes em sites .onion
    22. DNS Rebinding - Testa vulnerabilidade a DNS rebinding
-   23. ReconAll     - Todos os modulos contra um alvo
+   23. DNS Water Torture - Stress test DNS com subdominios aleatorios
+   24. ReconAll     - Todos os modulos contra um alvo
 
 Cada modulo e lancado em modo interativo com seu proprio shell de comandos.
 O usuario pode usar argumentos CLI normalmente dentro de cada shell.
@@ -98,9 +100,10 @@ def menu() -> None:
     print(f"  {color('20', Cyber.GREEN, Cyber.BOLD)} {color('Paste/Leak Monitor', Cyber.CYAN)} Busca credenciais em pastes/repos")
     print(f"  {color('21', Cyber.GREEN, Cyber.BOLD)} {color('Dark Web Monitor', Cyber.CYAN)}  Mencoes em sites .onion")
     print(f"  {color('22', Cyber.GREEN, Cyber.BOLD)} {color('DNS Rebinding', Cyber.CYAN)}      Testa vuln rebinding (TTL, IP, CNAME)")
-    print(f"  {color('23', Cyber.GREEN, Cyber.BOLD)} {color('ReconAll', Cyber.CYAN)}          Todos os modulos contra um alvo")
-    print(f"  {color('24', Cyber.GREEN, Cyber.BOLD)} {color('Ajuda', Cyber.CYAN)}            exemplos rapidos")
-    print(f"  {color('25', Cyber.GREEN, Cyber.BOLD)} {color('Limpar', Cyber.CYAN)}           limpar terminal")
+    print(f"  {color('23', Cyber.GREEN, Cyber.BOLD)} {color('DNS Water Torture', Cyber.CYAN)} Stress test DNS (subdominios aleatorios)")
+    print(f"  {color('24', Cyber.GREEN, Cyber.BOLD)} {color('ReconAll', Cyber.CYAN)}          Todos os modulos contra um alvo")
+    print(f"  {color('25', Cyber.GREEN, Cyber.BOLD)} {color('Ajuda', Cyber.CYAN)}            exemplos rapidos")
+    print(f"  {color('26', Cyber.GREEN, Cyber.BOLD)} {color('Limpar', Cyber.CYAN)}           limpar terminal")
     print(f"  {color('0', Cyber.RED, Cyber.BOLD)} {color('Sair', Cyber.CYAN)}")
 
 
@@ -195,6 +198,11 @@ def help_screen() -> None:
     print("  mytools-rebind example.com")
     print("  mytools-rebind example.com --queries 10")
     print("  mytools-rebind -l domains.txt -o results.json")
+    print(color("\nDNS Water Torture:", Cyber.CYAN))
+    print("  mytools-dwt example.com")
+    print("  mytools-dwt example.com --rate 100 --duration 30")
+    print("  mytools-dwt example.com --nameserver 8.8.8.8 --pattern uuid")
+    print("  mytools-dwt example.com --concurrency 50 --duration 60")
     print(color("\nReconAll:", Cyber.CYAN))
     print("  python3 reconall.py example.com")
     print("  python3 reconall.py example.com --deep --skip dnstransfer")
@@ -617,6 +625,25 @@ def launch_dnsrebinding() -> None:
     )
 
 
+def launch_dnswatorture() -> None:
+    """Inicia o módulo DNS Water Torture em modo interativo."""
+    parser = dnswatorture.build_parser()
+    run_interactive_shell(
+        parser, "dwt> ", dnswatorture.run_once,
+        description="DNS Water Torture interativo.",
+        example="example.com --rate 100 --duration 10",
+        banner_fn=dnswatorture.banner,
+        contextual_help=(
+            "Uso: <dominio> [opcoes]\n"
+            "Exemplos:\n"
+            "  example.com\n"
+            "  example.com --rate 100 --duration 30\n"
+            "  example.com --nameserver 8.8.8.8 --pattern uuid\n"
+            "  example.com --concurrency 50 --duration 60"
+        ),
+    )
+
+
 def launch_reconall() -> None:
     """Inicia o módulo ReconAll em modo interativo."""
     parser = reconall.build_parser()
@@ -698,12 +725,14 @@ def main() -> int:
                 launch_darkwebmonitor()
             case "22" | "rebind" | "dnsrebinding" | "rebinding":
                 launch_dnsrebinding()
-            case "23" | "reconall" | "all" | "full":
+            case "23" | "dwt" | "watorture" | "dns watorture" | "dnswatorture":
+                launch_dnswatorture()
+            case "24" | "reconall" | "all" | "full":
                 launch_reconall()
-            case "24" | "help" | "ajuda" | "h":
+            case "25" | "help" | "ajuda" | "h":
                 help_screen()
                 input(color("Enter para voltar...", Cyber.GRAY))
-            case "25" | "clear" | "limpar" | "cls":
+            case "26" | "clear" | "limpar" | "cls":
                 clear_console()
                 continue
             case _:
