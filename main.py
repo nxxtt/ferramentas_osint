@@ -7,6 +7,7 @@ import configfiledetect
 import darkwebmonitor
 import dirscanner
 import dnshistory
+import dnsrebinding
 import dnstransfer
 import emailbreachcheck
 import googledorking
@@ -49,7 +50,8 @@ Painel interativo central que permite alternar entre:
    19. Social Engineering Recon - Coleta emails, nomes, cargos de funcionarios
    20. Paste/Leak Monitor - Busca credenciais em pastes e repos publicos
    21. Dark Web Monitor - Busca mencoes em sites .onion
-   22. ReconAll     - Todos os modulos contra um alvo
+   22. DNS Rebinding - Testa vulnerabilidade a DNS rebinding
+   23. ReconAll     - Todos os modulos contra um alvo
 
 Cada modulo e lancado em modo interativo com seu proprio shell de comandos.
 O usuario pode usar argumentos CLI normalmente dentro de cada shell.
@@ -95,9 +97,10 @@ def menu() -> None:
     print(f"  {color('19', Cyber.GREEN, Cyber.BOLD)} {color('Social Eng Recon', Cyber.CYAN)}  Coleta emails, nomes, cargos")
     print(f"  {color('20', Cyber.GREEN, Cyber.BOLD)} {color('Paste/Leak Monitor', Cyber.CYAN)} Busca credenciais em pastes/repos")
     print(f"  {color('21', Cyber.GREEN, Cyber.BOLD)} {color('Dark Web Monitor', Cyber.CYAN)}  Mencoes em sites .onion")
-    print(f"  {color('22', Cyber.GREEN, Cyber.BOLD)} {color('ReconAll', Cyber.CYAN)}          Todos os modulos contra um alvo")
-    print(f"  {color('23', Cyber.GREEN, Cyber.BOLD)} {color('Ajuda', Cyber.CYAN)}            exemplos rapidos")
-    print(f"  {color('24', Cyber.GREEN, Cyber.BOLD)} {color('Limpar', Cyber.CYAN)}           limpar terminal")
+    print(f"  {color('22', Cyber.GREEN, Cyber.BOLD)} {color('DNS Rebinding', Cyber.CYAN)}      Testa vuln rebinding (TTL, IP, CNAME)")
+    print(f"  {color('23', Cyber.GREEN, Cyber.BOLD)} {color('ReconAll', Cyber.CYAN)}          Todos os modulos contra um alvo")
+    print(f"  {color('24', Cyber.GREEN, Cyber.BOLD)} {color('Ajuda', Cyber.CYAN)}            exemplos rapidos")
+    print(f"  {color('25', Cyber.GREEN, Cyber.BOLD)} {color('Limpar', Cyber.CYAN)}           limpar terminal")
     print(f"  {color('0', Cyber.RED, Cyber.BOLD)} {color('Sair', Cyber.CYAN)}")
 
 
@@ -188,6 +191,10 @@ def help_screen() -> None:
     print("  mytools-dark example.com --source ahmia --source darksearch")
     print("  mytools-dark example.com --intelx-key KEY")
     print("  mytools-dark -l domains.txt -o results.json")
+    print(color("\nDNS Rebinding Detection:", Cyber.CYAN))
+    print("  mytools-rebind example.com")
+    print("  mytools-rebind example.com --queries 10")
+    print("  mytools-rebind -l domains.txt -o results.json")
     print(color("\nReconAll:", Cyber.CYAN))
     print("  python3 reconall.py example.com")
     print("  python3 reconall.py example.com --deep --skip dnstransfer")
@@ -592,6 +599,24 @@ def launch_darkwebmonitor() -> None:
     )
 
 
+def launch_dnsrebinding() -> None:
+    """Inicia o módulo DNS Rebinding Detection em modo interativo."""
+    parser = dnsrebinding.build_parser()
+    run_interactive_shell(
+        parser, "rebind> ", dnsrebinding.run_once,
+        description="DNS Rebinding Detection interativo.",
+        example="example.com --queries 10",
+        banner_fn=dnsrebinding.banner,
+        contextual_help=(
+            "Uso: <dominio> [opcoes]\n"
+            "Exemplos:\n"
+            "  example.com\n"
+            "  example.com --queries 10\n"
+            "  -l domains.txt -o results.json"
+        ),
+    )
+
+
 def launch_reconall() -> None:
     """Inicia o módulo ReconAll em modo interativo."""
     parser = reconall.build_parser()
@@ -671,12 +696,14 @@ def main() -> int:
                 launch_pasteleak()
             case "21" | "dark" | "darkweb" | "darkwebmonitor":
                 launch_darkwebmonitor()
-            case "22" | "reconall" | "all" | "full":
+            case "22" | "rebind" | "dnsrebinding" | "rebinding":
+                launch_dnsrebinding()
+            case "23" | "reconall" | "all" | "full":
                 launch_reconall()
-            case "23" | "help" | "ajuda" | "h":
+            case "24" | "help" | "ajuda" | "h":
                 help_screen()
                 input(color("Enter para voltar...", Cyber.GRAY))
-            case "24" | "clear" | "limpar" | "cls":
+            case "25" | "clear" | "limpar" | "cls":
                 clear_console()
                 continue
             case _:
