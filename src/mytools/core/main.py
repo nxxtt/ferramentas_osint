@@ -18,7 +18,7 @@ from mytools.email import (
 from mytools.network import dirscanner, portscanner
 from mytools.osint import darkwebmonitor, emailbreachcheck, googledorking, ipasninfo, pasteleak, socialengrecon
 from mytools.vcs import vcsleak
-from mytools.web import attackaudit, graphqlplayground, openapidiscovery, sourcemapdiscovery, techfingerprint, webrecon
+from mytools.web import attackaudit, graphqlplayground, nullbyteinject, openapidiscovery, sourcemapdiscovery, techfingerprint, webrecon
 from mytools.whois import whoishistory
 
 """Modulo principal que integra as ferramentas de segurança.
@@ -60,7 +60,8 @@ Painel interativo central que permite alternar entre:
     34. Attach Bypass  - Testa bypass de filtros de anexos de email
     35. Addr Bypass   - Testa bypass de blocklists via local-parts citados
     36. Link Tracking - Detecta tracking pixels e link rewrites em emails
-    37. ReconAll     - Todos os modulos contra um alvo
+    37. Null Byte    - Testa injecao de null bytes em URLs, headers e parametros
+    38. ReconAll     - Todos os modulos contra um alvo
 
 Cada modulo e lancado em modo interativo com seu proprio shell de comandos.
 O usuario pode usar argumentos CLI normalmente dentro de cada shell.
@@ -121,9 +122,10 @@ def menu() -> None:
     print(f"  {color('34', Cyber.GREEN, Cyber.BOLD)} {color('Attach Bypass', Cyber.CYAN)}  Testa bypass de filtros de anexos")
     print(f"  {color('35', Cyber.GREEN, Cyber.BOLD)} {color('Addr Bypass', Cyber.CYAN)}   Testa bypass de blocklists (quoted)")
     print(f"  {color('36', Cyber.GREEN, Cyber.BOLD)} {color('Link Tracking', Cyber.CYAN)} Detecta tracking pixels e link rewrites")
-    print(f"  {color('37', Cyber.GREEN, Cyber.BOLD)} {color('ReconAll', Cyber.CYAN)}          Todos os modulos contra um alvo")
-    print(f"  {color('38', Cyber.GREEN, Cyber.BOLD)} {color('Ajuda', Cyber.CYAN)}            exemplos rapidos")
-    print(f"  {color('39', Cyber.GREEN, Cyber.BOLD)} {color('Limpar', Cyber.CYAN)}           limpar terminal")
+    print(f"  {color('37', Cyber.GREEN, Cyber.BOLD)} {color('Null Byte', Cyber.CYAN)}    Testa injecao de null bytes em web apps")
+    print(f"  {color('38', Cyber.GREEN, Cyber.BOLD)} {color('ReconAll', Cyber.CYAN)}          Todos os modulos contra um alvo")
+    print(f"  {color('39', Cyber.GREEN, Cyber.BOLD)} {color('Ajuda', Cyber.CYAN)}            exemplos rapidos")
+    print(f"  {color('40', Cyber.GREEN, Cyber.BOLD)} {color('Limpar', Cyber.CYAN)}           limpar terminal")
     print(f"  {color('0', Cyber.RED, Cyber.BOLD)} {color('Sair', Cyber.CYAN)}")
 
 
@@ -269,6 +271,11 @@ def help_screen() -> None:
     print("  mytools-linktrack mail.example.com --port 25")
     print("  mytools-linktrack mail.example.com --category pixel")
     print("  mytools-linktrack mail.example.com --category link")
+    print(color("\nNull Byte Injection:", Cyber.CYAN))
+    print("  mytools-nullbyte https://target.com")
+    print("  mytools-nullbyte https://target.com -c url")
+    print("  mytools-nullbyte https://target.com -c header --proxy http://127.0.0.1:8080")
+    print("  mytools-nullbyte https://target.com -c traversal --timeout 15")
     print(color("\nReconAll:", Cyber.CYAN))
     print("  python3 reconall.py example.com")
     print("  python3 reconall.py example.com --deep --skip dnstransfer")
@@ -949,6 +956,25 @@ def launch_emaillinktracking() -> None:
     )
 
 
+def launch_nullbyteinject() -> None:
+    """Inicia o módulo Null Byte Injection em modo interativo."""
+    parser = nullbyteinject.build_parser()
+    run_interactive_shell(
+        parser, "nullbyte> ", nullbyteinject.run_once,
+        description="Null Byte Injection — testa injecao de null bytes em URLs, headers e parametros.",
+        example="https://target.com -c url",
+        banner_fn=nullbyteinject.banner_art,
+        contextual_help=(
+            "Uso: <url> [opcoes]\n"
+            "Exemplos:\n"
+            "  https://target.com\n"
+            "  https://target.com -c url\n"
+            "  https://target.com -c header --proxy http://127.0.0.1:8080\n"
+            "  https://target.com -c traversal --timeout 15"
+        ),
+    )
+
+
 def launch_reconall() -> None:
     """Inicia o módulo ReconAll em modo interativo."""
     parser = reconall.build_parser()
@@ -1058,12 +1084,14 @@ def main() -> int:
                 launch_emailaddressbypass()
             case "36" | "linktrack" | "linktracking" | "tracking":
                 launch_emaillinktracking()
-            case "37" | "reconall" | "all" | "full":
+            case "37" | "nullbyte" | "null" | "nullinject":
+                launch_nullbyteinject()
+            case "38" | "reconall" | "all" | "full":
                 launch_reconall()
-            case "38" | "help" | "ajuda" | "h":
+            case "39" | "help" | "ajuda" | "h":
                 help_screen()
                 input(color("Enter para voltar...", Cyber.GRAY))
-            case "39" | "clear" | "limpar" | "cls":
+            case "40" | "clear" | "limpar" | "cls":
                 clear_console()
                 continue
             case _:
