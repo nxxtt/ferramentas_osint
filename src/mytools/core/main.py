@@ -18,7 +18,17 @@ from mytools.email import (
 from mytools.network import dirscanner, portscanner
 from mytools.osint import darkwebmonitor, emailbreachcheck, googledorking, ipasninfo, pasteleak, socialengrecon
 from mytools.vcs import vcsleak
-from mytools.web import attackaudit, doubleurlencode, graphqlplayground, nullbyteinject, openapidiscovery, sourcemapdiscovery, techfingerprint, webrecon
+from mytools.web import (
+    attackaudit,
+    doubleurlencode,
+    graphqlplayground,
+    nullbyteinject,
+    openapidiscovery,
+    pathtraversal,
+    sourcemapdiscovery,
+    techfingerprint,
+    webrecon,
+)
 from mytools.whois import whoishistory
 
 """Modulo principal que integra as ferramentas de segurança.
@@ -62,7 +72,8 @@ Painel interativo central que permite alternar entre:
     36. Link Tracking - Detecta tracking pixels e link rewrites em emails
     37. Null Byte    - Testa injecao de null bytes em URLs, headers e parametros
     38. DblURL Encode - Testa bypass de filtros via encoding duplo de URLs
-    39. ReconAll     - Todos os modulos contra um alvo
+    39. Ptraversal   - Path traversal via encoding
+    40. ReconAll     - Todos os modulos contra um alvo
 
 Cada modulo e lancado em modo interativo com seu proprio shell de comandos.
 O usuario pode usar argumentos CLI normalmente dentro de cada shell.
@@ -125,9 +136,10 @@ def menu() -> None:
     print(f"  {color('36', Cyber.GREEN, Cyber.BOLD)} {color('Link Tracking', Cyber.CYAN)} Detecta tracking pixels e link rewrites")
     print(f"  {color('37', Cyber.GREEN, Cyber.BOLD)} {color('Null Byte', Cyber.CYAN)}    Testa injecao de null bytes em web apps")
     print(f"  {color('38', Cyber.GREEN, Cyber.BOLD)} {color('DblURL Encode', Cyber.CYAN)} Testa bypass via encoding duplo de URLs")
-    print(f"  {color('39', Cyber.GREEN, Cyber.BOLD)} {color('ReconAll', Cyber.CYAN)}          Todos os modulos contra um alvo")
-    print(f"  {color('40', Cyber.GREEN, Cyber.BOLD)} {color('Ajuda', Cyber.CYAN)}            exemplos rapidos")
-    print(f"  {color('41', Cyber.GREEN, Cyber.BOLD)} {color('Limpar', Cyber.CYAN)}           limpar terminal")
+    print(f"  {color('39', Cyber.GREEN, Cyber.BOLD)} {color('Ptraversal', Cyber.CYAN)}    Path traversal via encoding")
+    print(f"  {color('40', Cyber.GREEN, Cyber.BOLD)} {color('ReconAll', Cyber.CYAN)}          Todos os modulos contra um alvo")
+    print(f"  {color('41', Cyber.GREEN, Cyber.BOLD)} {color('Ajuda', Cyber.CYAN)}            exemplos rapidos")
+    print(f"  {color('42', Cyber.GREEN, Cyber.BOLD)} {color('Limpar', Cyber.CYAN)}           limpar terminal")
     print(f"  {color('0', Cyber.RED, Cyber.BOLD)} {color('Sair', Cyber.CYAN)}")
 
 
@@ -283,6 +295,11 @@ def help_screen() -> None:
     print("  mytools-dblurl https://target.com -c url")
     print("  mytools-dblurl https://target.com -c traversal")
     print("  mytools-dblurl https://target.com -c waf --proxy http://127.0.0.1:8080")
+    print(color("\nPath Traversal via Encoding:", Cyber.CYAN))
+    print("  mytools-ptraversal https://target.com")
+    print("  mytools-ptraversal https://target.com -c path")
+    print("  mytools-ptraversal https://target.com -c semicolon")
+    print("  mytools-ptraversal https://target.com -c platform --proxy http://127.0.0.1:8080")
     print(color("\nReconAll:", Cyber.CYAN))
     print("  python3 reconall.py example.com")
     print("  python3 reconall.py example.com --deep --skip dnstransfer")
@@ -1001,6 +1018,25 @@ def launch_doubleurlencode() -> None:
     )
 
 
+def launch_pathtraversal() -> None:
+    """Inicia o módulo Path Traversal via Encoding em modo interativo."""
+    parser = pathtraversal.build_parser()
+    run_interactive_shell(
+        parser, "ptraversal> ", pathtraversal.run_once,
+        description="Path Traversal via Encoding — detecta bypass de traversal via encoding.",
+        example="https://target.com -c path",
+        banner_fn=pathtraversal.banner_art,
+        contextual_help=(
+            "Uso: <url> [opcoes]\n"
+            "Exemplos:\n"
+            "  https://target.com\n"
+            "  https://target.com -c path\n"
+            "  https://target.com -c semicolon\n"
+            "  https://target.com -c platform --proxy http://127.0.0.1:8080"
+        ),
+    )
+
+
 def launch_reconall() -> None:
     """Inicia o módulo ReconAll em modo interativo."""
     parser = reconall.build_parser()
@@ -1114,12 +1150,14 @@ def main() -> int:
                 launch_nullbyteinject()
             case "38" | "dblurl" | "doubleurl" | "doubleencode":
                 launch_doubleurlencode()
-            case "39" | "reconall" | "all" | "full":
+            case "39" | "ptraversal" | "pathtraversal" | "traversalenc":
+                launch_pathtraversal()
+            case "40" | "reconall" | "all" | "full":
                 launch_reconall()
-            case "40" | "help" | "ajuda" | "h":
+            case "41" | "help" | "ajuda" | "h":
                 help_screen()
                 input(color("Enter para voltar...", Cyber.GRAY))
-            case "41" | "clear" | "limpar" | "cls":
+            case "42" | "clear" | "limpar" | "cls":
                 clear_console()
                 continue
             case _:
