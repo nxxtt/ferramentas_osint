@@ -16,6 +16,7 @@ import dnstunnel
 import dnswatorture
 import emailbreachcheck
 import emailsecurity
+import emailspoof
 import googledorking
 import graphqlplayground
 import ipasninfo
@@ -65,7 +66,8 @@ Painel interativo central que permite alternar entre:
    27. NSEC Walking   - Enumera zona via NSEC records em DNSSEC
    28. CAA Record Check - Verifica registros CAA de certificados
    29. Email Security  - Verifica DMARC/SPF/DKIM
-   30. ReconAll     - Todos os modulos contra um alvo
+   30. Email Spoofing - Analise de vulnerabilidade a spoofing
+   31. ReconAll     - Todos os modulos contra um alvo
 
 Cada modulo e lancado em modo interativo com seu proprio shell de comandos.
 O usuario pode usar argumentos CLI normalmente dentro de cada shell.
@@ -119,9 +121,10 @@ def menu() -> None:
     print(f"  {color('27', Cyber.GREEN, Cyber.BOLD)} {color('NSEC Walking', Cyber.CYAN)}      Enumera zona via NSEC records")
     print(f"  {color('28', Cyber.GREEN, Cyber.BOLD)} {color('CAA Record Check', Cyber.CYAN)} Verifica registros CAA de certificados")
     print(f"  {color('29', Cyber.GREEN, Cyber.BOLD)} {color('Email Security', Cyber.CYAN)}   Verifica DMARC/SPF/DKIM")
-    print(f"  {color('30', Cyber.GREEN, Cyber.BOLD)} {color('ReconAll', Cyber.CYAN)}          Todos os modulos contra um alvo")
-    print(f"  {color('31', Cyber.GREEN, Cyber.BOLD)} {color('Ajuda', Cyber.CYAN)}            exemplos rapidos")
-    print(f"  {color('32', Cyber.GREEN, Cyber.BOLD)} {color('Limpar', Cyber.CYAN)}           limpar terminal")
+    print(f"  {color('30', Cyber.GREEN, Cyber.BOLD)} {color('Email Spoofing', Cyber.CYAN)}  Analise de vulnerabilidade a spoofing")
+    print(f"  {color('31', Cyber.GREEN, Cyber.BOLD)} {color('ReconAll', Cyber.CYAN)}          Todos os modulos contra um alvo")
+    print(f"  {color('32', Cyber.GREEN, Cyber.BOLD)} {color('Ajuda', Cyber.CYAN)}            exemplos rapidos")
+    print(f"  {color('33', Cyber.GREEN, Cyber.BOLD)} {color('Limpar', Cyber.CYAN)}           limpar terminal")
     print(f"  {color('0', Cyber.RED, Cyber.BOLD)} {color('Sair', Cyber.CYAN)}")
 
 
@@ -244,6 +247,10 @@ def help_screen() -> None:
     print("  mytools-secemail example.com")
     print("  mytools-secemail example.com --selectors default,google")
     print("  mytools-secemail example.com --nameserver 1.1.1.1")
+    print(color("\nEmail Spoofing:", Cyber.CYAN))
+    print("  mytools-spoof example.com")
+    print("  mytools-spoof example.com --selectors default,google")
+    print("  mytools-spoof example.com --nameserver 1.1.1.1")
     print(color("\nReconAll:", Cyber.CYAN))
     print("  python3 reconall.py example.com")
     print("  python3 reconall.py example.com --deep --skip dnstransfer")
@@ -792,6 +799,24 @@ def launch_emailsecurity() -> None:
     )
 
 
+def launch_emailspoof() -> None:
+    """Inicia o módulo Email Spoofing em modo interativo."""
+    parser = emailspoof.build_parser()
+    run_interactive_shell(
+        parser, "spoof> ", emailspoof.run_once,
+        description="Email Spoofing — analise de vulnerabilidade a spoofing.",
+        example="example.com --selectors default,google",
+        banner_fn=emailspoof.banner,
+        contextual_help=(
+            "Uso: <dominio> [opcoes]\n"
+            "Exemplos:\n"
+            "  example.com\n"
+            "  example.com --selectors default,google,s1\n"
+            "  example.com --nameserver 1.1.1.1"
+        ),
+    )
+
+
 def launch_reconall() -> None:
     """Inicia o módulo ReconAll em modo interativo."""
     parser = reconall.build_parser()
@@ -887,12 +912,14 @@ def main() -> int:
                 launch_caacheck()
             case "29" | "secemail" | "emailsecurity" | "dmarc" | "spf" | "dkim":
                 launch_emailsecurity()
-            case "30" | "reconall" | "all" | "full":
+            case "30" | "spoof" | "emailspoof" | "spoofing":
+                launch_emailspoof()
+            case "31" | "reconall" | "all" | "full":
                 launch_reconall()
-            case "31" | "help" | "ajuda" | "h":
+            case "32" | "help" | "ajuda" | "h":
                 help_screen()
                 input(color("Enter para voltar...", Cyber.GRAY))
-            case "32" | "clear" | "limpar" | "cls":
+            case "33" | "clear" | "limpar" | "cls":
                 clear_console()
                 continue
             case _:
