@@ -57,6 +57,7 @@ mytools-secemail = "emailsecurity:main"
 mytools-spoof = "emailspoof:main"
 mytools-smtpinject = "smtpinjection:main"
 mytools-smtpdown = "smtpdowngrade:main"
+mytools-templeti = "emailtemplateinject:main"
 mytools-reconall = "reconall:main"
 
 [build-system]

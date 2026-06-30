@@ -44,6 +44,7 @@ import dnstunnel
 import dnswatorture
 import emailbreachcheck
 import emailsecurity
+import emailtemplateinject
 import emailspoof
 import googledorking
 import graphqlplayground
@@ -72,7 +73,7 @@ from utils import (
     setup_logging,
 )
 
-ALL_MODULES = ["portscanner", "dnstransfer", "subenum", "dnshistory", "whoishistory", "ipasninfo", "techfingerprint", "openapidiscovery", "graphqlplayground", "sourcemapdiscovery", "vcsleak", "configfiledetect", "backupfiledetect", "googledorking", "emailbreachcheck", "socialengrecon", "pasteleak", "darkwebmonitor", "dnsrebinding", "dnswatorture", "dnsamplification", "dnstunnel", "dnssecvalidation", "nsecwalking", "caacheck", "emailsecurity", "emailspoof", "smtpinjection", "smtpdowngrade", "dirscanner", "webrecon", "attackaudit"]
+ALL_MODULES = ["portscanner", "dnstransfer", "subenum", "dnshistory", "whoishistory", "ipasninfo", "techfingerprint", "openapidiscovery", "graphqlplayground", "sourcemapdiscovery", "vcsleak", "configfiledetect", "backupfiledetect", "googledorking", "emailbreachcheck", "socialengrecon", "pasteleak", "darkwebmonitor", "dnsrebinding", "dnswatorture", "dnsamplification", "dnstunnel", "dnssecvalidation", "nsecwalking",     "caacheck", "emailsecurity", "emailspoof", "smtpinjection", "smtpdowngrade", "emailtemplateinject", "dirscanner", "webrecon", "attackaudit"]
 
 """Recon completo: executa portscanner, dirscanner, webrecon, attackaudit, dnstransfer e subenum contra um alvo."""
 
@@ -86,7 +87,7 @@ def banner() -> None:
 /_/  /_/\__, /   /_/  \____/\____/_/____/
        /____/
 """
-    create_banner(art, "   recon all-in-one: port + dir + web + audit + dns + subenum + dnshistory + whoishistory + ipasn + techfp + oas + gql + sm + vcs + cfg + bak + dork + breach + soceng + leak + dark + rebind + dwt + amp + tunnel + dnssec + nsec + caa + secemail + spoof + smtpinject + smtpdown")()
+    create_banner(art, "   recon all-in-one: port + dir + web + audit + dns + subenum + dnshistory + whoishistory + ipasn + techfp + oas + gql + sm + vcs + cfg + bak + dork + breach + soceng + leak + dark + rebind + dwt + amp + tunnel + dnssec + nsec + caa + secemail + spoof + smtpinject + smtpdown + templeti")()
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -143,7 +144,7 @@ _ALL_MODS = (
     backupfiledetect, googledorking, emailbreachcheck, socialengrecon,
     pasteleak, darkwebmonitor, dnsrebinding, dnswatorture,
     dnsamplification, dnstunnel, dnssecvalidation, nsecwalking,
-    caacheck, emailsecurity, emailspoof, smtpinjection, smtpdowngrade, webrecon, attackaudit,
+    caacheck, emailsecurity, emailspoof, smtpinjection, smtpdowngrade, emailtemplateinject, webrecon, attackaudit,
 )
 
 
@@ -293,6 +294,10 @@ def run_all(args: argparse.Namespace) -> int:
     if "smtpdowngrade" not in skipped:
         modules.append(("smtpdowngrade", smtpdowngrade.run_once,
                         _make_args(target, {"target": domain, "output": _out("smtpdowngrade")}, base_ns)))
+
+    if "emailtemplateinject" not in skipped:
+        modules.append(("emailtemplateinject", emailtemplateinject.run_once,
+                        _make_args(target, {"target": domain, "output": _out("emailtemplateinject")}, base_ns)))
 
     if is_url:
         if "techfingerprint" not in skipped:
