@@ -52,6 +52,7 @@ import nsecwalking
 import openapidiscovery
 import pasteleak
 import portscanner
+import smtpinjection
 import socialengrecon
 import sourcemapdiscovery
 import subdomainenum
@@ -70,7 +71,7 @@ from utils import (
     setup_logging,
 )
 
-ALL_MODULES = ["portscanner", "dnstransfer", "subenum", "dnshistory", "whoishistory", "ipasninfo", "techfingerprint", "openapidiscovery", "graphqlplayground", "sourcemapdiscovery", "vcsleak", "configfiledetect", "backupfiledetect", "googledorking", "emailbreachcheck", "socialengrecon", "pasteleak", "darkwebmonitor", "dnsrebinding", "dnswatorture", "dnsamplification", "dnstunnel", "dnssecvalidation", "nsecwalking", "caacheck", "emailsecurity", "emailspoof", "dirscanner", "webrecon", "attackaudit"]
+ALL_MODULES = ["portscanner", "dnstransfer", "subenum", "dnshistory", "whoishistory", "ipasninfo", "techfingerprint", "openapidiscovery", "graphqlplayground", "sourcemapdiscovery", "vcsleak", "configfiledetect", "backupfiledetect", "googledorking", "emailbreachcheck", "socialengrecon", "pasteleak", "darkwebmonitor", "dnsrebinding", "dnswatorture", "dnsamplification", "dnstunnel", "dnssecvalidation", "nsecwalking", "caacheck", "emailsecurity", "emailspoof", "smtpinjection", "dirscanner", "webrecon", "attackaudit"]
 
 """Recon completo: executa portscanner, dirscanner, webrecon, attackaudit, dnstransfer e subenum contra um alvo."""
 
@@ -84,7 +85,7 @@ def banner() -> None:
 /_/  /_/\__, /   /_/  \____/\____/_/____/
        /____/
 """
-    create_banner(art, "   recon all-in-one: port + dir + web + audit + dns + subenum + dnshistory + whoishistory + ipasn + techfp + oas + gql + sm + vcs + cfg + bak + dork + breach + soceng + leak + dark + rebind + dwt + amp + tunnel + dnssec + nsec + caa + secemail + spoof")()
+    create_banner(art, "   recon all-in-one: port + dir + web + audit + dns + subenum + dnshistory + whoishistory + ipasn + techfp + oas + gql + sm + vcs + cfg + bak + dork + breach + soceng + leak + dark + rebind + dwt + amp + tunnel + dnssec + nsec + caa + secemail + spoof + smtpinject")()
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -141,7 +142,7 @@ _ALL_MODS = (
     backupfiledetect, googledorking, emailbreachcheck, socialengrecon,
     pasteleak, darkwebmonitor, dnsrebinding, dnswatorture,
     dnsamplification, dnstunnel, dnssecvalidation, nsecwalking,
-    caacheck, emailsecurity, emailspoof, webrecon, attackaudit,
+    caacheck, emailsecurity, emailspoof, smtpinjection, webrecon, attackaudit,
 )
 
 
@@ -283,6 +284,10 @@ def run_all(args: argparse.Namespace) -> int:
     if "emailspoof" not in skipped:
         modules.append(("emailspoof", emailspoof.run_once,
                         _make_args(domain, {"domain": domain, "output": _out("emailspoof")}, base_ns)))
+
+    if "smtpinjection" not in skipped:
+        modules.append(("smtpinjection", smtpinjection.run_once,
+                        _make_args(target, {"target": domain, "output": _out("smtpinjection")}, base_ns)))
 
     if is_url:
         if "techfingerprint" not in skipped:

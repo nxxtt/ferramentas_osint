@@ -55,6 +55,7 @@ mytools-nsec = "nsecwalking:main"
 mytools-caa = "caacheck:main"
 mytools-secemail = "emailsecurity:main"
 mytools-spoof = "emailspoof:main"
+mytools-smtpinject = "smtpinjection:main"
 mytools-reconall = "reconall:main"
 
 [build-system]

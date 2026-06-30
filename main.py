@@ -25,6 +25,7 @@ import openapidiscovery
 import pasteleak
 import portscanner
 import reconall
+import smtpinjection
 import socialengrecon
 import sourcemapdiscovery
 import subdomainenum
@@ -67,7 +68,8 @@ Painel interativo central que permite alternar entre:
    28. CAA Record Check - Verifica registros CAA de certificados
    29. Email Security  - Verifica DMARC/SPF/DKIM
    30. Email Spoofing - Analise de vulnerabilidade a spoofing
-   31. ReconAll     - Todos os modulos contra um alvo
+   31. SMTP Injection - Testa injecao CRLF em campos de email
+   32. ReconAll     - Todos os modulos contra um alvo
 
 Cada modulo e lancado em modo interativo com seu proprio shell de comandos.
 O usuario pode usar argumentos CLI normalmente dentro de cada shell.
@@ -122,9 +124,10 @@ def menu() -> None:
     print(f"  {color('28', Cyber.GREEN, Cyber.BOLD)} {color('CAA Record Check', Cyber.CYAN)} Verifica registros CAA de certificados")
     print(f"  {color('29', Cyber.GREEN, Cyber.BOLD)} {color('Email Security', Cyber.CYAN)}   Verifica DMARC/SPF/DKIM")
     print(f"  {color('30', Cyber.GREEN, Cyber.BOLD)} {color('Email Spoofing', Cyber.CYAN)}  Analise de vulnerabilidade a spoofing")
-    print(f"  {color('31', Cyber.GREEN, Cyber.BOLD)} {color('ReconAll', Cyber.CYAN)}          Todos os modulos contra um alvo")
-    print(f"  {color('32', Cyber.GREEN, Cyber.BOLD)} {color('Ajuda', Cyber.CYAN)}            exemplos rapidos")
-    print(f"  {color('33', Cyber.GREEN, Cyber.BOLD)} {color('Limpar', Cyber.CYAN)}           limpar terminal")
+    print(f"  {color('31', Cyber.GREEN, Cyber.BOLD)} {color('SMTP Injection', Cyber.CYAN)} Testa injecao CRLF em campos de email")
+    print(f"  {color('32', Cyber.GREEN, Cyber.BOLD)} {color('ReconAll', Cyber.CYAN)}          Todos os modulos contra um alvo")
+    print(f"  {color('33', Cyber.GREEN, Cyber.BOLD)} {color('Ajuda', Cyber.CYAN)}            exemplos rapidos")
+    print(f"  {color('34', Cyber.GREEN, Cyber.BOLD)} {color('Limpar', Cyber.CYAN)}           limpar terminal")
     print(f"  {color('0', Cyber.RED, Cyber.BOLD)} {color('Sair', Cyber.CYAN)}")
 
 
@@ -251,6 +254,10 @@ def help_screen() -> None:
     print("  mytools-spoof example.com")
     print("  mytools-spoof example.com --selectors default,google")
     print("  mytools-spoof example.com --nameserver 1.1.1.1")
+    print(color("\nSMTP Injection:", Cyber.CYAN))
+    print("  mytools-smtpinject mail.example.com")
+    print("  mytools-smtpinject mail.example.com --port 25 --no-tls")
+    print("  mytools-smtpinject mail.example.com --fields To,Subject")
     print(color("\nReconAll:", Cyber.CYAN))
     print("  python3 reconall.py example.com")
     print("  python3 reconall.py example.com --deep --skip dnstransfer")
@@ -817,6 +824,24 @@ def launch_emailspoof() -> None:
     )
 
 
+def launch_smtpinjection() -> None:
+    """Inicia o módulo SMTP Injection em modo interativo."""
+    parser = smtpinjection.build_parser()
+    run_interactive_shell(
+        parser, "smtpinject> ", smtpinjection.run_once,
+        description="SMTP Injection — testa injecao CRLF em campos de email.",
+        example="mail.example.com --port 587 --from-addr admin@test.com",
+        banner_fn=smtpinjection.banner_art,
+        contextual_help=(
+            "Uso: <host> [opcoes]\n"
+            "Exemplos:\n"
+            "  mail.example.com\n"
+            "  mail.example.com --port 25 --no-tls\n"
+            "  mail.example.com --fields To,Subject"
+        ),
+    )
+
+
 def launch_reconall() -> None:
     """Inicia o módulo ReconAll em modo interativo."""
     parser = reconall.build_parser()
@@ -914,12 +939,14 @@ def main() -> int:
                 launch_emailsecurity()
             case "30" | "spoof" | "emailspoof" | "spoofing":
                 launch_emailspoof()
-            case "31" | "reconall" | "all" | "full":
+            case "31" | "smtpinject" | "smtpinjection" | "smtp":
+                launch_smtpinjection()
+            case "32" | "reconall" | "all" | "full":
                 launch_reconall()
-            case "32" | "help" | "ajuda" | "h":
+            case "33" | "help" | "ajuda" | "h":
                 help_screen()
                 input(color("Enter para voltar...", Cyber.GRAY))
-            case "33" | "clear" | "limpar" | "cls":
+            case "34" | "clear" | "limpar" | "cls":
                 clear_console()
                 continue
             case _:
