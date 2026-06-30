@@ -5,7 +5,16 @@ from mytools.config import backupfiledetect, configfiledetect
 from mytools.core import reconall
 from mytools.core.utils import Cyber, __version__, clear_console, color, create_banner, run_interactive_shell
 from mytools.dns import caacheck, dnsamplification, dnshistory, dnsrebinding, dnssecvalidation, dnstransfer, dnstunnel, dnswatorture, nsecwalking, subdomainenum
-from mytools.email import emailaddressbypass, emailattachmentbypass, emailsecurity, emailspoof, emailtemplateinject, smtpdowngrade, smtpinjection
+from mytools.email import (
+    emailaddressbypass,
+    emailattachmentbypass,
+    emaillinktracking,
+    emailsecurity,
+    emailspoof,
+    emailtemplateinject,
+    smtpdowngrade,
+    smtpinjection,
+)
 from mytools.network import dirscanner, portscanner
 from mytools.osint import darkwebmonitor, emailbreachcheck, googledorking, ipasninfo, pasteleak, socialengrecon
 from mytools.vcs import vcsleak
@@ -50,7 +59,8 @@ Painel interativo central que permite alternar entre:
     33. Template Inject - Testa injecao em templates de email
     34. Attach Bypass  - Testa bypass de filtros de anexos de email
     35. Addr Bypass   - Testa bypass de blocklists via local-parts citados
-    36. ReconAll     - Todos os modulos contra um alvo
+    36. Link Tracking - Detecta tracking pixels e link rewrites em emails
+    37. ReconAll     - Todos os modulos contra um alvo
 
 Cada modulo e lancado em modo interativo com seu proprio shell de comandos.
 O usuario pode usar argumentos CLI normalmente dentro de cada shell.
@@ -110,9 +120,10 @@ def menu() -> None:
     print(f"  {color('33', Cyber.GREEN, Cyber.BOLD)} {color('Template Inject', Cyber.CYAN)} Testa injecao em templates de email")
     print(f"  {color('34', Cyber.GREEN, Cyber.BOLD)} {color('Attach Bypass', Cyber.CYAN)}  Testa bypass de filtros de anexos")
     print(f"  {color('35', Cyber.GREEN, Cyber.BOLD)} {color('Addr Bypass', Cyber.CYAN)}   Testa bypass de blocklists (quoted)")
-    print(f"  {color('36', Cyber.GREEN, Cyber.BOLD)} {color('ReconAll', Cyber.CYAN)}          Todos os modulos contra um alvo")
-    print(f"  {color('37', Cyber.GREEN, Cyber.BOLD)} {color('Ajuda', Cyber.CYAN)}            exemplos rapidos")
-    print(f"  {color('38', Cyber.GREEN, Cyber.BOLD)} {color('Limpar', Cyber.CYAN)}           limpar terminal")
+    print(f"  {color('36', Cyber.GREEN, Cyber.BOLD)} {color('Link Tracking', Cyber.CYAN)} Detecta tracking pixels e link rewrites")
+    print(f"  {color('37', Cyber.GREEN, Cyber.BOLD)} {color('ReconAll', Cyber.CYAN)}          Todos os modulos contra um alvo")
+    print(f"  {color('38', Cyber.GREEN, Cyber.BOLD)} {color('Ajuda', Cyber.CYAN)}            exemplos rapidos")
+    print(f"  {color('39', Cyber.GREEN, Cyber.BOLD)} {color('Limpar', Cyber.CYAN)}           limpar terminal")
     print(f"  {color('0', Cyber.RED, Cyber.BOLD)} {color('Sair', Cyber.CYAN)}")
 
 
@@ -253,6 +264,11 @@ def help_screen() -> None:
     print("  mytools-addrbypass mail.example.com --port 25")
     print("  mytools-addrbypass mail.example.com --category quoted")
     print("  mytools-addrbypass mail.example.com --domain example.com")
+    print(color("\nLink Tracking:", Cyber.CYAN))
+    print("  mytools-linktrack mail.example.com")
+    print("  mytools-linktrack mail.example.com --port 25")
+    print("  mytools-linktrack mail.example.com --category pixel")
+    print("  mytools-linktrack mail.example.com --category link")
     print(color("\nReconAll:", Cyber.CYAN))
     print("  python3 reconall.py example.com")
     print("  python3 reconall.py example.com --deep --skip dnstransfer")
@@ -913,6 +929,26 @@ def launch_emailaddressbypass() -> None:
     )
 
 
+def launch_emaillinktracking() -> None:
+    """Inicia o módulo Email Link Tracking em modo interativo."""
+    parser = emaillinktracking.build_parser()
+    run_interactive_shell(
+        parser, "linktrack> ", emaillinktracking.run_once,
+        description="Email Link Tracking — detecta tracking pixels e link rewrites em emails.",
+        example="mail.example.com --port 587",
+        banner_fn=emaillinktracking.banner_art,
+        contextual_help=(
+            "Uso: <host> [opcoes]\n"
+            "Exemplos:\n"
+            "  mail.example.com\n"
+            "  mail.example.com --port 25\n"
+            "  mail.example.com --from-addr admin@test.com\n"
+            "  mail.example.com --category pixel\n"
+            "  mail.example.com --category link"
+        ),
+    )
+
+
 def launch_reconall() -> None:
     """Inicia o módulo ReconAll em modo interativo."""
     parser = reconall.build_parser()
@@ -1020,12 +1056,14 @@ def main() -> int:
                 launch_emailattachmentbypass()
             case "35" | "addrbypass" | "address" | "addr" | "quoting":
                 launch_emailaddressbypass()
-            case "36" | "reconall" | "all" | "full":
+            case "36" | "linktrack" | "linktracking" | "tracking":
+                launch_emaillinktracking()
+            case "37" | "reconall" | "all" | "full":
                 launch_reconall()
-            case "37" | "help" | "ajuda" | "h":
+            case "38" | "help" | "ajuda" | "h":
                 help_screen()
                 input(color("Enter para voltar...", Cyber.GRAY))
-            case "38" | "clear" | "limpar" | "cls":
+            case "39" | "clear" | "limpar" | "cls":
                 clear_console()
                 continue
             case _:
