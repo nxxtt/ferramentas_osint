@@ -52,6 +52,7 @@ mytools-amp = "dnsamplification:main"
 mytools-tunnel = "dnstunnel:main"
 mytools-dnssec = "dnssecvalidation:main"
 mytools-nsec = "nsecwalking:main"
+mytools-caa = "caacheck:main"
 mytools-reconall = "reconall:main"
 
 [build-system]

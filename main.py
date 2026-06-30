@@ -12,6 +12,7 @@ import dnsrebinding
 import dnssecvalidation
 import dnstunnel
 import nsecwalking
+import caacheck
 import dnstransfer
 import dnswatorture
 import emailbreachcheck
@@ -61,7 +62,8 @@ Painel interativo central que permite alternar entre:
    25. DNS Tunnel    - Detecta DNS tunneling via analise de padroes
    26. DNSSEC Validation - Verifica se DNSSEC esta configurado corretamente
    27. NSEC Walking   - Enumera zona via NSEC records em DNSSEC
-   28. ReconAll     - Todos os modulos contra um alvo
+   28. CAA Record Check - Verifica registros CAA de certificados
+   29. ReconAll     - Todos os modulos contra um alvo
 
 Cada modulo e lancado em modo interativo com seu proprio shell de comandos.
 O usuario pode usar argumentos CLI normalmente dentro de cada shell.
@@ -113,9 +115,10 @@ def menu() -> None:
     print(f"  {color('25', Cyber.GREEN, Cyber.BOLD)} {color('DNS Tunnel', Cyber.CYAN)}        Detecta DNS tunneling via padroes")
     print(f"  {color('26', Cyber.GREEN, Cyber.BOLD)} {color('DNSSEC Validation', Cyber.CYAN)} Verifica se DNSSEC esta correto")
     print(f"  {color('27', Cyber.GREEN, Cyber.BOLD)} {color('NSEC Walking', Cyber.CYAN)}      Enumera zona via NSEC records")
-    print(f"  {color('28', Cyber.GREEN, Cyber.BOLD)} {color('ReconAll', Cyber.CYAN)}          Todos os modulos contra um alvo")
-    print(f"  {color('29', Cyber.GREEN, Cyber.BOLD)} {color('Ajuda', Cyber.CYAN)}            exemplos rapidos")
-    print(f"  {color('30', Cyber.GREEN, Cyber.BOLD)} {color('Limpar', Cyber.CYAN)}           limpar terminal")
+    print(f"  {color('28', Cyber.GREEN, Cyber.BOLD)} {color('CAA Record Check', Cyber.CYAN)} Verifica registros CAA de certificados")
+    print(f"  {color('29', Cyber.GREEN, Cyber.BOLD)} {color('ReconAll', Cyber.CYAN)}          Todos os modulos contra um alvo")
+    print(f"  {color('30', Cyber.GREEN, Cyber.BOLD)} {color('Ajuda', Cyber.CYAN)}            exemplos rapidos")
+    print(f"  {color('31', Cyber.GREEN, Cyber.BOLD)} {color('Limpar', Cyber.CYAN)}           limpar terminal")
     print(f"  {color('0', Cyber.RED, Cyber.BOLD)} {color('Sair', Cyber.CYAN)}")
 
 
@@ -231,6 +234,9 @@ def help_screen() -> None:
     print("  mytools-nsec example.com")
     print("  mytools-nsec example.com --max-hops 500")
     print("  mytools-nsec example.com --nameserver 1.1.1.1")
+    print(color("\nCAA Record Check:", Cyber.CYAN))
+    print("  mytools-caa example.com")
+    print("  mytools-caa example.com --nameserver 1.1.1.1")
     print(color("\nReconAll:", Cyber.CYAN))
     print("  python3 reconall.py example.com")
     print("  python3 reconall.py example.com --deep --skip dnstransfer")
@@ -744,6 +750,23 @@ def launch_nsecwalking() -> None:
     )
 
 
+def launch_caacheck() -> None:
+    """Inicia o módulo CAA Record Check em modo interativo."""
+    parser = caacheck.build_parser()
+    run_interactive_shell(
+        parser, "caa> ", caacheck.run_once,
+        description="CAA Record Check interativo.",
+        example="example.com --nameserver 8.8.8.8",
+        banner_fn=caacheck.banner,
+        contextual_help=(
+            "Uso: <dominio> [opcoes]\n"
+            "Exemplos:\n"
+            "  example.com\n"
+            "  example.com --nameserver 1.1.1.1"
+        ),
+    )
+
+
 def launch_reconall() -> None:
     """Inicia o módulo ReconAll em modo interativo."""
     parser = reconall.build_parser()
@@ -835,12 +858,14 @@ def main() -> int:
                 launch_dnssecvalidation()
             case "27" | "nsec" | "nsecwalking":
                 launch_nsecwalking()
-            case "28" | "reconall" | "all" | "full":
+            case "28" | "caa" | "caacheck":
+                launch_caacheck()
+            case "29" | "reconall" | "all" | "full":
                 launch_reconall()
-            case "29" | "help" | "ajuda" | "h":
+            case "30" | "help" | "ajuda" | "h":
                 help_screen()
                 input(color("Enter para voltar...", Cyber.GRAY))
-            case "30" | "clear" | "limpar" | "cls":
+            case "31" | "clear" | "limpar" | "cls":
                 clear_console()
                 continue
             case _:
