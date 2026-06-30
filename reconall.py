@@ -39,6 +39,7 @@ import dnsamplification
 import dnsrebinding
 import dnssecvalidation
 import dnstunnel
+import nsecwalking
 import dnstransfer
 import dnswatorture
 import emailbreachcheck
@@ -66,7 +67,7 @@ from utils import (
     setup_logging,
 )
 
-ALL_MODULES = ["portscanner", "dnstransfer", "subenum", "dnshistory", "whoishistory", "ipasninfo", "techfingerprint", "openapidiscovery", "graphqlplayground", "sourcemapdiscovery", "vcsleak", "configfiledetect", "backupfiledetect", "googledorking", "emailbreachcheck", "socialengrecon", "pasteleak", "darkwebmonitor", "dnsrebinding", "dnswatorture", "dnsamplification", "dnstunnel", "dnssecvalidation", "dirscanner", "webrecon", "attackaudit"]
+ALL_MODULES = ["portscanner", "dnstransfer", "subenum", "dnshistory", "whoishistory", "ipasninfo", "techfingerprint", "openapidiscovery", "graphqlplayground", "sourcemapdiscovery", "vcsleak", "configfiledetect", "backupfiledetect", "googledorking", "emailbreachcheck", "socialengrecon", "pasteleak", "darkwebmonitor", "dnsrebinding", "dnswatorture", "dnsamplification", "dnstunnel", "dnssecvalidation", "nsecwalking", "dirscanner", "webrecon", "attackaudit"]
 
 """Recon completo: executa portscanner, dirscanner, webrecon, attackaudit, dnstransfer e subenum contra um alvo."""
 
@@ -80,7 +81,7 @@ def banner() -> None:
 /_/  /_/\__, /   /_/  \____/\____/_/____/
        /____/
 """
-    create_banner(art, "   recon all-in-one: port + dir + web + audit + dns + subenum + dnshistory + whoishistory + ipasn + techfp + oas + gql + sm + vcs + cfg + bak + dork + breach + soceng + leak + dark + rebind + dwt + amp + tunnel + dnssec")()
+    create_banner(art, "   recon all-in-one: port + dir + web + audit + dns + subenum + dnshistory + whoishistory + ipasn + techfp + oas + gql + sm + vcs + cfg + bak + dork + breach + soceng + leak + dark + rebind + dwt + amp + tunnel + dnssec + nsec")()
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -135,7 +136,7 @@ def _build_base_ns(args: argparse.Namespace) -> argparse.Namespace:
     ele aparece automaticamente aqui via build_parser().parse_args([]).
     """
     all_defaults: dict[str, object] = {}
-    for mod in (dirscanner, portscanner, dnstransfer, subdomainenum, dnshistory, whoishistory, ipasninfo, techfingerprint, openapidiscovery, graphqlplayground, sourcemapdiscovery, vcsleak, configfiledetect, backupfiledetect, googledorking, emailbreachcheck, socialengrecon, pasteleak, darkwebmonitor, dnsrebinding, dnswatorture, dnsamplification, dnstunnel, dnssecvalidation, webrecon, attackaudit):
+    for mod in (dirscanner, portscanner, dnstransfer, subdomainenum, dnshistory, whoishistory, ipasninfo, techfingerprint, openapidiscovery, graphqlplayground, sourcemapdiscovery, vcsleak, configfiledetect, backupfiledetect, googledorking, emailbreachcheck, socialengrecon, pasteleak, darkwebmonitor, dnsrebinding, dnswatorture, dnsamplification, dnstunnel, dnssecvalidation, nsecwalking, webrecon, attackaudit):
         parser = mod.build_parser()
         all_defaults.update(vars(parser.parse_args([])))
 
@@ -242,6 +243,10 @@ def run_all(args: argparse.Namespace) -> int:
     if "dnssecvalidation" not in skipped:
         modules.append(("dnssecvalidation", dnssecvalidation.run_once,
                         _make_args(domain, {"domain": domain, "output": _out("dnssecvalidation")}, base_ns)))
+
+    if "nsecwalking" not in skipped:
+        modules.append(("nsecwalking", nsecwalking.run_once,
+                        _make_args(domain, {"domain": domain, "output": _out("nsecwalking")}, base_ns)))
 
     if is_url:
         if "techfingerprint" not in skipped:

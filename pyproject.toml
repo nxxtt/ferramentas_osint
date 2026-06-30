@@ -51,6 +51,7 @@ mytools-dwt = "dnswatorture:main"
 mytools-amp = "dnsamplification:main"
 mytools-tunnel = "dnstunnel:main"
 mytools-dnssec = "dnssecvalidation:main"
+mytools-nsec = "nsecwalking:main"
 mytools-reconall = "reconall:main"
 
 [build-system]

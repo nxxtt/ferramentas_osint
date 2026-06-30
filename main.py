@@ -11,6 +11,7 @@ import dnsamplification
 import dnsrebinding
 import dnssecvalidation
 import dnstunnel
+import nsecwalking
 import dnstransfer
 import dnswatorture
 import emailbreachcheck
@@ -59,7 +60,8 @@ Painel interativo central que permite alternar entre:
    24. DNS Amplification - Detecta se servidor pode ser usado para amplificacao
    25. DNS Tunnel    - Detecta DNS tunneling via analise de padroes
    26. DNSSEC Validation - Verifica se DNSSEC esta configurado corretamente
-   27. ReconAll     - Todos os modulos contra um alvo
+   27. NSEC Walking   - Enumera zona via NSEC records em DNSSEC
+   28. ReconAll     - Todos os modulos contra um alvo
 
 Cada modulo e lancado em modo interativo com seu proprio shell de comandos.
 O usuario pode usar argumentos CLI normalmente dentro de cada shell.
@@ -110,9 +112,10 @@ def menu() -> None:
     print(f"  {color('24', Cyber.GREEN, Cyber.BOLD)} {color('DNS Amplification', Cyber.CYAN)}  Detecta amplificacao DNS (audit)")
     print(f"  {color('25', Cyber.GREEN, Cyber.BOLD)} {color('DNS Tunnel', Cyber.CYAN)}        Detecta DNS tunneling via padroes")
     print(f"  {color('26', Cyber.GREEN, Cyber.BOLD)} {color('DNSSEC Validation', Cyber.CYAN)} Verifica se DNSSEC esta correto")
-    print(f"  {color('27', Cyber.GREEN, Cyber.BOLD)} {color('ReconAll', Cyber.CYAN)}          Todos os modulos contra um alvo")
-    print(f"  {color('28', Cyber.GREEN, Cyber.BOLD)} {color('Ajuda', Cyber.CYAN)}            exemplos rapidos")
-    print(f"  {color('29', Cyber.GREEN, Cyber.BOLD)} {color('Limpar', Cyber.CYAN)}           limpar terminal")
+    print(f"  {color('27', Cyber.GREEN, Cyber.BOLD)} {color('NSEC Walking', Cyber.CYAN)}      Enumera zona via NSEC records")
+    print(f"  {color('28', Cyber.GREEN, Cyber.BOLD)} {color('ReconAll', Cyber.CYAN)}          Todos os modulos contra um alvo")
+    print(f"  {color('29', Cyber.GREEN, Cyber.BOLD)} {color('Ajuda', Cyber.CYAN)}            exemplos rapidos")
+    print(f"  {color('30', Cyber.GREEN, Cyber.BOLD)} {color('Limpar', Cyber.CYAN)}           limpar terminal")
     print(f"  {color('0', Cyber.RED, Cyber.BOLD)} {color('Sair', Cyber.CYAN)}")
 
 
@@ -224,6 +227,10 @@ def help_screen() -> None:
     print("  mytools-dnssec example.com")
     print("  mytools-dnssec example.com --nameserver 1.1.1.1")
     print("  mytools-dnssec example.com --query-timeout 10")
+    print(color("\nNSEC Walking:", Cyber.CYAN))
+    print("  mytools-nsec example.com")
+    print("  mytools-nsec example.com --max-hops 500")
+    print("  mytools-nsec example.com --nameserver 1.1.1.1")
     print(color("\nReconAll:", Cyber.CYAN))
     print("  python3 reconall.py example.com")
     print("  python3 reconall.py example.com --deep --skip dnstransfer")
@@ -719,6 +726,24 @@ def launch_dnssecvalidation() -> None:
     )
 
 
+def launch_nsecwalking() -> None:
+    """Inicia o módulo NSEC Walking em modo interativo."""
+    parser = nsecwalking.build_parser()
+    run_interactive_shell(
+        parser, "nsec> ", nsecwalking.run_once,
+        description="NSEC Walking interativo.",
+        example="example.com --max-hops 500",
+        banner_fn=nsecwalking.banner,
+        contextual_help=(
+            "Uso: <dominio> [opcoes]\n"
+            "Exemplos:\n"
+            "  example.com\n"
+            "  example.com --max-hops 500\n"
+            "  example.com --nameserver 1.1.1.1"
+        ),
+    )
+
+
 def launch_reconall() -> None:
     """Inicia o módulo ReconAll em modo interativo."""
     parser = reconall.build_parser()
@@ -808,12 +833,14 @@ def main() -> int:
                 launch_dnstunnel()
             case "26" | "dnssec" | "dnssecvalidation":
                 launch_dnssecvalidation()
-            case "27" | "reconall" | "all" | "full":
+            case "27" | "nsec" | "nsecwalking":
+                launch_nsecwalking()
+            case "28" | "reconall" | "all" | "full":
                 launch_reconall()
-            case "28" | "help" | "ajuda" | "h":
+            case "29" | "help" | "ajuda" | "h":
                 help_screen()
                 input(color("Enter para voltar...", Cyber.GRAY))
-            case "29" | "clear" | "limpar" | "cls":
+            case "30" | "clear" | "limpar" | "cls":
                 clear_console()
                 continue
             case _:
