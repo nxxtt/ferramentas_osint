@@ -5,16 +5,15 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from mytools.email import emailattachmentbypass
 from mytools.email.emailattachmentbypass import (
+    _ATTACH_BYPASS_PAYLOADS,
+    _CATEGORY_MAP,
     BypassAttempt,
     BypassResult,
     _build_attachment_email,
     _connect_smtp,
     _get_banner,
     _send_bypass_email,
-    _ATTACH_BYPASS_PAYLOADS,
-    _CATEGORY_MAP,
     build_parser,
     print_results,
     scan_attachment_bypass,
@@ -90,7 +89,7 @@ class TestParser:
 
 class TestPayloads:
     def test_all_payloads_have_required_fields(self) -> None:
-        for name, (filename, content_type, payload) in _ATTACH_BYPASS_PAYLOADS.items():
+        for _name, (filename, content_type, payload) in _ATTACH_BYPASS_PAYLOADS.items():
             assert isinstance(filename, str) and filename
             assert isinstance(content_type, str) and "/" in content_type
             assert isinstance(payload, bytes) and len(payload) > 0
@@ -150,7 +149,7 @@ class TestConnectSmtp:
     def test_connect_ssl(self, mock_ssl: MagicMock) -> None:
         mock_server = MagicMock()
         mock_ssl.return_value = mock_server
-        server, tls = _connect_smtp("mail.test.com", 465, 10.0)
+        _server, tls = _connect_smtp("mail.test.com", 465, 10.0)
         mock_ssl.assert_called_once_with("mail.test.com", 465, timeout=10.0)
         assert tls is True
 
@@ -166,7 +165,7 @@ class TestConnectSmtp:
         mock_server.ehlo.return_value = (250, b"250-mail\n250-STARTTLS")
         mock_server.starttls.return_value = (220, b"Ready")
         mock_smtp.return_value = mock_server
-        _server, tls = _connect_smtp("mail.test.com", 587, 10.0)
+        _server, _tls = _connect_smtp("mail.test.com", 587, 10.0)
         mock_server.starttls.assert_called_once()
 
 

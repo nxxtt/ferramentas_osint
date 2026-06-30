@@ -40,7 +40,7 @@ from mytools.core.utils import (
     setup_logging,
 )
 from mytools.dns import caacheck, dnsamplification, dnshistory, dnsrebinding, dnssecvalidation, dnstransfer, dnstunnel, dnswatorture, nsecwalking, subdomainenum
-from mytools.email import emailattachmentbypass, emailsecurity, emailspoof, emailtemplateinject, smtpdowngrade, smtpinjection
+from mytools.email import emailaddressbypass, emailattachmentbypass, emailsecurity, emailspoof, emailtemplateinject, smtpdowngrade, smtpinjection
 from mytools.network import dirscanner, portscanner
 from mytools.network.portscanner import parse_ports
 from mytools.osint import darkwebmonitor, emailbreachcheck, googledorking, ipasninfo, pasteleak, socialengrecon
@@ -48,7 +48,7 @@ from mytools.vcs import vcsleak
 from mytools.web import attackaudit, graphqlplayground, openapidiscovery, sourcemapdiscovery, techfingerprint, webrecon
 from mytools.whois import whoishistory
 
-ALL_MODULES = ["portscanner", "dnstransfer", "subenum", "dnshistory", "whoishistory", "ipasninfo", "techfingerprint", "openapidiscovery", "graphqlplayground", "sourcemapdiscovery", "vcsleak", "configfiledetect", "backupfiledetect", "googledorking", "emailbreachcheck", "socialengrecon", "pasteleak", "darkwebmonitor", "dnsrebinding", "dnswatorture", "dnsamplification", "dnstunnel", "dnssecvalidation", "nsecwalking",     "caacheck", "emailsecurity", "emailspoof", "smtpinjection", "smtpdowngrade", "emailtemplateinject", "emailattachmentbypass", "dirscanner", "webrecon", "attackaudit"]
+ALL_MODULES = ["portscanner", "dnstransfer", "subenum", "dnshistory", "whoishistory", "ipasninfo", "techfingerprint", "openapidiscovery", "graphqlplayground", "sourcemapdiscovery", "vcsleak", "configfiledetect", "backupfiledetect", "googledorking", "emailbreachcheck", "socialengrecon", "pasteleak", "darkwebmonitor", "dnsrebinding", "dnswatorture", "dnsamplification", "dnstunnel", "dnssecvalidation", "nsecwalking",     "caacheck", "emailsecurity", "emailspoof", "smtpinjection", "smtpdowngrade", "emailtemplateinject", "emailattachmentbypass", "emailaddressbypass", "dirscanner", "webrecon", "attackaudit"]
 
 """Recon completo: executa portscanner, dirscanner, webrecon, attackaudit, dnstransfer e subenum contra um alvo."""
 
@@ -62,7 +62,7 @@ def banner() -> None:
 /_/  /_/\__, /   /_/  \____/\____/_/____/
        /____/
 """
-    create_banner(art, "   recon all-in-one: port + dir + web + audit + dns + subenum + dnshistory + whoishistory + ipasn + techfp + oas + gql + sm + vcs + cfg + bak + dork + breach + soceng + leak + dark + rebind + dwt + amp + tunnel + dnssec + nsec + caa + secemail + spoof + smtpinject + smtpdown + templeti + attachbypass")()
+    create_banner(art, "   recon all-in-one: port + dir + web + audit + dns + subenum + dnshistory + whoishistory + ipasn + techfp + oas + gql + sm + vcs + cfg + bak + dork + breach + soceng + leak + dark + rebind + dwt + amp + tunnel + dnssec + nsec + caa + secemail + spoof + smtpinject + smtpdown + templeti + attachbypass + addrbypass")()
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -119,7 +119,7 @@ _ALL_MODS = (
     backupfiledetect, googledorking, emailbreachcheck, socialengrecon,
     pasteleak, darkwebmonitor, dnsrebinding, dnswatorture,
     dnsamplification, dnstunnel, dnssecvalidation, nsecwalking,
-    caacheck, emailsecurity, emailspoof, smtpinjection, smtpdowngrade, emailtemplateinject, emailattachmentbypass, webrecon, attackaudit,
+    caacheck, emailsecurity, emailspoof, smtpinjection, smtpdowngrade, emailtemplateinject, emailattachmentbypass, emailaddressbypass, webrecon, attackaudit,
 )
 
 
@@ -277,6 +277,10 @@ def run_all(args: argparse.Namespace) -> int:
     if "emailattachmentbypass" not in skipped:
         modules.append(("emailattachmentbypass", emailattachmentbypass.run_once,
                         _make_args(target, {"target": domain, "output": _out("emailattachmentbypass")}, base_ns)))
+
+    if "emailaddressbypass" not in skipped:
+        modules.append(("emailaddressbypass", emailaddressbypass.run_once,
+                        _make_args(target, {"target": domain, "output": _out("emailaddressbypass")}, base_ns)))
 
     if is_url:
         if "techfingerprint" not in skipped:

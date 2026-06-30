@@ -59,6 +59,7 @@ mytools-smtpinject = "mytools.email.smtpinjection:main"
 mytools-smtpdown = "mytools.email.smtpdowngrade:main"
 mytools-templeti = "mytools.email.emailtemplateinject:main"
 mytools-attachbypass = "mytools.email.emailattachmentbypass:main"
+mytools-addrbypass = "mytools.email.emailaddressbypass:main"
 mytools-reconall = "mytools.core.reconall:main"
 
 [build-system]
