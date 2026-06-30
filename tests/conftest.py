@@ -1,10 +1,36 @@
+import argparse
 import asyncio
 from unittest.mock import AsyncMock
 
 import pytest
 import pytest_asyncio
 
+from reconall import _get_parser_defaults
 from utils import create_async_client
+
+
+@pytest.fixture(scope="session")
+def base_ns():
+    """Namespace base com defaults de todos os modulos, construido uma vez por sessao."""
+    defaults = _get_parser_defaults()
+    defaults.update({
+        "output": None,
+        "quiet": True,
+        "log_file": None,
+        "color": None,
+        "verbose": 0,
+        "timeout": 10,
+        "dry_run": False,
+        "output_dir": None,
+        "user_agent": "MyTools/test",
+        "verify": False,
+        "threads": None,
+        "auth": None,
+        "bearer_token": None,
+        "cookie": None,
+        "header": None,
+    })
+    return argparse.Namespace(**defaults)
 
 
 @pytest.fixture(autouse=True)

@@ -131,16 +131,37 @@ def _make_args(target: str, extra: dict, base_args: argparse.Namespace) -> argpa
     return ns
 
 
+_PARSER_DEFAULTS: dict[str, object] | None = None
+
+_ALL_MODS = (
+    dirscanner, portscanner, dnstransfer, subdomainenum, dnshistory,
+    whoishistory, ipasninfo, techfingerprint, openapidiscovery,
+    graphqlplayground, sourcemapdiscovery, vcsleak, configfiledetect,
+    backupfiledetect, googledorking, emailbreachcheck, socialengrecon,
+    pasteleak, darkwebmonitor, dnsrebinding, dnswatorture,
+    dnsamplification, dnstunnel, dnssecvalidation, nsecwalking,
+    caacheck, emailsecurity, webrecon, attackaudit,
+)
+
+
+def _get_parser_defaults() -> dict[str, object]:
+    """Retorna defaults dos parsers dos modulos filhos, cacheados."""
+    global _PARSER_DEFAULTS
+    if _PARSER_DEFAULTS is None:
+        _PARSER_DEFAULTS = {}
+        for mod in _ALL_MODS:
+            parser = mod.build_parser()
+            _PARSER_DEFAULTS.update(vars(parser.parse_args([])))
+    return _PARSER_DEFAULTS
+
+
 def _build_base_ns(args: argparse.Namespace) -> argparse.Namespace:
     """Constroi base_ns derivando defaults dos parsers dos modulos filhos.
 
     Elimina hardcode de 37+ atributos. Quando um modulo adiciona um arg,
     ele aparece automaticamente aqui via build_parser().parse_args([]).
     """
-    all_defaults: dict[str, object] = {}
-    for mod in (dirscanner, portscanner, dnstransfer, subdomainenum, dnshistory, whoishistory, ipasninfo, techfingerprint, openapidiscovery, graphqlplayground, sourcemapdiscovery, vcsleak, configfiledetect, backupfiledetect, googledorking, emailbreachcheck, socialengrecon, pasteleak, darkwebmonitor, dnsrebinding, dnswatorture, dnsamplification, dnstunnel, dnssecvalidation, nsecwalking, caacheck, emailsecurity, webrecon, attackaudit):
-        parser = mod.build_parser()
-        all_defaults.update(vars(parser.parse_args([])))
+    all_defaults = dict(_get_parser_defaults())
 
     # Overrides do reconall — valores que difinem do default do parser
     all_defaults.update({
