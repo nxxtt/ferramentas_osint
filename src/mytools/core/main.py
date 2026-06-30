@@ -5,7 +5,7 @@ from mytools.config import backupfiledetect, configfiledetect
 from mytools.core import reconall
 from mytools.core.utils import Cyber, __version__, clear_console, color, create_banner, run_interactive_shell
 from mytools.dns import caacheck, dnsamplification, dnshistory, dnsrebinding, dnssecvalidation, dnstransfer, dnstunnel, dnswatorture, nsecwalking, subdomainenum
-from mytools.email import emailsecurity, emailspoof, emailtemplateinject, smtpdowngrade, smtpinjection
+from mytools.email import emailattachmentbypass, emailsecurity, emailspoof, emailtemplateinject, smtpdowngrade, smtpinjection
 from mytools.network import dirscanner, portscanner
 from mytools.osint import darkwebmonitor, emailbreachcheck, googledorking, ipasninfo, pasteleak, socialengrecon
 from mytools.vcs import vcsleak
@@ -47,8 +47,9 @@ Painel interativo central que permite alternar entre:
    30. Email Spoofing - Analise de vulnerabilidade a spoofing
    31. SMTP Injection - Testa injecao CRLF em campos de email
    32. SMTP Downgrade - Forca downgrade de STARTTLS para plaintext
-   33. Template Inject - Testa injecao em templates de email
-   34. ReconAll     - Todos os modulos contra um alvo
+    33. Template Inject - Testa injecao em templates de email
+    34. Attach Bypass  - Testa bypass de filtros de anexos de email
+    35. ReconAll     - Todos os modulos contra um alvo
 
 Cada modulo e lancado em modo interativo com seu proprio shell de comandos.
 O usuario pode usar argumentos CLI normalmente dentro de cada shell.
@@ -106,9 +107,10 @@ def menu() -> None:
     print(f"  {color('31', Cyber.GREEN, Cyber.BOLD)} {color('SMTP Injection', Cyber.CYAN)} Testa injecao CRLF em campos de email")
     print(f"  {color('32', Cyber.GREEN, Cyber.BOLD)} {color('SMTP Downgrade', Cyber.CYAN)} Forca downgrade de STARTTLS para plaintext")
     print(f"  {color('33', Cyber.GREEN, Cyber.BOLD)} {color('Template Inject', Cyber.CYAN)} Testa injecao em templates de email")
-    print(f"  {color('34', Cyber.GREEN, Cyber.BOLD)} {color('ReconAll', Cyber.CYAN)}          Todos os modulos contra um alvo")
-    print(f"  {color('35', Cyber.GREEN, Cyber.BOLD)} {color('Ajuda', Cyber.CYAN)}            exemplos rapidos")
-    print(f"  {color('36', Cyber.GREEN, Cyber.BOLD)} {color('Limpar', Cyber.CYAN)}           limpar terminal")
+    print(f"  {color('34', Cyber.GREEN, Cyber.BOLD)} {color('Attach Bypass', Cyber.CYAN)}  Testa bypass de filtros de anexos")
+    print(f"  {color('35', Cyber.GREEN, Cyber.BOLD)} {color('ReconAll', Cyber.CYAN)}          Todos os modulos contra um alvo")
+    print(f"  {color('36', Cyber.GREEN, Cyber.BOLD)} {color('Ajuda', Cyber.CYAN)}            exemplos rapidos")
+    print(f"  {color('37', Cyber.GREEN, Cyber.BOLD)} {color('Limpar', Cyber.CYAN)}           limpar terminal")
     print(f"  {color('0', Cyber.RED, Cyber.BOLD)} {color('Sair', Cyber.CYAN)}")
 
 
@@ -239,6 +241,11 @@ def help_screen() -> None:
     print("  mytools-smtpinject mail.example.com")
     print("  mytools-smtpinject mail.example.com --port 25 --no-tls")
     print("  mytools-smtpinject mail.example.com --fields To,Subject")
+    print(color("\nAttachment Bypass:", Cyber.CYAN))
+    print("  mytools-attachbypass mail.example.com")
+    print("  mytools-attachbypass mail.example.com --port 25")
+    print("  mytools-attachbypass mail.example.com --category polyglot")
+    print("  mytools-attachbypass mail.example.com --from-addr admin@test.com")
     print(color("\nReconAll:", Cyber.CYAN))
     print("  python3 reconall.py example.com")
     print("  python3 reconall.py example.com --deep --skip dnstransfer")
@@ -859,6 +866,26 @@ def launch_emailtemplateinject() -> None:
     )
 
 
+def launch_emailattachmentbypass() -> None:
+    """Inicia o módulo Email Attachment Bypass em modo interativo."""
+    parser = emailattachmentbypass.build_parser()
+    run_interactive_shell(
+        parser, "attachbypass> ", emailattachmentbypass.run_once,
+        description="Email Attachment Bypass — testa bypass de filtros de anexos de email.",
+        example="mail.example.com --port 587",
+        banner_fn=emailattachmentbypass.banner_art,
+        contextual_help=(
+            "Uso: <host> [opcoes]\n"
+            "Exemplos:\n"
+            "  mail.example.com\n"
+            "  mail.example.com --port 25\n"
+            "  mail.example.com --from-addr admin@test.com\n"
+            "  mail.example.com --category polyglot\n"
+            "  mail.example.com --category double_ext"
+        ),
+    )
+
+
 def launch_reconall() -> None:
     """Inicia o módulo ReconAll em modo interativo."""
     parser = reconall.build_parser()
@@ -962,12 +989,14 @@ def main() -> int:
                 launch_smtpdowngrade()
             case "33" | "templeti" | "template" | "templatinject":
                 launch_emailtemplateinject()
-            case "34" | "reconall" | "all" | "full":
+            case "34" | "attachbypass" | "attachment" | "attach" | "bypass":
+                launch_emailattachmentbypass()
+            case "35" | "reconall" | "all" | "full":
                 launch_reconall()
-            case "35" | "help" | "ajuda" | "h":
+            case "36" | "help" | "ajuda" | "h":
                 help_screen()
                 input(color("Enter para voltar...", Cyber.GRAY))
-            case "36" | "clear" | "limpar" | "cls":
+            case "37" | "clear" | "limpar" | "cls":
                 clear_console()
                 continue
             case _:
