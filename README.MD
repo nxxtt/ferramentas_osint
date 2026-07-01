@@ -76,7 +76,8 @@ Isso instala os comandos CLI:
 | `mytools-smtpinject` | SMTP Header Injection |
 | `mytools-smtpdown` | SMTP Downgrade Attack |
 | `mytools-templeti` | Email Template Injection |
-| `mytools-addr` | Email Address Bypass |
+| `mytools-attachbypass` | Email Attachment Bypass |
+| `mytools-addrbypass` | Email Address Bypass |
 | `mytools-linktrack` | Email Link Tracking |
 | `mytools-nullbyte` | Null Byte Injection |
 | `mytools-dblurl` | Double URL Encoding Bypass |
@@ -422,16 +423,24 @@ mytools-templeti mail.example.com --port 25
 mytools-templeti mail.example.com --from-addr admin@test.com
 ```
 
-### 35. Email Address Bypass (`mytools-addr`)
+### 35. Email Attachment Bypass (`mytools-attachbypass`)
+Testa bypass de filtros de anexos de email (tipos perigosos, extensões duplas).
+
+```bash
+mytools-attachbypass mail.example.com
+mytools-attachbypass mail.example.com --technique double-extension
+```
+
+### 36. Email Address Bypass (`mytools-addrbypass`)
 Testa bypass de blocklists de email usando técnicas de encoding e formatação.
 
 ```bash
-mytools-addr user@example.com
-mytools-addr user@example.com --technique unicode
-mytools-addr -f emails.txt -o results.json
+mytools-addrbypass user@example.com
+mytools-addrbypass user@example.com --technique unicode
+mytools-addrbypass -f emails.txt -o results.json
 ```
 
-### 36. Email Link Tracking (`mytools-linktrack`)
+### 37. Email Link Tracking (`mytools-linktrack`)
 Detecta tracking pixels e rewrites de links em emails.
 
 ```bash
@@ -439,7 +448,7 @@ mytools-linktrack https://example.com
 mytools-linktrack https://example.com --deep
 ```
 
-### 37. Null Byte Injection (`mytools-nullbyte`)
+### 38. Null Byte Injection (`mytools-nullbyte`)
 Testa injecao de null bytes (%00) em URLs, headers e parâmetros HTTP.
 
 ```bash
@@ -815,7 +824,8 @@ mytools-spoof --version
 mytools-smtpinject --version
 mytools-smtpdown --version
 mytools-templeti --version
-mytools-addr --version
+mytools-attachbypass --version
+mytools-addrbypass --version
 mytools-linktrack --version
 mytools-nullbyte --version
 mytools-dblurl --version
@@ -828,6 +838,7 @@ mytools-openredirect --version
 mytools-crlfinject --version
 mytools-sstdetect --version
 mytools-reconall --version
+mytools-cred --version
 ```
 
 ---
@@ -838,7 +849,7 @@ mytools-reconall --version
 ```bash
 mytools
 ```
-O menu oferece opções numéricas ou palavras-chave: `port`, `dir`, `recon`, `audit`, `dns/xfer`, `sub/subenum`, `dns-history`, `whois-history`, `ip-asn`, `tech`, `oas`, `gql`, `sourcemap`, `vcs`, `cfg`, `bak`, `dork`, `breach`, `soceng`, `leak`, `dark`, `rebind`, `dwt`, `amp`, `tunnel`, `dnssec`, `nsec`, `caa`, `secemail`, `spoof`, `smtpinject`, `smtpdown`, `templeti`, `addr`, `linktrack`, `nullbyte`, `dblurl`, `ptraversal`, `rtlo`, `overlong`, `bominject`, `charsetbypass`, `openredirect`, `crlfinject`, `sstdetect`.
+O menu oferece opções numéricas ou palavras-chave: `port`, `dir`, `recon`, `audit`, `dns/xfer`, `sub/subenum`, `dns-history`, `whois-history`, `ip-asn`, `tech`, `oas`, `gql`, `sourcemap`, `vcs`, `cfg`, `bak`, `dork`, `breach`, `soceng`, `leak`, `dark`, `rebind`, `dwt`, `amp`, `tunnel`, `dnssec`, `nsec`, `caa`, `secemail`, `spoof`, `smtpinject`, `smtpdown`, `templeti`, `attachbypass`, `addrbypass`, `linktrack`, `nullbyte`, `dblurl`, `ptraversal`, `rtlo`, `overlong`, `bominject`, `charsetbypass`, `openredirect`, `crlfinject`, `sstdetect`.
 
 ### Modo interativo
 Cada módulo possui um shell interativo. Dentro dele, digite os argumentos normalmente:
@@ -970,6 +981,9 @@ src/mytools/                    # Pacote principal
     smtpinjection.py            # SMTP Header Injection
     smtpdowngrade.py            # SMTP Downgrade Attack
     emailtemplateinject.py      # Email Template Injection
+    emailattachmentbypass.py    # Email Attachment Bypass
+    emailaddressbypass.py       # Email Address Bypass
+    emaillinktracking.py        # Email Link Tracking
   vcs/                          # Controle de versão
     vcsleak.py                  # VCS Leak Detection
   config/                       # Arquivos de configuração
@@ -1020,6 +1034,7 @@ poetry install --with dev
 - `python-whois>=0.9.6` — Consulta WHOIS
 - `dnspython>=2.8.0` — Resolução DNS, zone transfer e enumeração de subdomínios
 - `pyyaml>=6.0.3` — Parse de YAML (OpenAPI specs)
+- `pyreadline3>=3.5.6` — Readline para Windows (apenas Windows)
 
 ### Dev
 - `pytest>=9.1.1` — Framework de testes
