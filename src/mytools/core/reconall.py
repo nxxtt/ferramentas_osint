@@ -56,6 +56,7 @@ from mytools.osint import darkwebmonitor, emailbreachcheck, googledorking, ipasn
 from mytools.vcs import vcsleak
 from mytools.web import (
     attackaudit,
+    casevariationbypass,
     doubleurlencode,
     graphqlplayground,
     nullbyteinject,
@@ -67,7 +68,7 @@ from mytools.web import (
 )
 from mytools.whois import whoishistory
 
-ALL_MODULES = ["portscanner", "dnstransfer", "subenum", "dnshistory", "whoishistory", "ipasninfo", "techfingerprint", "openapidiscovery", "graphqlplayground", "sourcemapdiscovery", "vcsleak", "configfiledetect", "backupfiledetect", "googledorking", "emailbreachcheck", "socialengrecon", "pasteleak", "darkwebmonitor", "dnsrebinding", "dnswatorture", "dnsamplification", "dnstunnel", "dnssecvalidation", "nsecwalking",     "caacheck", "emailsecurity", "emailspoof", "smtpinjection", "smtpdowngrade", "emailtemplateinject", "emailattachmentbypass", "emailaddressbypass", "emaillinktracking", "nullbyteinject", "doubleurlencode", "pathtraversal", "dirscanner", "webrecon", "attackaudit"]
+ALL_MODULES = ["portscanner", "dnstransfer", "subenum", "dnshistory", "whoishistory", "ipasninfo", "techfingerprint", "openapidiscovery", "graphqlplayground", "sourcemapdiscovery", "vcsleak", "configfiledetect", "backupfiledetect", "googledorking", "emailbreachcheck", "socialengrecon", "pasteleak", "darkwebmonitor", "dnsrebinding", "dnswatorture", "dnsamplification", "dnstunnel", "dnssecvalidation", "nsecwalking",     "caacheck", "emailsecurity", "emailspoof", "smtpinjection", "smtpdowngrade", "emailtemplateinject", "emailattachmentbypass", "emailaddressbypass", "emaillinktracking", "nullbyteinject", "doubleurlencode", "pathtraversal", "casevariationbypass", "dirscanner", "webrecon", "attackaudit"]
 
 """Recon completo: executa portscanner, dirscanner, webrecon, attackaudit, dnstransfer e subenum contra um alvo."""
 
@@ -81,7 +82,7 @@ def banner() -> None:
 /_/  /_/\__, /   /_/  \____/\____/_/____/
        /____/
 """
-    create_banner(art, "   recon all-in-one: port + dir + web + audit + dns + subenum + dnshistory + whoishistory + ipasn + techfp + oas + gql + sm + vcs + cfg + bak + dork + breach + soceng + leak + dark + rebind + dwt + amp + tunnel + dnssec + nsec + caa + secemail + spoof + smtpinject + smtpdown + templeti + attachbypass + addrbypass + linktrack + nullbyte + dblurl + ptraversal")()
+    create_banner(art, "   recon all-in-one: port + dir + web + audit + dns + subenum + dnshistory + whoishistory + ipasn + techfp + oas + gql + sm + vcs + cfg + bak + dork + breach + soceng + leak + dark + rebind + dwt + amp + tunnel + dnssec + nsec + caa + secemail + spoof + smtpinject + smtpdown + templeti + attachbypass + addrbypass + linktrack + nullbyte + dblurl + ptraversal + casevar")()
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -138,7 +139,7 @@ _ALL_MODS = (
     backupfiledetect, googledorking, emailbreachcheck, socialengrecon,
     pasteleak, darkwebmonitor, dnsrebinding, dnswatorture,
     dnsamplification, dnstunnel, dnssecvalidation, nsecwalking,
-    caacheck, emailsecurity, emailspoof, smtpinjection, smtpdowngrade, emailtemplateinject, emailattachmentbypass, emailaddressbypass, emaillinktracking, nullbyteinject, doubleurlencode, pathtraversal, webrecon, attackaudit,
+    caacheck, emailsecurity, emailspoof, smtpinjection, smtpdowngrade, emailtemplateinject, emailattachmentbypass, emailaddressbypass, emaillinktracking, nullbyteinject, doubleurlencode, pathtraversal, casevariationbypass, webrecon, attackaudit,
 )
 
 

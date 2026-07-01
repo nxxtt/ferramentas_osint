@@ -20,6 +20,7 @@ from mytools.osint import darkwebmonitor, emailbreachcheck, googledorking, ipasn
 from mytools.vcs import vcsleak
 from mytools.web import (
     attackaudit,
+    casevariationbypass,
     doubleurlencode,
     graphqlplayground,
     nullbyteinject,
@@ -72,8 +73,9 @@ Painel interativo central que permite alternar entre:
     36. Link Tracking - Detecta tracking pixels e link rewrites em emails
     37. Null Byte    - Testa injecao de null bytes em URLs, headers e parametros
     38. DblURL Encode - Testa bypass de filtros via encoding duplo de URLs
-    39. Ptraversal   - Path traversal via encoding
-    40. ReconAll     - Todos os modulos contra um alvo
+        39. Ptraversal   - Path traversal via encoding
+        40. CaseVar      - Bypass via variacao de case
+        41. ReconAll     - Todos os modulos contra um alvo
 
 Cada modulo e lancado em modo interativo com seu proprio shell de comandos.
 O usuario pode usar argumentos CLI normalmente dentro de cada shell.
@@ -137,9 +139,10 @@ def menu() -> None:
     print(f"  {color('37', Cyber.GREEN, Cyber.BOLD)} {color('Null Byte', Cyber.CYAN)}    Testa injecao de null bytes em web apps")
     print(f"  {color('38', Cyber.GREEN, Cyber.BOLD)} {color('DblURL Encode', Cyber.CYAN)} Testa bypass via encoding duplo de URLs")
     print(f"  {color('39', Cyber.GREEN, Cyber.BOLD)} {color('Ptraversal', Cyber.CYAN)}    Path traversal via encoding")
-    print(f"  {color('40', Cyber.GREEN, Cyber.BOLD)} {color('ReconAll', Cyber.CYAN)}          Todos os modulos contra um alvo")
-    print(f"  {color('41', Cyber.GREEN, Cyber.BOLD)} {color('Ajuda', Cyber.CYAN)}            exemplos rapidos")
-    print(f"  {color('42', Cyber.GREEN, Cyber.BOLD)} {color('Limpar', Cyber.CYAN)}           limpar terminal")
+    print(f"  {color('40', Cyber.GREEN, Cyber.BOLD)} {color('CaseVar', Cyber.CYAN)}       Bypass via variacao de case")
+    print(f"  {color('41', Cyber.GREEN, Cyber.BOLD)} {color('ReconAll', Cyber.CYAN)}          Todos os modulos contra um alvo")
+    print(f"  {color('42', Cyber.GREEN, Cyber.BOLD)} {color('Ajuda', Cyber.CYAN)}            exemplos rapidos")
+    print(f"  {color('43', Cyber.GREEN, Cyber.BOLD)} {color('Limpar', Cyber.CYAN)}           limpar terminal")
     print(f"  {color('0', Cyber.RED, Cyber.BOLD)} {color('Sair', Cyber.CYAN)}")
 
 
@@ -300,6 +303,11 @@ def help_screen() -> None:
     print("  mytools-ptraversal https://target.com -c path")
     print("  mytools-ptraversal https://target.com -c semicolon")
     print("  mytools-ptraversal https://target.com -c platform --proxy http://127.0.0.1:8080")
+    print(color("\nCase Variation Bypass:", Cyber.CYAN))
+    print("  mytools-casevar https://target.com")
+    print("  mytools-casevar https://target.com -c path")
+    print("  mytools-casevar https://target.com -c header")
+    print("  mytools-casevar https://target.com -c extension --proxy http://127.0.0.1:8080")
     print(color("\nReconAll:", Cyber.CYAN))
     print("  python3 reconall.py example.com")
     print("  python3 reconall.py example.com --deep --skip dnstransfer")
@@ -1037,6 +1045,25 @@ def launch_pathtraversal() -> None:
     )
 
 
+def launch_casevariationbypass() -> None:
+    """Inicia o módulo Case Variation Bypass em modo interativo."""
+    parser = casevariationbypass.build_parser()
+    run_interactive_shell(
+        parser, "casevar> ", casevariationbypass.run_once,
+        description="Case Variation Bypass — testa bypass de filtros via variacao de case.",
+        example="https://target.com -c path",
+        banner_fn=casevariationbypass.banner_art,
+        contextual_help=(
+            "Uso: <url> [opcoes]\n"
+            "Exemplos:\n"
+            "  https://target.com\n"
+            "  https://target.com -c path\n"
+            "  https://target.com -c header\n"
+            "  https://target.com -c extension --proxy http://127.0.0.1:8080"
+        ),
+    )
+
+
 def launch_reconall() -> None:
     """Inicia o módulo ReconAll em modo interativo."""
     parser = reconall.build_parser()
@@ -1152,12 +1179,14 @@ def main() -> int:
                 launch_doubleurlencode()
             case "39" | "ptraversal" | "pathtraversal" | "traversalenc":
                 launch_pathtraversal()
-            case "40" | "reconall" | "all" | "full":
+            case "40" | "casevar" | "case" | "casebypass":
+                launch_casevariationbypass()
+            case "41" | "reconall" | "all" | "full":
                 launch_reconall()
-            case "41" | "help" | "ajuda" | "h":
+            case "42" | "help" | "ajuda" | "h":
                 help_screen()
                 input(color("Enter para voltar...", Cyber.GRAY))
-            case "42" | "clear" | "limpar" | "cls":
+            case "43" | "clear" | "limpar" | "cls":
                 clear_console()
                 continue
             case _:
