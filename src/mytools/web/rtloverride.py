@@ -59,6 +59,28 @@ _RTL_LABELS: dict[str, str] = {
     "pdi": "Pop Directional Isolate",
 }
 
+_ZERO_WIDTH_CHARS: dict[str, str] = {
+    "zwsp": "\u200b",
+    "zwnj": "\u200c",
+    "zwj": "\u200d",
+    "bom": "\ufeff",
+    "lrm": "\u200e",
+    "rlm": "\u200f",
+}
+
+_ZERO_WIDTH_LABELS: dict[str, str] = {
+    "zwsp": "Zero-Width Space",
+    "zwnj": "Zero-Width Non-Joiner",
+    "zwj": "Zero-Width Joiner",
+    "bom": "Zero-Width No-Break Space (BOM)",
+    "lrm": "Left-to-Right Mark",
+    "rlm": "Right-to-Left Mark",
+}
+
+_INVISIBLE_CHARS: set[int] = set()
+
+_ALL_LABELS: dict[str, str] = {**_RTL_LABELS, **_ZERO_WIDTH_LABELS}
+
 
 @dataclass(frozen=True, slots=True)
 class RTLAttempt:
@@ -114,33 +136,58 @@ def _insert_rtl(url: str, rtl_char: str, position: str) -> str:
     return url
 
 
-def _generate_variants(url: str) -> list[tuple[str, str, str, str]]:
-    """Gera variantes RTL de uma URL. Retorna (label, rtl_char, position, modified_url)."""
+def _generate_variants(url: str, char_type: str = "rtl") -> list[tuple[str, str, str, str]]:
+    """Gera variantes de uma URL. Retorna (label, char, position, modified_url)."""
     variants: list[tuple[str, str, str, str]] = []
     positions = ["before_domain", "in_path", "before_path", "in_query"]
-    for key, rtl_char in _RTL_CHARS.items():
-        label = _RTL_LABELS[key]
-        for position in positions:
-            modified = _insert_rtl(url, rtl_char, position)
-            if modified != url:
-                variants.append((label, rtl_char, position, modified))
+
+    chars_to_use: dict[str, tuple[dict[str, str], dict[str, str]]] = {
+        "rtl": (_RTL_CHARS, _RTL_LABELS),
+        "zero-width": (_ZERO_WIDTH_CHARS, _ZERO_WIDTH_LABELS),
+    }
+
+    char_sets: list[tuple[dict[str, str], dict[str, str]]] = []
+    if char_type == "all":
+        char_sets = [(_RTL_CHARS, _RTL_LABELS), (_ZERO_WIDTH_CHARS, _ZERO_WIDTH_LABELS)]
+    elif char_type in chars_to_use:
+        char_sets = [chars_to_use[char_type]]
+
+    for chars, labels in char_sets:
+        for key, char in chars.items():
+            label = labels[key]
+            for position in positions:
+                modified = _insert_rtl(url, char, position)
+                if modified != url:
+                    variants.append((label, char, position, modified))
     return variants
 
 
-def detect_rtl(text: str) -> list[tuple[str, str, int]]:
-    """Detecta caracteres RTL em um texto. Retorna (nome, char, posicao)."""
+def detect_rtl(text: str, char_type: str = "rtl") -> list[tuple[str, str, int]]:
+    """Detecta caracteres Unicode invisiveis em um texto. Retorna (nome, char, posicao)."""
+    if char_type == "rtl":
+        codes = (0x202E, 0x202B, 0x202D, 0x2066, 0x2067, 0x2068, 0x2069)
+    elif char_type == "zero-width":
+        codes = (0x200B, 0x200C, 0x200D, 0xFEFF, 0x200E, 0x200F)
+    else:
+        codes = (0x202E, 0x202B, 0x202D, 0x2066, 0x2067, 0x2068, 0x2069, 0x200B, 0x200C, 0x200D, 0xFEFF, 0x200E, 0x200F)
+
     found: list[tuple[str, str, int]] = []
     for i, c in enumerate(text):
-        code = ord(c)
-        if code in (0x202E, 0x202B, 0x202D, 0x2066, 0x2067, 0x2068, 0x2069):
-            name = unicodedata.name(c, f"U+{code:04X}")
+        if ord(c) in codes:
+            name = unicodedata.name(c, f"U+{ord(c):04X}")
             found.append((name, c, i))
     return found
 
 
+_INVISIBLE_CODES = frozenset((
+    0x202E, 0x202B, 0x202D, 0x2066, 0x2067, 0x2068, 0x2069,
+    0x200B, 0x200C, 0x200D, 0xFEFF, 0x200E, 0x200F,
+))
+
+
 def _make_display(url: str) -> str:
     """Cria versao 'display' da URL removendo caracteres invisiveis."""
-    return "".join(c for c in url if ord(c) not in (0x202E, 0x202B, 0x202D, 0x2066, 0x2067, 0x2068, 0x2069))
+    return "".join(c for c in url if ord(c) not in _INVISIBLE_CODES)
 
 
 async def _test_variant(
@@ -230,8 +277,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "-T", "--techniques",
         nargs="*",
-        choices=list(_RTL_CHARS.keys()),
-        help="Tecnicas especificas para testar. Padrao: todas",
+        choices=list(_ALL_LABELS.keys()),
+        help="Tecnicas especificas para testar. Padrao: todas do tipo selecionado",
+    )
+    parser.add_argument(
+        "--type",
+        choices=["rtl", "zero-width", "all"],
+        default="rtl",
+        help="Tipo de caractere: rtl, zero-width, all. Padrao: rtl",
     )
     parser.set_defaults(user_agent="Mozilla/5.0 (X11; Linux x86_64) RTLOverride/1.0")
     return parser
@@ -242,19 +295,20 @@ async def _async_run_once(args: argparse.Namespace) -> int:
     quiet = init_scanner(args)
     url = args.url
     mode = args.mode
+    char_type = getattr(args, "type", "rtl")
 
     if mode == "detect":
-        detected = detect_rtl(url)
+        detected = detect_rtl(url, char_type=char_type)
         if detected:
-            print(color("[!] Caracteres RTL detectados:", Cyber.RED, Cyber.BOLD))
+            print(color("[!] Caracteres invisiveis detectados:", Cyber.RED, Cyber.BOLD))
             for name, char, pos in detected:
                 print(f"  - {name} (U+{ord(char):04X}) na posicao {pos}")
         else:
-            print(color("[+] Nenhum caractere RTL detectado.", Cyber.GREEN))
+            print(color("[+] Nenhum caractere invisivel detectado.", Cyber.GREEN))
         return 0
 
     if mode == "gen":
-        variants = _generate_variants(url)
+        variants = _generate_variants(url, char_type=char_type)
         print(color(f"[*] {len(variants)} variantes geradas:", Cyber.CYAN, Cyber.BOLD))
         for label, _rtl_char, position, modified in variants:
             print(f"\n  {color(label, Cyber.CYAN)} - {color(position, Cyber.YELLOW)}")
@@ -274,12 +328,12 @@ async def _async_run_once(args: argparse.Namespace) -> int:
         tls = url.startswith("https://")
         print(color("[*]", Cyber.CYAN, Cyber.BOLD), f"Baseline: {color(str(b_status), Cyber.YELLOW)} ({b_size}B)")
 
-        variants = _generate_variants(url)
-        techniques = args.techniques or list(_RTL_CHARS.keys())
+        variants = _generate_variants(url, char_type=char_type)
+        techniques = args.techniques or list(_ALL_LABELS.keys())
 
         attempts: list[RTLAttempt] = []
         for label, rtl_char, position, modified in variants:
-            key = next((k for k, v in _RTL_LABELS.items() if v == label), "")
+            key = next((k for k, v in _ALL_LABELS.items() if v == label), "")
             if key not in techniques:
                 continue
 
@@ -373,9 +427,9 @@ def main() -> int:
             "Uso: <url> [opcoes]\n"
             "Exemplos:\n"
             "  https://target.com\n"
-            "  https://target.com -m gen\n"
-            "  https://target.com -m detect\n"
-            "  https://target.com -m scan -T rlo rle"
+            "  https://target.com -m gen --type zero-width\n"
+            "  https://target.com -m detect --type all\n"
+            "  https://target.com -m scan --type rtl -T rlo rle"
         ),
     )
 

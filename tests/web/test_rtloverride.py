@@ -7,6 +7,7 @@ import pytest
 
 from mytools.web.rtloverride import (
     _RTL_CHARS,
+    _ZERO_WIDTH_CHARS,
     RTLAttempt,
     RTLResult,
     _generate_variants,
@@ -206,3 +207,94 @@ class TestMain:
         with patch("sys.argv", ["mytools-rtlo"]), patch("builtins.input", side_effect=EOFError("exit")):
             result = main()
             assert result == 0
+
+
+class TestZeroWidthChars:
+    """Testes para _ZERO_WIDTH_CHARS."""
+
+    def test_has_zwsp(self) -> None:
+        assert "zwsp" in _ZERO_WIDTH_CHARS
+        assert _ZERO_WIDTH_CHARS["zwsp"] == "\u200b"
+
+    def test_has_zwnj(self) -> None:
+        assert "zwnj" in _ZERO_WIDTH_CHARS
+
+    def test_has_zwj(self) -> None:
+        assert "zwj" in _ZERO_WIDTH_CHARS
+
+    def test_has_bom(self) -> None:
+        assert "bom" in _ZERO_WIDTH_CHARS
+        assert _ZERO_WIDTH_CHARS["bom"] == "\ufeff"
+
+
+class TestGenerateVariantsZeroWidth:
+    """Testes para _generate_variants com zero-width."""
+
+    def test_zero_width_type(self) -> None:
+        variants = _generate_variants("https://example.com/a/b", char_type="zero-width")
+        assert len(variants) > 0
+
+    def test_zero_width_contains_zwsp(self) -> None:
+        variants = _generate_variants("https://example.com/a/b", char_type="zero-width")
+        assert any("\u200b" in v[3] for v in variants)
+
+    def test_all_type(self) -> None:
+        variants = _generate_variants("https://example.com/a/b", char_type="all")
+        assert len(variants) > 10
+
+    def test_all_type_has_both(self) -> None:
+        variants = _generate_variants("https://example.com/a/b", char_type="all")
+        has_rtl = any("\u202e" in v[3] for v in variants)
+        has_zw = any("\u200b" in v[3] for v in variants)
+        assert has_rtl and has_zw
+
+
+class TestDetectRTLZeroWidth:
+    """Testes para detect_rtl com zero-width."""
+
+    def test_detects_zwsp(self) -> None:
+        found = detect_rtl("hello\u200bworld", char_type="zero-width")
+        assert len(found) == 1
+
+    def test_detects_bom(self) -> None:
+        found = detect_rtl("test\ufeffdata", char_type="zero-width")
+        assert len(found) == 1
+
+    def test_all_type_detects_both(self) -> None:
+        found = detect_rtl("\u202e\u200b", char_type="all")
+        assert len(found) == 2
+
+
+class TestMakeDisplayZeroWidth:
+    """Testes para _make_display com zero-width."""
+
+    def test_removes_zwsp(self) -> None:
+        result = _make_display("hello\u200bworld")
+        assert result == "helloworld"
+
+    def test_removes_bom(self) -> None:
+        result = _make_display("test\ufeffdata")
+        assert result == "testdata"
+
+    def test_removes_mixed(self) -> None:
+        result = _make_display("\u202e\u200bhello")
+        assert result == "hello"
+
+
+class TestBuildParserType:
+    """Testes para build_parser --type."""
+
+    def test_default_type_rtl(self) -> None:
+        parser = build_parser()
+        args = parser.parse_args(["https://example.com"])
+        assert args.type == "rtl"
+
+    def test_type_zero_width(self) -> None:
+        parser = build_parser()
+        args = parser.parse_args(["https://example.com", "--type", "zero-width"])
+        assert args.type == "zero-width"
+
+    def test_type_all(self) -> None:
+        parser = build_parser()
+        args = parser.parse_args(["https://example.com", "--type", "all"])
+        assert args.type == "all"
