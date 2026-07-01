@@ -22,6 +22,7 @@ from mytools.web import (
     attackaudit,
     bominjection,
     charsetbypass,
+    crlfinjection,
     doubleurlencode,
     graphqlplayground,
     nullbyteinject,
@@ -83,7 +84,8 @@ Painel interativo central que permite alternar entre:
         42. Charset Bypass - Charset detection bypass
         43. RTLO Bypass  - RTL Override para confundir URLs
         44. Open Redirect - Detecta redirecionamentos abusivos
-        45. ReconAll     - Todos os modulos contra um alvo
+        45. CRLF Inject  - Injecao de headers via \\r\\n em HTTP
+        46. ReconAll     - Todos os modulos contra um alvo
 
 Cada modulo e lancado em modo interativo com seu proprio shell de comandos.
 O usuario pode usar argumentos CLI normalmente dentro de cada shell.
@@ -152,9 +154,10 @@ def menu() -> None:
     print(f"  {color('42', Cyber.GREEN, Cyber.BOLD)} {color('Charset Bypass', Cyber.CYAN)} Charset detection bypass")
     print(f"  {color('43', Cyber.GREEN, Cyber.BOLD)} {color('RTLO Bypass', Cyber.CYAN)}  RTL Override para confundir URLs")
     print(f"  {color('44', Cyber.GREEN, Cyber.BOLD)} {color('Open Redirect', Cyber.CYAN)} Detecta redirecionamentos abusivos")
-    print(f"  {color('45', Cyber.GREEN, Cyber.BOLD)} {color('ReconAll', Cyber.CYAN)}          Todos os modulos contra um alvo")
-    print(f"  {color('46', Cyber.GREEN, Cyber.BOLD)} {color('Ajuda', Cyber.CYAN)}            exemplos rapidos")
-    print(f"  {color('47', Cyber.GREEN, Cyber.BOLD)} {color('Limpar', Cyber.CYAN)}           limpar terminal")
+    print(f"  {color('45', Cyber.GREEN, Cyber.BOLD)} {color('CRLF Inject', Cyber.CYAN)}  Injecao de headers via \\r\\n")
+    print(f"  {color('46', Cyber.GREEN, Cyber.BOLD)} {color('ReconAll', Cyber.CYAN)}          Todos os modulos contra um alvo")
+    print(f"  {color('47', Cyber.GREEN, Cyber.BOLD)} {color('Ajuda', Cyber.CYAN)}            exemplos rapidos")
+    print(f"  {color('48', Cyber.GREEN, Cyber.BOLD)} {color('Limpar', Cyber.CYAN)}           limpar terminal")
     print(f"  {color('0', Cyber.RED, Cyber.BOLD)} {color('Sair', Cyber.CYAN)}")
 
 
@@ -1186,6 +1189,28 @@ def launch_openredirect() -> None:
     )
 
 
+def launch_crlfinject() -> None:
+    """Inicia o módulo CRLF Injection em modo interativo."""
+    parser = crlfinjection.build_parser()
+    run_interactive_shell(
+        parser, "crlf> ", crlfinjection.run_once,
+        description="CRLF Injection — detecta injecao de headers via \\r\\n em HTTP.",
+        example="https://target.com -c param",
+        banner_fn=lambda: print(color(
+            "CRLF Injection — detecta injecao de headers via \\r\\n em HTTP",
+            Cyber.RED, Cyber.BOLD,
+        )),
+        contextual_help=(
+            "Uso: <url> [opcoes]\n"
+            "Exemplos:\n"
+            "  https://target.com\n"
+            "  https://target.com -c param\n"
+            "  https://target.com -c header\n"
+            "  https://target.com -c bypass --proxy http://127.0.0.1:8080"
+        ),
+    )
+
+
 def main() -> int:
     """Loop principal do menu interativo. Retorna 0 ao sair."""
     if "--version" in sys.argv or "-V" in sys.argv:
@@ -1292,12 +1317,14 @@ def main() -> int:
                 launch_rtloverride()
             case "44" | "openredirect" | "redirect" | "oredir":
                 launch_openredirect()
-            case "45" | "reconall" | "all" | "full":
+            case "45" | "crlfinject" | "crlf":
+                launch_crlfinject()
+            case "46" | "reconall" | "all" | "full":
                 launch_reconall()
-            case "46" | "help" | "ajuda" | "h":
+            case "47" | "help" | "ajuda" | "h":
                 help_screen()
                 input(color("Enter para voltar...", Cyber.GRAY))
-            case "47" | "clear" | "limpar" | "cls":
+            case "48" | "clear" | "limpar" | "cls":
                 clear_console()
                 continue
             case _:

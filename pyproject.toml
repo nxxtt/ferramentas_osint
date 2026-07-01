@@ -69,6 +69,7 @@ mytools-overlong = "mytools.web.overlongencoding:main"
 mytools-bominject = "mytools.web.bominjection:main"
 mytools-charsetbypass = "mytools.web.charsetbypass:main"
 mytools-openredirect = "mytools.web.openredirect:main"
+mytools-crlfinject = "mytools.web.crlfinjection:main"
 mytools-reconall = "mytools.core.reconall:main"
 
 [build-system]
