@@ -89,6 +89,7 @@ Isso instala os comandos CLI:
 | `mytools-openredirect` | Open Redirect Detection |
 | `mytools-crlfinject` | CRLF Injection Detection |
 | `mytools-sstdetect` | SSTI Detection |
+| `mytools-ssrfdetect` | SSRF Detection |
 | `mytools-cred` | Gerenciador de credenciais |
 | `mytools-reconall` | Recon completo (todos os módulos) |
 
@@ -534,7 +535,17 @@ mytools-sstdetect https://example.com -c detect
 mytools-sstdetect https://example.com -c exploit
 ```
 
-### 47. ReconAll (`mytools-reconall`)
+### 47. SSRF Detection (`mytools-ssrfdetect`)
+Detecta Server-Side Request Forgery em web apps.
+
+```bash
+mytools-ssrfdetect https://example.com
+mytools-ssrfdetect https://example.com -c detect
+mytools-ssrfdetect https://example.com -c cloud
+mytools-ssrfdetect https://example.com -c bypass
+```
+
+### 48. ReconAll (`mytools-reconall`)
 Executa todos os módulos contra um alvo de uma vez.
 
 ```bash
@@ -837,6 +848,7 @@ mytools-charsetbypass --version
 mytools-openredirect --version
 mytools-crlfinject --version
 mytools-sstdetect --version
+mytools-ssrfdetect --version
 mytools-reconall --version
 mytools-cred --version
 ```
@@ -849,7 +861,7 @@ mytools-cred --version
 ```bash
 mytools
 ```
-O menu oferece opções numéricas ou palavras-chave: `port`, `dir`, `recon`, `audit`, `dns/xfer`, `sub/subenum`, `dns-history`, `whois-history`, `ip-asn`, `tech`, `oas`, `gql`, `sourcemap`, `vcs`, `cfg`, `bak`, `dork`, `breach`, `soceng`, `leak`, `dark`, `rebind`, `dwt`, `amp`, `tunnel`, `dnssec`, `nsec`, `caa`, `secemail`, `spoof`, `smtpinject`, `smtpdown`, `templeti`, `attachbypass`, `addrbypass`, `linktrack`, `nullbyte`, `dblurl`, `ptraversal`, `rtlo`, `overlong`, `bominject`, `charsetbypass`, `openredirect`, `crlfinject`, `sstdetect`.
+O menu oferece opções numéricas ou palavras-chave: `port`, `dir`, `recon`, `audit`, `dns/xfer`, `sub/subenum`, `dns-history`, `whois-history`, `ip-asn`, `tech`, `oas`, `gql`, `sourcemap`, `vcs`, `cfg`, `bak`, `dork`, `breach`, `soceng`, `leak`, `dark`, `rebind`, `dwt`, `amp`, `tunnel`, `dnssec`, `nsec`, `caa`, `secemail`, `spoof`, `smtpinject`, `smtpdown`, `templeti`, `attachbypass`, `addrbypass`, `linktrack`, `nullbyte`, `dblurl`, `ptraversal`, `rtlo`, `overlong`, `bominject`, `charsetbypass`, `openredirect`, `crlfinject`, `sstdetect`, `ssrfdetect`.
 
 ### Modo interativo
 Cada módulo possui um shell interativo. Dentro dele, digite os argumentos normalmente:
@@ -900,6 +912,7 @@ Use `help` para ver a ajuda, `exit` para voltar ao menu.
 | `mytools-openredirect https://example.com` | Open redirect detection |
 | `mytools-crlfinject https://example.com` | CRLF injection detection |
 | `mytools-sstdetect https://example.com` | SSTI detection |
+| `mytools-ssrfdetect https://example.com` | SSRF detection |
 | `mytools-reconall https://example.com --deep` | Recon completo com todos os módulos |
 
 ### Proxy e Rate Limiting
@@ -955,6 +968,7 @@ src/mytools/                    # Pacote principal
     openredirect.py             # Open Redirect Detection
     crlfinjection.py            # CRLF Injection Detection
     sstidetect.py               # SSTI Detection
+    ssrfdetect.py               # SSRF Detection
   dns/                          # DNS e resolução
     dnstransfer.py              # DNS Zone Transfer
     subdomainenum.py            # Enumeração de subdomínios
@@ -990,7 +1004,7 @@ src/mytools/                    # Pacote principal
     configfiledetect.py         # Config File Detection
     backupfiledetect.py         # Backup File Detection
 
-tests/                          # Testes unitários (2546 testes)
+tests/                          # Testes unitários (2604 testes)
   core/                         # test_utils, test_cred, test_reconall
   network/                      # test_portscanner, test_dirscanner
   web/                          # test_webrecon, test_attackaudit, ...
