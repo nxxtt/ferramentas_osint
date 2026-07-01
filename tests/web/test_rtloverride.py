@@ -6,11 +6,13 @@ from unittest.mock import patch
 import pytest
 
 from mytools.web.rtloverride import (
+    _COMBINING_CHARS,
     _RTL_CHARS,
     _ZERO_WIDTH_CHARS,
     RTLAttempt,
     RTLResult,
     _generate_variants,
+    _insert_combining,
     _insert_rtl,
     _make_display,
     build_parser,
@@ -298,3 +300,76 @@ class TestBuildParserType:
         parser = build_parser()
         args = parser.parse_args(["https://example.com", "--type", "all"])
         assert args.type == "all"
+
+    def test_type_combining(self) -> None:
+        parser = build_parser()
+        args = parser.parse_args(["https://example.com", "--type", "combining"])
+        assert args.type == "combining"
+
+
+class TestCombiningChars:
+    """Testes para _COMBINING_CHARS."""
+
+    def test_has_grave(self) -> None:
+        assert "grave" in _COMBINING_CHARS
+        assert _COMBINING_CHARS["grave"] == "\u0300"
+
+    def test_has_acute(self) -> None:
+        assert "acute" in _COMBINING_CHARS
+        assert _COMBINING_CHARS["acute"] == "\u0301"
+
+    def test_has_circumflex(self) -> None:
+        assert "circumflex" in _COMBINING_CHARS
+
+    def test_has_tilde(self) -> None:
+        assert "tilde" in _COMBINING_CHARS
+
+
+class TestInsertCombining:
+    """Testes para _insert_combining."""
+
+    def test_inserts_between_letters(self) -> None:
+        result = _insert_combining("https://example.com/admin", "\u0300")
+        assert "\u0300" in result
+
+    def test_preserves_non_alpha(self) -> None:
+        result = _insert_combining("https://example.com/123", "\u0300")
+        assert "\u200b" not in result
+        assert "/123" in result
+
+    def test_empty_path(self) -> None:
+        result = _insert_combining("https://example.com", "\u0300")
+        assert isinstance(result, str)
+
+
+class TestGenerateVariantsCombining:
+    """Testes para _generate_variants com combining."""
+
+    def test_combining_type(self) -> None:
+        variants = _generate_variants("https://example.com/admin", char_type="combining")
+        assert len(variants) > 0
+
+    def test_combining_inserts_marks(self) -> None:
+        variants = _generate_variants("https://example.com/admin", char_type="combining")
+        assert any("\u0300" in v[3] for v in variants)
+
+    def test_all_type_includes_combining(self) -> None:
+        variants = _generate_variants("https://example.com/admin", char_type="all")
+        has_combining = any("\u0300" in v[3] or "\u0301" in v[3] for v in variants)
+        assert has_combining
+
+
+class TestDetectRTLCombining:
+    """Testes para detect_rtl com combining."""
+
+    def test_detects_grave(self) -> None:
+        found = detect_rtl("a\u0300dmin", char_type="combining")
+        assert len(found) == 1
+
+    def test_detects_multiple(self) -> None:
+        found = detect_rtl("a\u0300d\u0301min", char_type="combining")
+        assert len(found) == 2
+
+    def test_all_type_detects_combining(self) -> None:
+        found = detect_rtl("\u202ea\u0300", char_type="all")
+        assert len(found) == 2

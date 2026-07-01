@@ -77,9 +77,29 @@ _ZERO_WIDTH_LABELS: dict[str, str] = {
     "rlm": "Right-to-Left Mark",
 }
 
+_COMBINING_CHARS: dict[str, str] = {
+    "grave": "\u0300",
+    "acute": "\u0301",
+    "circumflex": "\u0302",
+    "tilde": "\u0303",
+    "diaeresis": "\u0308",
+    "dot_below": "\u0323",
+    "comma_below": "\u0327",
+}
+
+_COMBINING_LABELS: dict[str, str] = {
+    "grave": "Combining Grave Accent",
+    "acute": "Combining Acute Accent",
+    "circumflex": "Combining Circumflex Accent",
+    "tilde": "Combining Tilde",
+    "diaeresis": "Combining Diaeresis",
+    "dot_below": "Combining Dot Below",
+    "comma_below": "Combining Comma Below",
+}
+
 _INVISIBLE_CHARS: set[int] = set()
 
-_ALL_LABELS: dict[str, str] = {**_RTL_LABELS, **_ZERO_WIDTH_LABELS}
+_ALL_LABELS: dict[str, str] = {**_RTL_LABELS, **_ZERO_WIDTH_LABELS, **_COMBINING_LABELS}
 
 
 @dataclass(frozen=True, slots=True)
@@ -136,6 +156,25 @@ def _insert_rtl(url: str, rtl_char: str, position: str) -> str:
     return url
 
 
+def _insert_combining(url: str, combining_char: str) -> str:
+    """Insere combining marks entre letras ASCII da URL."""
+    parsed = urlparse(url)
+    def _combine_path(path: str) -> str:
+        result: list[str] = []
+        for c in path:
+            if c.isascii() and c.isalpha():
+                result.append(c)
+                result.append(combining_char)
+            else:
+                result.append(c)
+        return "".join(result)
+
+    new_path = _combine_path(parsed.path)
+    new_netloc = _combine_path(parsed.netloc)
+    new_query = _combine_path(parsed.query) if parsed.query else ""
+    return f"{parsed.scheme}://{new_netloc}{new_path}" + (f"?{new_query}" if new_query else "")
+
+
 def _generate_variants(url: str, char_type: str = "rtl") -> list[tuple[str, str, str, str]]:
     """Gera variantes de uma URL. Retorna (label, char, position, modified_url)."""
     variants: list[tuple[str, str, str, str]] = []
@@ -144,32 +183,44 @@ def _generate_variants(url: str, char_type: str = "rtl") -> list[tuple[str, str,
     chars_to_use: dict[str, tuple[dict[str, str], dict[str, str]]] = {
         "rtl": (_RTL_CHARS, _RTL_LABELS),
         "zero-width": (_ZERO_WIDTH_CHARS, _ZERO_WIDTH_LABELS),
+        "combining": (_COMBINING_CHARS, _COMBINING_LABELS),
     }
 
     char_sets: list[tuple[dict[str, str], dict[str, str]]] = []
     if char_type == "all":
-        char_sets = [(_RTL_CHARS, _RTL_LABELS), (_ZERO_WIDTH_CHARS, _ZERO_WIDTH_LABELS)]
+        char_sets = [(_RTL_CHARS, _RTL_LABELS), (_ZERO_WIDTH_CHARS, _ZERO_WIDTH_LABELS), (_COMBINING_CHARS, _COMBINING_LABELS)]
     elif char_type in chars_to_use:
         char_sets = [chars_to_use[char_type]]
 
     for chars, labels in char_sets:
         for key, char in chars.items():
             label = labels[key]
-            for position in positions:
-                modified = _insert_rtl(url, char, position)
+            if char_type == "combining" or (char_type == "all" and key in _COMBINING_CHARS):
+                modified = _insert_combining(url, char)
                 if modified != url:
-                    variants.append((label, char, position, modified))
+                    variants.append((label, char, "in_chars", modified))
+            else:
+                for position in positions:
+                    modified = _insert_rtl(url, char, position)
+                    if modified != url:
+                        variants.append((label, char, position, modified))
     return variants
 
 
 def detect_rtl(text: str, char_type: str = "rtl") -> list[tuple[str, str, int]]:
     """Detecta caracteres Unicode invisiveis em um texto. Retorna (nome, char, posicao)."""
+    _RTL_CODES = (0x202E, 0x202B, 0x202D, 0x2066, 0x2067, 0x2068, 0x2069)
+    _ZW_CODES = (0x200B, 0x200C, 0x200D, 0xFEFF, 0x200E, 0x200F)
+    _COMBINING_CODES = (0x0300, 0x0301, 0x0302, 0x0303, 0x0308, 0x0323, 0x0327)
+
     if char_type == "rtl":
-        codes = (0x202E, 0x202B, 0x202D, 0x2066, 0x2067, 0x2068, 0x2069)
+        codes = _RTL_CODES
     elif char_type == "zero-width":
-        codes = (0x200B, 0x200C, 0x200D, 0xFEFF, 0x200E, 0x200F)
+        codes = _ZW_CODES
+    elif char_type == "combining":
+        codes = _COMBINING_CODES
     else:
-        codes = (0x202E, 0x202B, 0x202D, 0x2066, 0x2067, 0x2068, 0x2069, 0x200B, 0x200C, 0x200D, 0xFEFF, 0x200E, 0x200F)
+        codes = _RTL_CODES + _ZW_CODES + _COMBINING_CODES
 
     found: list[tuple[str, str, int]] = []
     for i, c in enumerate(text):
@@ -182,6 +233,7 @@ def detect_rtl(text: str, char_type: str = "rtl") -> list[tuple[str, str, int]]:
 _INVISIBLE_CODES = frozenset((
     0x202E, 0x202B, 0x202D, 0x2066, 0x2067, 0x2068, 0x2069,
     0x200B, 0x200C, 0x200D, 0xFEFF, 0x200E, 0x200F,
+    0x0300, 0x0301, 0x0302, 0x0303, 0x0308, 0x0323, 0x0327,
 ))
 
 
@@ -282,9 +334,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--type",
-        choices=["rtl", "zero-width", "all"],
+        choices=["rtl", "zero-width", "combining", "all"],
         default="rtl",
-        help="Tipo de caractere: rtl, zero-width, all. Padrao: rtl",
+        help="Tipo de caractere: rtl, zero-width, combining, all. Padrao: rtl",
     )
     parser.set_defaults(user_agent="Mozilla/5.0 (X11; Linux x86_64) RTLOverride/1.0")
     return parser
