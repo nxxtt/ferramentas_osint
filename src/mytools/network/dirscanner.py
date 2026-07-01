@@ -5,6 +5,7 @@ import logging
 import os
 import sys
 import time
+import unicodedata
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from urllib.parse import urljoin
@@ -79,6 +80,39 @@ _CASE_VARIATIONS: list[tuple[str, Callable[[str], str]]] = [
     ("capitalize", str.capitalize),
 ]
 
+
+def _to_circled(s: str) -> str:
+    """Converte letras ASCII para circled letters Unicode (a → ⓐ)."""
+    result: list[str] = []
+    for c in s:
+        code = ord(c)
+        if 0x61 <= code <= 0x7A:
+            result.append(chr(code - 0x61 + 0x24D0))
+        elif 0x41 <= code <= 0x5A:
+            result.append(chr(code - 0x41 + 0x24B6))
+        else:
+            result.append(c)
+    return "".join(result)
+
+
+def _to_fullwidth(s: str) -> str:
+    """Converte ASCII para full-width Unicode (a → ａ)."""
+    result: list[str] = []
+    for c in s:
+        code = ord(c)
+        if 0x21 <= code <= 0x7E:
+            result.append(chr(code - 0x21 + 0xFF01))
+        else:
+            result.append(c)
+    return "".join(result)
+
+
+_UNICODE_TRANSFORMS: list[tuple[str, Callable[[str], str]]] = [
+    ("nfkc", lambda s: unicodedata.normalize("NFKC", s)),
+    ("circled", _to_circled),
+    ("fullwidth", _to_fullwidth),
+]
+
 """Scanner HTTP de diretórios e arquivos para alvos autorizados."""
 
 
@@ -150,8 +184,8 @@ def _read_wordlist(wordlist: str) -> list[str]:
 def _generate_case_variations(path: str) -> list[str]:
     """Gera variacoes de case para um path (Admin, ADMIN, aDmIn, etc)."""
     name, _, ext = path.rpartition(".")
-    base = name if ext else path
-    ext_part = f".{ext}" if ext else ""
+    base = name if name else path
+    ext_part = f".{ext}" if name else ""
     variations: list[str] = []
     seen: set[str] = set()
     for _label, transform in _CASE_VARIATIONS:
@@ -162,7 +196,22 @@ def _generate_case_variations(path: str) -> list[str]:
     return variations
 
 
-def load_paths(wordlist: str | None, extensions: list[str], case_variation: bool = False) -> list[str]:
+def _generate_unicode_variations(path: str) -> list[str]:
+    """Gera variantes Unicode para um path (circled, full-width, NFKC)."""
+    name, _, ext = path.rpartition(".")
+    base = name if name else path
+    ext_part = f".{ext}" if name else ""
+    variations: list[str] = []
+    seen: set[str] = set()
+    for _label, transform in _UNICODE_TRANSFORMS:
+        candidate = transform(base) + ext_part
+        if candidate != path and candidate not in seen:
+            seen.add(candidate)
+            variations.append(candidate)
+    return variations
+
+
+def load_paths(wordlist: str | None, extensions: list[str], case_variation: bool = False, unicode_norm: bool = False) -> list[str]:
     """Carrega caminhos da wordlist ou lista padrao e aplica extensoes."""
     raw_paths = _read_wordlist(wordlist) if wordlist else list(DEFAULT_PATHS)
 
@@ -177,6 +226,12 @@ def load_paths(wordlist: str | None, extensions: list[str], case_variation: bool
                 paths.add(f"{path}.{extension}")
         if case_variation:
             for variation in _generate_case_variations(path):
+                paths.add(variation)
+                if extensions and "." not in os.path.basename(variation):
+                    for extension in extensions:
+                        paths.add(f"{variation}.{extension}")
+        if unicode_norm:
+            for variation in _generate_unicode_variations(path):
                 paths.add(variation)
                 if extensions and "." not in os.path.basename(variation):
                     for extension in extensions:
@@ -422,6 +477,12 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Gera variacoes de case (Admin, ADMIN, aDmIn) para cada path da wordlist",
     )
+    parser.add_argument(
+        "-U",
+        "--unicode-norm",
+        action="store_true",
+        help="Gera variantes Unicode (circled, full-width) para cada path da wordlist",
+    )
     parser.set_defaults(user_agent=f"Mozilla/5.0 (X11; Linux x86_64) DirScanner/{__version__}")
     return parser
 
@@ -431,7 +492,7 @@ async def _run_single(url: str, args: argparse.Namespace, quiet: bool = False) -
     extra_headers = parse_extra_headers(args.header) if args.header else {}
     cookie_headers = {"Cookie": args.cookie} if args.cookie else {}
     base_url = normalize_url(url, default_scheme="http", ensure_trailing_slash=True)
-    paths = load_paths(args.wordlist, args.extensions, case_variation=getattr(args, "case_variation", False))
+    paths = load_paths(args.wordlist, args.extensions, case_variation=getattr(args, "case_variation", False), unicode_norm=getattr(args, "unicode_norm", False))
     findings = await scan_target(
         base_url=base_url,
         paths=paths,
@@ -465,7 +526,7 @@ async def _async_run_once(args: argparse.Namespace) -> int:
     ensure_output_dir(output_dir)
 
     if getattr(args, "dry_run", False):
-        paths = load_paths(args.wordlist, args.extensions, case_variation=getattr(args, "case_variation", False))
+        paths = load_paths(args.wordlist, args.extensions, case_variation=getattr(args, "case_variation", False), unicode_norm=getattr(args, "unicode_norm", False))
         print(color("[DRY-RUN]", Cyber.YELLOW, Cyber.BOLD), "Nenhuma requisicao HTTP sera enviada.")
         for url in urls:
             base_url = normalize_url(url, default_scheme="http", ensure_trailing_slash=True)
@@ -519,6 +580,7 @@ def main() -> int:
             "  http://localhost:8000 -x php,txt,bak\n"
             "  http://target.com -s 200,301,403 -w wordlist.txt\n"
             "  http://target.com -C -x php,txt,bak\n"
+            "  http://target.com -U -x php,txt,bak\n"
             "  http://target.com -M POST --filter-size 100-5000\n"
             "  -l urls.txt --output-dir results/ -o out.json"
         ),

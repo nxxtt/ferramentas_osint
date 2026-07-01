@@ -12,6 +12,9 @@ from mytools.network.dirscanner import (
     DEFAULT_STATUSES,
     Finding,
     _async_run_once,
+    _generate_unicode_variations,
+    _to_circled,
+    _to_fullwidth,
     build_parser,
     load_paths,
     matches_filter,
@@ -219,6 +222,82 @@ class TestLoadPaths:
     def test_missing_wordlist_raises(self):
         with pytest.raises(ValueError, match="arquivo nao encontrado"):
             load_paths("/nonexistent/wordlist.txt", [])
+
+
+class TestToCircled:
+    def test_lowercase(self):
+        assert _to_circled("admin") == "ⓐⓓⓜⓘⓝ"
+
+    def test_uppercase(self):
+        assert _to_circled("ADMIN") == "ⒶⒹⓂⒾⓃ"
+
+    def test_mixed(self):
+        assert _to_circled("Admin") == "Ⓐⓓⓜⓘⓝ"
+
+    def test_non_alpha(self):
+        assert _to_circled("admin123") == "ⓐⓓⓜⓘⓝ123"
+
+    def test_empty(self):
+        assert _to_circled("") == ""
+
+    def test_special_chars(self):
+        assert _to_circled("a.b") == "ⓐ.ⓑ"
+
+
+class TestToFullwidth:
+    def test_lowercase(self):
+        assert _to_fullwidth("admin") == "ａｄｍｉｎ"
+
+    def test_uppercase(self):
+        assert _to_fullwidth("ADMIN") == "ＡＤＭＩＮ"
+
+    def test_mixed(self):
+        assert _to_fullwidth("Admin") == "Ａｄｍｉｎ"
+
+    def test_non_ascii(self):
+        assert _to_fullwidth("admin123") == "ａｄｍｉｎ１２３"
+
+    def test_empty(self):
+        assert _to_fullwidth("") == ""
+
+    def test_special_chars(self):
+        assert _to_fullwidth("a.b") == "ａ．ｂ"
+
+
+class TestGenerateUnicodeVariations:
+    def test_admin(self):
+        variations = _generate_unicode_variations("admin")
+        assert len(variations) > 0
+        assert any("ⓐ" in v for v in variations)
+        assert any("ａ" in v for v in variations)
+
+    def test_with_extension(self):
+        variations = _generate_unicode_variations("admin.php")
+        assert all(v.endswith(".php") for v in variations)
+
+    def test_no_duplicate_original(self):
+        variations = _generate_unicode_variations("admin")
+        assert "admin" not in variations
+
+    def test_deduplication(self):
+        variations = _generate_unicode_variations("test")
+        assert len(variations) == len(set(variations))
+
+
+class TestLoadPathsWithUnicodeNorm:
+    def test_unicode_norm_adds_variations(self):
+        paths = load_paths(None, [], unicode_norm=True)
+        assert any("ａ" in p for p in paths)
+        assert any("ⓐ" in p for p in paths)
+
+    def test_unicode_norm_with_extensions(self):
+        paths = load_paths(None, ["php"], unicode_norm=True)
+        assert any("ａ" in p and p.endswith(".php") for p in paths)
+
+    def test_unicode_norm_false_no_changes(self):
+        paths_normal = load_paths(None, [])
+        paths_unicode = load_paths(None, [], unicode_norm=False)
+        assert paths_normal == paths_unicode
 
 
 class TestDefaultPaths:
