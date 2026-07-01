@@ -72,6 +72,7 @@ mytools-openredirect = "mytools.web.openredirect:main"
 mytools-crlfinject = "mytools.web.crlfinjection:main"
 mytools-sstdetect = "mytools.web.sstidetect:main"
 mytools-ssrfdetect = "mytools.web.ssrfdetect:main"
+mytools-xxedetect = "mytools.web.xxedetect:main"
 mytools-reconall = "mytools.core.reconall:main"
 
 [build-system]

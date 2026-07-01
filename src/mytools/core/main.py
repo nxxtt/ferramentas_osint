@@ -36,6 +36,7 @@ from mytools.web import (
     sstidetect,
     techfingerprint,
     webrecon,
+    xxedetect,
 )
 from mytools.whois import whoishistory
 
@@ -161,9 +162,10 @@ def menu() -> None:
     print(f"  {color('45', Cyber.GREEN, Cyber.BOLD)} {color('CRLF Inject', Cyber.CYAN)}  Injecao de headers via \\r\\n")
     print(f"  {color('46', Cyber.GREEN, Cyber.BOLD)} {color('SSTI Detect', Cyber.CYAN)} Server-Side Template Injection")
     print(f"  {color('47', Cyber.GREEN, Cyber.BOLD)} {color('SSRF Detect', Cyber.CYAN)} Server-Side Request Forgery")
-    print(f"  {color('48', Cyber.GREEN, Cyber.BOLD)} {color('ReconAll', Cyber.CYAN)}          Todos os modulos contra um alvo")
-    print(f"  {color('49', Cyber.GREEN, Cyber.BOLD)} {color('Ajuda', Cyber.CYAN)}            exemplos rapidos")
-    print(f"  {color('50', Cyber.GREEN, Cyber.BOLD)} {color('Limpar', Cyber.CYAN)}           limpar terminal")
+    print(f"  {color('48', Cyber.GREEN, Cyber.BOLD)} {color('XXE Detect', Cyber.CYAN)}   XML External Entity Detection")
+    print(f"  {color('49', Cyber.GREEN, Cyber.BOLD)} {color('ReconAll', Cyber.CYAN)}          Todos os modulos contra um alvo")
+    print(f"  {color('50', Cyber.GREEN, Cyber.BOLD)} {color('Ajuda', Cyber.CYAN)}            exemplos rapidos")
+    print(f"  {color('51', Cyber.GREEN, Cyber.BOLD)} {color('Limpar', Cyber.CYAN)}           limpar terminal")
     print(f"  {color('0', Cyber.RED, Cyber.BOLD)} {color('Sair', Cyber.CYAN)}")
 
 
@@ -1261,6 +1263,28 @@ def launch_ssrfdetect() -> None:
     )
 
 
+def launch_xxedetect() -> None:
+    """Inicia o módulo XXE Detection em modo interativo."""
+    parser = xxedetect.build_parser()
+    run_interactive_shell(
+        parser, "xxe> ", xxedetect.run_once,
+        description="XXE — detecta XML External Entity em web apps.",
+        example="https://target.com -c detect",
+        banner_fn=lambda: print(color(
+            "XXE — detecta XML External Entity em web apps",
+            Cyber.RED, Cyber.BOLD,
+        )),
+        contextual_help=(
+            "Uso: <url> [opcoes]\n"
+            "Exemplos:\n"
+            "  https://target.com\n"
+            "  https://target.com -c detect\n"
+            "  https://target.com -c file_read\n"
+            "  https://target.com -c bypass --proxy http://127.0.0.1:8080"
+        ),
+    )
+
+
 def main() -> int:
     """Loop principal do menu interativo. Retorna 0 ao sair."""
     if "--version" in sys.argv or "-V" in sys.argv:
@@ -1373,12 +1397,14 @@ def main() -> int:
                 launch_sstdetect()
             case "47" | "ssrfdetect" | "ssrf":
                 launch_ssrfdetect()
-            case "48" | "reconall" | "all" | "full":
+            case "48" | "xxedetect" | "xxe":
+                launch_xxedetect()
+            case "49" | "reconall" | "all" | "full":
                 launch_reconall()
-            case "49" | "help" | "ajuda" | "h":
+            case "50" | "help" | "ajuda" | "h":
                 help_screen()
                 input(color("Enter para voltar...", Cyber.GRAY))
-            case "50" | "clear" | "limpar" | "cls":
+            case "51" | "clear" | "limpar" | "cls":
                 clear_console()
                 continue
             case _:
