@@ -37,6 +37,7 @@ from mytools.web import (
     techfingerprint,
     webrecon,
     xxedetect,
+    nosqliinject,
 )
 from mytools.whois import whoishistory
 
@@ -163,9 +164,10 @@ def menu() -> None:
     print(f"  {color('46', Cyber.GREEN, Cyber.BOLD)} {color('SSTI Detect', Cyber.CYAN)} Server-Side Template Injection")
     print(f"  {color('47', Cyber.GREEN, Cyber.BOLD)} {color('SSRF Detect', Cyber.CYAN)} Server-Side Request Forgery")
     print(f"  {color('48', Cyber.GREEN, Cyber.BOLD)} {color('XXE Detect', Cyber.CYAN)}   XML External Entity Detection")
-    print(f"  {color('49', Cyber.GREEN, Cyber.BOLD)} {color('ReconAll', Cyber.CYAN)}          Todos os modulos contra um alvo")
-    print(f"  {color('50', Cyber.GREEN, Cyber.BOLD)} {color('Ajuda', Cyber.CYAN)}            exemplos rapidos")
-    print(f"  {color('51', Cyber.GREEN, Cyber.BOLD)} {color('Limpar', Cyber.CYAN)}           limpar terminal")
+    print(f"  {color('49', Cyber.GREEN, Cyber.BOLD)} {color('NoSQL Inject', Cyber.CYAN)} Injecao NoSQL (MongoDB, Redis, CouchDB)")
+    print(f"  {color('50', Cyber.GREEN, Cyber.BOLD)} {color('ReconAll', Cyber.CYAN)}          Todos os modulos contra um alvo")
+    print(f"  {color('51', Cyber.GREEN, Cyber.BOLD)} {color('Ajuda', Cyber.CYAN)}            exemplos rapidos")
+    print(f"  {color('52', Cyber.GREEN, Cyber.BOLD)} {color('Limpar', Cyber.CYAN)}           limpar terminal")
     print(f"  {color('0', Cyber.RED, Cyber.BOLD)} {color('Sair', Cyber.CYAN)}")
 
 
@@ -1285,6 +1287,28 @@ def launch_xxedetect() -> None:
     )
 
 
+def launch_nosqli() -> None:
+    """Inicia o módulo NoSQL Injection em modo interativo."""
+    parser = nosqliinject.build_parser()
+    run_interactive_shell(
+        parser, "nosql> ", nosqliinject.run_once,
+        description="NoSQL Injection — detecta injecao NoSQL em web apps (MongoDB, Redis, CouchDB).",
+        example="https://target.com -c detect",
+        banner_fn=lambda: print(color(
+            "NoSQL Injection — detecta injecao NoSQL em web apps",
+            Cyber.RED, Cyber.BOLD,
+        )),
+        contextual_help=(
+            "Uso: <url> [opcoes]\n"
+            "Exemplos:\n"
+            "  https://target.com\n"
+            "  https://target.com -c detect\n"
+            "  https://target.com -c mongodb\n"
+            "  https://target.com -c bypass --proxy http://127.0.0.1:8080"
+        ),
+    )
+
+
 def main() -> int:
     """Loop principal do menu interativo. Retorna 0 ao sair."""
     if "--version" in sys.argv or "-V" in sys.argv:
@@ -1399,12 +1423,14 @@ def main() -> int:
                 launch_ssrfdetect()
             case "48" | "xxedetect" | "xxe":
                 launch_xxedetect()
-            case "49" | "reconall" | "all" | "full":
+            case "49" | "nosqli" | "nosql":
+                launch_nosqli()
+            case "50" | "reconall" | "all" | "full":
                 launch_reconall()
-            case "50" | "help" | "ajuda" | "h":
+            case "51" | "help" | "ajuda" | "h":
                 help_screen()
                 input(color("Enter para voltar...", Cyber.GRAY))
-            case "51" | "clear" | "limpar" | "cls":
+            case "52" | "clear" | "limpar" | "cls":
                 clear_console()
                 continue
             case _:

@@ -91,6 +91,7 @@ Isso instala os comandos CLI:
 | `mytools-sstdetect` | SSTI Detection |
 | `mytools-ssrfdetect` | SSRF Detection |
 | `mytools-xxedetect` | XXE Detection |
+| `mytools-nosqli` | NoSQL Injection Detection |
 | `mytools-cred` | Gerenciador de credenciais |
 | `mytools-reconall` | Recon completo (todos os módulos) |
 
@@ -556,7 +557,17 @@ mytools-xxedetect https://example.com -c file_read
 mytools-xxedetect https://example.com -c bypass
 ```
 
-### 49. ReconAll (`mytools-reconall`)
+### 49. NoSQL Injection (`mytools-nosqli`)
+Detecta injecao NoSQL em web apps (MongoDB, Redis, CouchDB).
+
+```bash
+mytools-nosqli https://example.com
+mytools-nosqli https://example.com -c detect
+mytools-nosqli https://example.com -c mongodb
+mytools-nosqli https://example.com -c bypass
+```
+
+### 50. ReconAll (`mytools-reconall`)
 Executa todos os módulos contra um alvo de uma vez.
 
 ```bash
@@ -925,6 +936,7 @@ Use `help` para ver a ajuda, `exit` para voltar ao menu.
 | `mytools-sstdetect https://example.com` | SSTI detection |
 | `mytools-ssrfdetect https://example.com` | SSRF detection |
 | `mytools-xxedetect https://example.com` | XXE detection |
+| `mytools-nosqli https://example.com` | NoSQL injection detection |
 | `mytools-reconall https://example.com --deep` | Recon completo com todos os módulos |
 
 ### Proxy e Rate Limiting
@@ -982,6 +994,7 @@ src/mytools/                    # Pacote principal
     sstidetect.py               # SSTI Detection
     ssrfdetect.py               # SSRF Detection
     xxedetect.py                # XXE Detection
+    nosqliinject.py             # NoSQL Injection Detection
   dns/                          # DNS e resolução
     dnstransfer.py              # DNS Zone Transfer
     subdomainenum.py            # Enumeração de subdomínios
@@ -1017,7 +1030,7 @@ src/mytools/                    # Pacote principal
     configfiledetect.py         # Config File Detection
     backupfiledetect.py         # Backup File Detection
 
-tests/                          # Testes unitários (2696 testes)
+tests/                          # Testes unitários (2782 testes)
   core/                         # test_utils, test_cred, test_reconall
   network/                      # test_portscanner, test_dirscanner
   web/                          # test_webrecon, test_attackaudit, ...
