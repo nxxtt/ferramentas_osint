@@ -67,6 +67,7 @@ mytools-ptraversal = "mytools.web.pathtraversal:main"
 mytools-rtlo = "mytools.web.rtloverride:main"
 mytools-overlong = "mytools.web.overlongencoding:main"
 mytools-bominject = "mytools.web.bominjection:main"
+mytools-charsetbypass = "mytools.web.charsetbypass:main"
 mytools-reconall = "mytools.core.reconall:main"
 
 [build-system]
