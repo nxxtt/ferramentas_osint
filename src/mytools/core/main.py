@@ -20,6 +20,7 @@ from mytools.osint import darkwebmonitor, emailbreachcheck, googledorking, ipasn
 from mytools.vcs import vcsleak
 from mytools.web import (
     attackaudit,
+    bominjection,
     doubleurlencode,
     graphqlplayground,
     nullbyteinject,
@@ -76,8 +77,9 @@ Painel interativo central que permite alternar entre:
     38. DblURL Encode - Testa bypass de filtros via encoding duplo de URLs
         39. Ptraversal   - Path traversal via encoding
         40. Overlong    - Overlong UTF-8 encoding bypass
-        41. RTLO Bypass  - RTL Override para confundir URLs
-        42. ReconAll     - Todos os modulos contra um alvo
+        41. BOM Inject  - Byte Order Mark injection
+        42. RTLO Bypass  - RTL Override para confundir URLs
+        43. ReconAll     - Todos os modulos contra um alvo
 
 Cada modulo e lancado em modo interativo com seu proprio shell de comandos.
 O usuario pode usar argumentos CLI normalmente dentro de cada shell.
@@ -142,10 +144,11 @@ def menu() -> None:
     print(f"  {color('38', Cyber.GREEN, Cyber.BOLD)} {color('DblURL Encode', Cyber.CYAN)} Testa bypass via encoding duplo de URLs")
     print(f"  {color('39', Cyber.GREEN, Cyber.BOLD)} {color('Ptraversal', Cyber.CYAN)}    Path traversal via encoding")
     print(f"  {color('40', Cyber.GREEN, Cyber.BOLD)} {color('Overlong', Cyber.CYAN)}       Overlong UTF-8 encoding bypass")
-    print(f"  {color('41', Cyber.GREEN, Cyber.BOLD)} {color('RTLO Bypass', Cyber.CYAN)}  RTL Override para confundir URLs")
-    print(f"  {color('42', Cyber.GREEN, Cyber.BOLD)} {color('ReconAll', Cyber.CYAN)}          Todos os modulos contra um alvo")
-    print(f"  {color('43', Cyber.GREEN, Cyber.BOLD)} {color('Ajuda', Cyber.CYAN)}            exemplos rapidos")
-    print(f"  {color('44', Cyber.GREEN, Cyber.BOLD)} {color('Limpar', Cyber.CYAN)}           limpar terminal")
+    print(f"  {color('41', Cyber.GREEN, Cyber.BOLD)} {color('BOM Inject', Cyber.CYAN)}     Byte Order Mark injection")
+    print(f"  {color('42', Cyber.GREEN, Cyber.BOLD)} {color('RTLO Bypass', Cyber.CYAN)}  RTL Override para confundir URLs")
+    print(f"  {color('43', Cyber.GREEN, Cyber.BOLD)} {color('ReconAll', Cyber.CYAN)}          Todos os modulos contra um alvo")
+    print(f"  {color('44', Cyber.GREEN, Cyber.BOLD)} {color('Ajuda', Cyber.CYAN)}            exemplos rapidos")
+    print(f"  {color('45', Cyber.GREEN, Cyber.BOLD)} {color('Limpar', Cyber.CYAN)}           limpar terminal")
     print(f"  {color('0', Cyber.RED, Cyber.BOLD)} {color('Sair', Cyber.CYAN)}")
 
 
@@ -1111,6 +1114,28 @@ def launch_overlongencoding() -> None:
     )
 
 
+def launch_bominjection() -> None:
+    """Inicia o módulo BOM Injection em modo interativo."""
+    parser = bominjection.build_parser()
+    run_interactive_shell(
+        parser, "bom> ", bominjection.run_once,
+        description="BOM Injection — detecta injecao de Byte Order Mark.",
+        example="https://target.com -c url",
+        banner_fn=lambda: print(color(
+            "BOM Injection — detecta injecao de Byte Order Mark em web apps",
+            Cyber.RED, Cyber.BOLD,
+        )),
+        contextual_help=(
+            "Uso: <url> [opcoes]\n"
+            "Exemplos:\n"
+            "  https://target.com\n"
+            "  https://target.com -c url\n"
+            "  https://target.com -c body\n"
+            "  https://target.com -c upload --proxy http://127.0.0.1:8080"
+        ),
+    )
+
+
 def main() -> int:
     """Loop principal do menu interativo. Retorna 0 ao sair."""
     if "--version" in sys.argv or "-V" in sys.argv:
@@ -1209,14 +1234,16 @@ def main() -> int:
                 launch_pathtraversal()
             case "40" | "overlong" | "overlongenc" | "overlongencoding":
                 launch_overlongencoding()
-            case "41" | "rtlo" | "rtloverride" | "rtl":
+            case "41" | "bominject" | "bom" | "bominjection":
+                launch_bominjection()
+            case "42" | "rtlo" | "rtloverride" | "rtl":
                 launch_rtloverride()
-            case "42" | "reconall" | "all" | "full":
+            case "43" | "reconall" | "all" | "full":
                 launch_reconall()
-            case "43" | "help" | "ajuda" | "h":
+            case "44" | "help" | "ajuda" | "h":
                 help_screen()
                 input(color("Enter para voltar...", Cyber.GRAY))
-            case "44" | "clear" | "limpar" | "cls":
+            case "45" | "clear" | "limpar" | "cls":
                 clear_console()
                 continue
             case _:

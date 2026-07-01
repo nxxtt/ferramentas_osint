@@ -68,7 +68,7 @@ from mytools.web import (
 )
 from mytools.whois import whoishistory
 
-ALL_MODULES = ["portscanner", "dnstransfer", "subenum", "dnshistory", "whoishistory", "ipasninfo", "techfingerprint", "openapidiscovery", "graphqlplayground", "sourcemapdiscovery", "vcsleak", "configfiledetect", "backupfiledetect", "googledorking", "emailbreachcheck", "socialengrecon", "pasteleak", "darkwebmonitor", "dnsrebinding", "dnswatorture", "dnsamplification", "dnstunnel", "dnssecvalidation", "nsecwalking",     "caacheck", "emailsecurity", "emailspoof", "smtpinjection", "smtpdowngrade", "emailtemplateinject", "emailattachmentbypass", "emailaddressbypass", "emaillinktracking", "nullbyteinject", "doubleurlencode", "pathtraversal", "overlongencoding", "rtloverride", "dirscanner", "webrecon", "attackaudit"]
+ALL_MODULES = ["portscanner", "dnstransfer", "subenum", "dnshistory", "whoishistory", "ipasninfo", "techfingerprint", "openapidiscovery", "graphqlplayground", "sourcemapdiscovery", "vcsleak", "configfiledetect", "backupfiledetect", "googledorking", "emailbreachcheck", "socialengrecon", "pasteleak", "darkwebmonitor", "dnsrebinding", "dnswatorture", "dnsamplification", "dnstunnel", "dnssecvalidation", "nsecwalking",     "caacheck", "emailsecurity", "emailspoof", "smtpinjection", "smtpdowngrade", "emailtemplateinject", "emailattachmentbypass", "emailaddressbypass", "emaillinktracking", "nullbyteinject", "doubleurlencode", "pathtraversal", "overlongencoding", "bominjection", "rtloverride", "dirscanner", "webrecon", "attackaudit"]
 
 """Recon completo: executa portscanner, dirscanner, webrecon, attackaudit, dnstransfer e subenum contra um alvo."""
 
