@@ -76,6 +76,18 @@ Isso instala os comandos CLI:
 | `mytools-smtpinject` | SMTP Header Injection |
 | `mytools-smtpdown` | SMTP Downgrade Attack |
 | `mytools-templeti` | Email Template Injection |
+| `mytools-addr` | Email Address Bypass |
+| `mytools-linktrack` | Email Link Tracking |
+| `mytools-nullbyte` | Null Byte Injection |
+| `mytools-dblurl` | Double URL Encoding Bypass |
+| `mytools-ptraversal` | Path Traversal via Encoding |
+| `mytools-rtlo` | RTL Override Bypass |
+| `mytools-overlong` | Overlong UTF-8 Encoding |
+| `mytools-bominject` | BOM Injection |
+| `mytools-charsetbypass` | Charset Detection Bypass |
+| `mytools-openredirect` | Open Redirect Detection |
+| `mytools-crlfinject` | CRLF Injection Detection |
+| `mytools-sstdetect` | SSTI Detection |
 | `mytools-cred` | Gerenciador de credenciais |
 | `mytools-reconall` | Recon completo (todos os módulos) |
 
@@ -410,7 +422,110 @@ mytools-templeti mail.example.com --port 25
 mytools-templeti mail.example.com --from-addr admin@test.com
 ```
 
-### 35. ReconAll (`mytools-reconall`)
+### 35. Email Address Bypass (`mytools-addr`)
+Testa bypass de blocklists de email usando técnicas de encoding e formatação.
+
+```bash
+mytools-addr user@example.com
+mytools-addr user@example.com --technique unicode
+mytools-addr -f emails.txt -o results.json
+```
+
+### 36. Email Link Tracking (`mytools-linktrack`)
+Detecta tracking pixels e rewrites de links em emails.
+
+```bash
+mytools-linktrack https://example.com
+mytools-linktrack https://example.com --deep
+```
+
+### 37. Null Byte Injection (`mytools-nullbyte`)
+Testa injecao de null bytes (%00) em URLs, headers e parâmetros HTTP.
+
+```bash
+mytools-nullbyte https://example.com
+mytools-nullbyte https://example.com -c url
+mytools-nullbyte https://example.com -c header
+```
+
+### 38. Double URL Encoding Bypass (`mytools-dblurl`)
+Testa bypass de filtros via encoding duplo de URLs.
+
+```bash
+mytools-dblurl https://example.com
+mytools-dblurl https://example.com -c param
+```
+
+### 39. Path Traversal via Encoding (`mytools-ptraversal`)
+Testa path traversal via encoding de URLs.
+
+```bash
+mytools-ptraversal https://example.com
+mytools-ptraversal https://example.com -c path
+```
+
+### 40. RTL Override Bypass (`mytools-rtlo`)
+Usa Right-to-Left Override para confundir display de URLs.
+
+```bash
+mytools-rtlo https://example.com
+mytools-rtlo https://example.com --type rtl
+mytools-rtlo https://example.com --type zero-width
+mytools-rtlo https://example.com --type combining
+```
+
+### 41. Overlong UTF-8 Encoding (`mytools-overlong`)
+Usa overlong encoding para bypass de filtros.
+
+```bash
+mytools-overlong https://example.com
+mytools-overlong https://example.com -c url
+```
+
+### 42. BOM Injection (`mytools-bominject`)
+Injeta Byte Order Mark em início de arquivos/requests.
+
+```bash
+mytools-bominject https://example.com
+mytools-bominject https://example.com -c url
+```
+
+### 43. Charset Detection Bypass (`mytools-charsetbypass`)
+Força detecção de charset errada para bypass.
+
+```bash
+mytools-charsetbypass https://example.com
+mytools-charsetbypass https://example.com -c meta
+```
+
+### 44. Open Redirect (`mytools-openredirect`)
+Detecta redirecionamentos abusivos em web apps.
+
+```bash
+mytools-openredirect https://example.com
+mytools-openredirect https://example.com -c param
+mytools-openredirect https://example.com -c bypass
+```
+
+### 45. CRLF Injection (`mytools-crlfinject`)
+Detecta injecao de headers via \r\n em HTTP.
+
+```bash
+mytools-crlfinject https://example.com
+mytools-crlfinject https://example.com -c param
+mytools-crlfinject https://example.com -c header
+```
+
+### 46. SSTI Detection (`mytools-sstdetect`)
+Detecta Server-Side Template Injection em web apps.
+
+```bash
+mytools-sstdetect https://example.com
+mytools-sstdetect https://example.com -c detect
+mytools-sstdetect https://example.com -c exploit
+```
+
+### 47. ReconAll (`mytools-reconall`)
 Executa todos os módulos contra um alvo de uma vez.
 
 ```bash
@@ -700,6 +815,18 @@ mytools-spoof --version
 mytools-smtpinject --version
 mytools-smtpdown --version
 mytools-templeti --version
+mytools-addr --version
+mytools-linktrack --version
+mytools-nullbyte --version
+mytools-dblurl --version
+mytools-ptraversal --version
+mytools-rtlo --version
+mytools-overlong --version
+mytools-bominject --version
+mytools-charsetbypass --version
+mytools-openredirect --version
+mytools-crlfinject --version
+mytools-sstdetect --version
 mytools-reconall --version
 ```
 
@@ -711,7 +838,7 @@ mytools-reconall --version
 ```bash
 mytools
 ```
-O menu oferece opções numéricas ou palavras-chave: `port`, `dir`, `recon`, `audit`, `dns/xfer`, `sub/subenum`, `dns-history`, `whois-history`, `ip-asn`, `tech`, `oas`, `gql`, `sourcemap`, `vcs`, `cfg`, `bak`, `dork`, `breach`, `soceng`, `leak`, `dark`, `rebind`, `dwt`, `amp`, `tunnel`, `dnssec`, `nsec`, `caa`, `secemail`, `spoof`, `smtpinject`, `smtpdown`, `templeti`.
+O menu oferece opções numéricas ou palavras-chave: `port`, `dir`, `recon`, `audit`, `dns/xfer`, `sub/subenum`, `dns-history`, `whois-history`, `ip-asn`, `tech`, `oas`, `gql`, `sourcemap`, `vcs`, `cfg`, `bak`, `dork`, `breach`, `soceng`, `leak`, `dark`, `rebind`, `dwt`, `amp`, `tunnel`, `dnssec`, `nsec`, `caa`, `secemail`, `spoof`, `smtpinject`, `smtpdown`, `templeti`, `addr`, `linktrack`, `nullbyte`, `dblurl`, `ptraversal`, `rtlo`, `overlong`, `bominject`, `charsetbypass`, `openredirect`, `crlfinject`, `sstdetect`.
 
 ### Modo interativo
 Cada módulo possui um shell interativo. Dentro dele, digite os argumentos normalmente:
@@ -752,6 +879,16 @@ Use `help` para ver a ajuda, `exit` para voltar ao menu.
 | `mytools-rebind example.com` | DNS rebinding test |
 | `mytools-dnssec example.com` | DNSSEC validation |
 | `mytools-secemail example.com` | Email security (DMARC/SPF/DKIM) |
+| `mytools-nullbyte https://example.com` | Null byte injection |
+| `mytools-dblurl https://example.com` | Double URL encoding bypass |
+| `mytools-ptraversal https://example.com` | Path traversal via encoding |
+| `mytools-rtlo https://example.com` | RTL override bypass |
+| `mytools-overlong https://example.com` | Overlong UTF-8 encoding |
+| `mytools-bominject https://example.com` | BOM injection |
+| `mytools-charsetbypass https://example.com` | Charset detection bypass |
+| `mytools-openredirect https://example.com` | Open redirect detection |
+| `mytools-crlfinject https://example.com` | CRLF injection detection |
+| `mytools-sstdetect https://example.com` | SSTI detection |
 | `mytools-reconall https://example.com --deep` | Recon completo com todos os módulos |
 
 ### Proxy e Rate Limiting
@@ -797,6 +934,16 @@ src/mytools/                    # Pacote principal
     graphqlplayground.py        # GraphQL Playground Exposure
     sourcemapdiscovery.py       # Source Map Discovery
     techfingerprint.py          # Technology Fingerprint
+    nullbyteinject.py           # Null Byte Injection
+    doubleurlencode.py          # Double URL Encoding Bypass
+    pathtraversal.py            # Path Traversal via Encoding
+    rtloverride.py              # RTL Override + Zero-Width + Combining
+    overlongencoding.py         # Overlong UTF-8 Encoding
+    bominjection.py             # BOM Injection
+    charsetbypass.py            # Charset Detection Bypass + Content-Type Mismatch
+    openredirect.py             # Open Redirect Detection
+    crlfinjection.py            # CRLF Injection Detection
+    sstidetect.py               # SSTI Detection
   dns/                          # DNS e resolução
     dnstransfer.py              # DNS Zone Transfer
     subdomainenum.py            # Enumeração de subdomínios
@@ -829,7 +976,7 @@ src/mytools/                    # Pacote principal
     configfiledetect.py         # Config File Detection
     backupfiledetect.py         # Backup File Detection
 
-tests/                          # Testes unitários (1900 testes)
+tests/                          # Testes unitários (2546 testes)
   core/                         # test_utils, test_cred, test_reconall
   network/                      # test_portscanner, test_dirscanner
   web/                          # test_webrecon, test_attackaudit, ...
