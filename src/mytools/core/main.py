@@ -25,6 +25,7 @@ from mytools.web import (
     nullbyteinject,
     openapidiscovery,
     pathtraversal,
+    rtloverride,
     sourcemapdiscovery,
     techfingerprint,
     webrecon,
@@ -73,7 +74,8 @@ Painel interativo central que permite alternar entre:
     37. Null Byte    - Testa injecao de null bytes em URLs, headers e parametros
     38. DblURL Encode - Testa bypass de filtros via encoding duplo de URLs
         39. Ptraversal   - Path traversal via encoding
-        40. ReconAll     - Todos os modulos contra um alvo
+        40. RTLO Bypass  - RTL Override para confundir URLs
+        41. ReconAll     - Todos os modulos contra um alvo
 
 Cada modulo e lancado em modo interativo com seu proprio shell de comandos.
 O usuario pode usar argumentos CLI normalmente dentro de cada shell.
@@ -137,9 +139,10 @@ def menu() -> None:
     print(f"  {color('37', Cyber.GREEN, Cyber.BOLD)} {color('Null Byte', Cyber.CYAN)}    Testa injecao de null bytes em web apps")
     print(f"  {color('38', Cyber.GREEN, Cyber.BOLD)} {color('DblURL Encode', Cyber.CYAN)} Testa bypass via encoding duplo de URLs")
     print(f"  {color('39', Cyber.GREEN, Cyber.BOLD)} {color('Ptraversal', Cyber.CYAN)}    Path traversal via encoding")
-    print(f"  {color('40', Cyber.GREEN, Cyber.BOLD)} {color('ReconAll', Cyber.CYAN)}          Todos os modulos contra um alvo")
-    print(f"  {color('41', Cyber.GREEN, Cyber.BOLD)} {color('Ajuda', Cyber.CYAN)}            exemplos rapidos")
-    print(f"  {color('42', Cyber.GREEN, Cyber.BOLD)} {color('Limpar', Cyber.CYAN)}           limpar terminal")
+    print(f"  {color('40', Cyber.GREEN, Cyber.BOLD)} {color('RTLO Bypass', Cyber.CYAN)}  RTL Override para confundir URLs")
+    print(f"  {color('41', Cyber.GREEN, Cyber.BOLD)} {color('ReconAll', Cyber.CYAN)}          Todos os modulos contra um alvo")
+    print(f"  {color('42', Cyber.GREEN, Cyber.BOLD)} {color('Ajuda', Cyber.CYAN)}            exemplos rapidos")
+    print(f"  {color('43', Cyber.GREEN, Cyber.BOLD)} {color('Limpar', Cyber.CYAN)}           limpar terminal")
     print(f"  {color('0', Cyber.RED, Cyber.BOLD)} {color('Sair', Cyber.CYAN)}")
 
 
@@ -300,6 +303,11 @@ def help_screen() -> None:
     print("  mytools-ptraversal https://target.com -c path")
     print("  mytools-ptraversal https://target.com -c semicolon")
     print("  mytools-ptraversal https://target.com -c platform --proxy http://127.0.0.1:8080")
+    print(color("\nRTL Override:", Cyber.CYAN))
+    print("  mytools-rtlo https://target.com")
+    print("  mytools-rtlo https://target.com -m gen")
+    print("  mytools-rtlo https://target.com -m detect")
+    print("  mytools-rtlo https://target.com -m scan -t rlo rle")
     print(color("\nReconAll:", Cyber.CYAN))
     print("  python3 reconall.py example.com")
     print("  python3 reconall.py example.com --deep --skip dnstransfer")
@@ -1056,6 +1064,28 @@ def launch_reconall() -> None:
     )
 
 
+def launch_rtloverride() -> None:
+    """Inicia o módulo RTL Override em modo interativo."""
+    parser = rtloverride.build_parser()
+    run_interactive_shell(
+        parser, "rtlo> ", rtloverride.run_once,
+        description="RTL Override — detecta bypass via Unicode RTL override.",
+        example="https://target.com -m scan",
+        banner_fn=lambda: print(color(
+            "RTL Override Bypass — detecta bypass via Unicode RTL",
+            Cyber.RED, Cyber.BOLD,
+        )),
+        contextual_help=(
+            "Uso: <url> [opcoes]\n"
+            "Exemplos:\n"
+            "  https://target.com\n"
+            "  https://target.com -m gen\n"
+            "  https://target.com -m detect\n"
+            "  https://target.com -m scan -t rlo rle"
+        ),
+    )
+
+
 def main() -> int:
     """Loop principal do menu interativo. Retorna 0 ao sair."""
     if "--version" in sys.argv or "-V" in sys.argv:
@@ -1152,12 +1182,14 @@ def main() -> int:
                 launch_doubleurlencode()
             case "39" | "ptraversal" | "pathtraversal" | "traversalenc":
                 launch_pathtraversal()
-            case "40" | "reconall" | "all" | "full":
+            case "40" | "rtlo" | "rtloverride" | "rtl":
+                launch_rtloverride()
+            case "41" | "reconall" | "all" | "full":
                 launch_reconall()
-            case "41" | "help" | "ajuda" | "h":
+            case "42" | "help" | "ajuda" | "h":
                 help_screen()
                 input(color("Enter para voltar...", Cyber.GRAY))
-            case "42" | "clear" | "limpar" | "cls":
+            case "43" | "clear" | "limpar" | "cls":
                 clear_console()
                 continue
             case _:

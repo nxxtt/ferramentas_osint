@@ -64,6 +64,7 @@ mytools-linktrack = "mytools.email.emaillinktracking:main"
 mytools-nullbyte = "mytools.web.nullbyteinject:main"
 mytools-dblurl = "mytools.web.doubleurlencode:main"
 mytools-ptraversal = "mytools.web.pathtraversal:main"
+mytools-rtlo = "mytools.web.rtloverride:main"
 mytools-reconall = "mytools.core.reconall:main"
 
 [build-system]
