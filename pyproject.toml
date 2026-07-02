@@ -20,7 +20,7 @@ pytest = ">=9.1.1"
 respx = ">=0.23.1"
 pytest-asyncio = ">=1.4.0"
 ruff = ">=0.15.20"
-basedpyright = ">=1.39.8"
+basedpyright = ">=1.39.9"
 
 [tool.poetry.scripts]
 mytools = "mytools.core.main:main"
