@@ -97,6 +97,7 @@ Isso instala os comandos CLI:
 | `mytools-ssiinject` | SSI Injection Detection |
 | `mytools-protopoll` | Prototype Pollution Detection |
 | `mytools-deserial` | Deserialization Injection Detection |
+| `mytools-cachepoison` | Cache Poisoning Detection |
 | `mytools-cred` | Gerenciador de credenciais |
 | `mytools-reconall` | Recon completo (todos os módulos) |
 
@@ -625,7 +626,18 @@ mytools-deserial https://example.com -c python
 mytools-deserial https://example.com -c bypass
 ```
 
-### 55. ReconAll (`mytools-reconall`)
+### 55. Cache Poisoning (`mytools-cachepoison`)
+Detecta cache key poisoning via headers nao-normalizados (X-Forwarded-Host, path).
+
+```bash
+mytools-cachepoison https://example.com
+mytools-cachepoison https://example.com -c host
+mytools-cachepoison https://example.com -c path
+mytools-cachepoison https://example.com -c encoding
+mytools-cachepoison https://example.com -c bypass
+```
+
+### 56. ReconAll (`mytools-reconall`)
 Executa todos os módulos contra um alvo de uma vez.
 
 ```bash
@@ -1060,6 +1072,7 @@ src/mytools/                    # Pacote principal
     ssiinject.py                # SSI Injection Detection
     prototypepollution.py       # Prototype Pollution Detection
     deserialinject.py           # Deserialization Injection Detection
+    cachepoisoning.py           # Cache Poisoning Detection
   dns/                          # DNS e resolução
     dnstransfer.py              # DNS Zone Transfer
     subdomainenum.py            # Enumeração de subdomínios

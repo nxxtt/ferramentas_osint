@@ -21,6 +21,7 @@ from mytools.vcs import vcsleak
 from mytools.web import (
     attackaudit,
     bominjection,
+    cachepoisoning,
     charsetbypass,
     crlfinjection,
     deserialinject,
@@ -175,9 +176,10 @@ def menu() -> None:
     print(f"  {color('52', Cyber.GREEN, Cyber.BOLD)} {color('SSI Inject', Cyber.CYAN)}   Server-Side Injection (RCE/leitura)")
     print(f"  {color('53', Cyber.GREEN, Cyber.BOLD)} {color('Proto Poll', Cyber.CYAN)}  Prototype Pollution (JS __proto__)")
     print(f"  {color('54', Cyber.GREEN, Cyber.BOLD)} {color('Deserial', Cyber.CYAN)}     Deserialization (PHP/Java/Python)")
-    print(f"  {color('55', Cyber.GREEN, Cyber.BOLD)} {color('ReconAll', Cyber.CYAN)}          Todos os modulos contra um alvo")
-    print(f"  {color('56', Cyber.GREEN, Cyber.BOLD)} {color('Ajuda', Cyber.CYAN)}            exemplos rapidos")
-    print(f"  {color('57', Cyber.GREEN, Cyber.BOLD)} {color('Limpar', Cyber.CYAN)}           limpar terminal")
+    print(f"  {color('55', Cyber.GREEN, Cyber.BOLD)} {color('Cache Poison', Cyber.CYAN)}  Cache Poisoning (headers/path)")
+    print(f"  {color('56', Cyber.GREEN, Cyber.BOLD)} {color('ReconAll', Cyber.CYAN)}          Todos os modulos contra um alvo")
+    print(f"  {color('57', Cyber.GREEN, Cyber.BOLD)} {color('Ajuda', Cyber.CYAN)}            exemplos rapidos")
+    print(f"  {color('58', Cyber.GREEN, Cyber.BOLD)} {color('Limpar', Cyber.CYAN)}           limpar terminal")
     print(f"  {color('0', Cyber.RED, Cyber.BOLD)} {color('Sair', Cyber.CYAN)}")
 
 
@@ -1431,6 +1433,29 @@ def launch_deserial() -> None:
     )
 
 
+def launch_cachepoison() -> None:
+    """Inicia o módulo Cache Poisoning em modo interativo."""
+    parser = cachepoisoning.build_parser()
+    run_interactive_shell(
+        parser, "cache> ", cachepoisoning.run_once,
+        description="Cache Poisoning — detecta cache key poisoning via headers nao-normalizados.",
+        example="https://target.com -c host",
+        banner_fn=lambda: print(color(
+            "Cache Poisoning — detecta cache key poisoning via headers nao-normalizados",
+            Cyber.RED, Cyber.BOLD,
+        )),
+        contextual_help=(
+            "Uso: <url> [opcoes]\n"
+            "Exemplos:\n"
+            "  https://target.com\n"
+            "  https://target.com -c host\n"
+            "  https://target.com -c path\n"
+            "  https://target.com -c encoding\n"
+            "  https://target.com -c bypass --proxy http://127.0.0.1:8080"
+        ),
+    )
+
+
 def main() -> int:
     """Loop principal do menu interativo. Retorna 0 ao sair."""
     if "--version" in sys.argv or "-V" in sys.argv:
@@ -1557,12 +1582,14 @@ def main() -> int:
                 launch_protopoll()
             case "54" | "deserial" | "deserialization":
                 launch_deserial()
-            case "55" | "reconall" | "all" | "full":
+            case "55" | "cachepoison" | "cachepoisoning" | "cpcache":
+                launch_cachepoison()
+            case "56" | "reconall" | "all" | "full":
                 launch_reconall()
-            case "56" | "help" | "ajuda" | "h":
+            case "57" | "help" | "ajuda" | "h":
                 help_screen()
                 input(color("Enter para voltar...", Cyber.GRAY))
-            case "57" | "clear" | "limpar" | "cls":
+            case "58" | "clear" | "limpar" | "cls":
                 clear_console()
                 continue
             case _:
