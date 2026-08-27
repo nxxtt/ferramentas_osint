@@ -41,7 +41,7 @@ dev = [
  "pytest-xdist>=3.8.0",
  "pytest-asyncio>=1.4.0",
  "pytest-cov>=7.1.0",
- "ruff>=0.16.3",
+ "ruff>=0.16.4",
  "basedpyright>=1.39.10",
 ]
 [project.scripts]
