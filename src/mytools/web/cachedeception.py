@@ -33,7 +33,6 @@ Fluxo:
 """
 
 import argparse
-import asyncio
 import logging
 from dataclasses import asdict, dataclass
 
@@ -46,6 +45,7 @@ from mytools.core.utils import (
     create_async_client,
     create_banner,
     print_exploit_info,
+    run_concurrent,
     run_main_loop,
     safe_asyncio_run,
     write_output,
@@ -767,38 +767,21 @@ async def run_scan(
 
         all_attempts: list[DeceptionAttempt] = []
 
-        sem = asyncio.Semaphore(concurrency)
+        baseline = (b_status, b_size, b"")
 
-        async def _run_cat(cat: str) -> list[DeceptionAttempt]:
-            async with sem:
-                if cat == "extension":
-                    return await _test_extension(
-                        client, target, (b_status, b_size, b"")
-                    )
-
-                if cat == "path":
-                    return await _test_path(client, target, (b_status, b_size, b""))
-
-                if cat == "parameter":
-                    return await _test_parameter(
-                        client, target, (b_status, b_size, b"")
-                    )
-
-                if cat == "framework":
-                    return await _test_framework(
-                        client, target, (b_status, b_size, b"")
-                    )
-
-                if cat == "bypass":
-                    return await _test_bypass(client, target, (b_status, b_size, b""))
-
-                return []
-
-        cat_tasks = [_run_cat(cat) for cat in test_categories]
-
-        for attempts in await asyncio.gather(*cat_tasks, return_exceptions=True):
-            if isinstance(attempts, list):
-                all_attempts.extend(attempts)
+        dispatch = {
+            "extension": lambda: _test_extension(client, target, baseline),
+            "path": lambda: _test_path(client, target, baseline),
+            "parameter": lambda: _test_parameter(client, target, baseline),
+            "framework": lambda: _test_framework(client, target, baseline),
+            "bypass": lambda: _test_bypass(client, target, baseline),
+        }
+        valid_cats = [c for c in test_categories if c in dispatch]
+        if valid_cats:
+            coros = [dispatch[c]() for c in valid_cats]
+            for attempts in await run_concurrent(coros, concurrency):
+                if isinstance(attempts, list):
+                    all_attempts.extend(attempts)
 
         vulnerable = [a for a in all_attempts if a.vulnerable]
 
@@ -872,7 +855,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Requisicoes simultaneas (default: 5)",
     )
 
-    add_common_args(parser)
+    add_common_args(parser, "web")
 
     return parser
 

@@ -686,7 +686,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Categorias para testar",
     )
 
-    add_common_args(parser)
+    add_common_args(parser, "web")
 
     return parser
 

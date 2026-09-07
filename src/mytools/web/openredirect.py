@@ -37,9 +37,7 @@ Fluxo:
 """
 
 import argparse
-import asyncio
 import logging
-from collections.abc import Awaitable
 from dataclasses import dataclass, replace
 from typing import Any
 from urllib.parse import quote, urlparse, urlunparse
@@ -52,6 +50,7 @@ from mytools.core.utils import (
     color,
     create_async_client,
     print_exploit_info,
+    run_concurrent,
 )
 
 logger = logging.getLogger("mytools.openredirect")
@@ -665,28 +664,21 @@ async def scan_open_redirect(
 
         baseline = (b_status, b_size, b_body)
 
-        sem = asyncio.Semaphore(concurrency)
-
-        async def _limited(coro: Awaitable[object]) -> object:
-
-            async with sem:
-                return await coro
-
-        tasks: list[Awaitable[object]] = []
+        coros = []
 
         selected = _CATEGORY_MAP.get(category, []) if category else []
 
         if not category or category == "param":
-            tasks.append(_limited(_test_param_redirect(client, url, baseline)))
+            coros.append(_test_param_redirect(client, url, baseline))
 
         if not category or category == "path":
-            tasks.append(_limited(_test_path_redirect(client, url, baseline)))
+            coros.append(_test_path_redirect(client, url, baseline))
 
         if not category or category == "header":
-            tasks.append(_limited(_test_header_redirect(client, url, baseline)))
+            coros.append(_test_header_redirect(client, url, baseline))
 
         if not category or category == "bypass":
-            tasks.append(_limited(_test_bypass_redirect(client, url, baseline)))
+            coros.append(_test_bypass_redirect(client, url, baseline))
 
         if category and not selected:
             return OpenRedirectResult(
@@ -701,7 +693,7 @@ async def scan_open_redirect(
                 overall_status="error",
             )
 
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+        results = await run_concurrent(coros, concurrency)
 
         all_attempts: list[OpenRedirectAttempt] = []
 

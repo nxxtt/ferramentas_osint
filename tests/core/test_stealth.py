@@ -20,7 +20,6 @@ from mytools.core.stealth import (
     waf_encode_url,
 )
 from mytools.core.utils import (
-    _detect_module_type,
     add_stealth_args,
     validate_stealth_args,
 )
@@ -592,22 +591,6 @@ def test_random_user_agent_returns_known_agent():
     ua = stealth_mod.random_user_agent()
     assert ua in stealth_mod._USER_AGENTS
     assert ua
-
-
-class TestDetectModuleType:
-    def test_returns_string(self):
-        result = _detect_module_type()
-        assert isinstance(result, str)
-        assert result in {
-            "web",
-            "dns",
-            "email",
-            "osint",
-            "network",
-            "vcs",
-            "config",
-            "core",
-        }
 
 
 class TestAddStealthArgs:

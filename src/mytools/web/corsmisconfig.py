@@ -33,6 +33,7 @@ Fluxo:
 """
 
 import argparse
+import asyncio
 import logging
 from dataclasses import asdict, dataclass
 from urllib.parse import urlparse
@@ -636,27 +637,22 @@ async def run_scan(
 
         test_categories = categories if categories else list(_CATEGORY_MAP.keys())
 
-        for cat in test_categories:
-            if cat == "null_origin":
-                all_attempts.extend(await _test_null_origin(client, target))
-
-            elif cat == "subdomain":
-                all_attempts.extend(
-                    await _test_subdomain(client, target, target_domain)
-                )
-
-            elif cat == "credentials":
-                all_attempts.extend(
-                    await _test_credentials(client, target, target_domain)
-                )
-
-            elif cat == "reflected":
-                all_attempts.extend(
-                    await _test_reflected(client, target, target_domain)
-                )
-
-            elif cat == "bypass":
-                all_attempts.extend(await _test_bypass(client, target, target_domain))
+        dispatch = {
+            "null_origin": lambda: _test_null_origin(client, target),
+            "subdomain": lambda: _test_subdomain(client, target, target_domain),
+            "credentials": lambda: _test_credentials(client, target, target_domain),
+            "reflected": lambda: _test_reflected(client, target, target_domain),
+            "bypass": lambda: _test_bypass(client, target, target_domain),
+        }
+        valid_cats = [c for c in test_categories if c in dispatch]
+        if valid_cats:
+            results = await asyncio.gather(
+                *(dispatch[c]() for c in valid_cats),
+                return_exceptions=True,
+            )
+            for r in results:
+                if isinstance(r, list):
+                    all_attempts.extend(r)
 
         vuln_techs = list({a.technique for a in all_attempts if a.vulnerable})
 
@@ -754,7 +750,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Categoria de testes (default: todas)",
     )
 
-    add_common_args(parser)
+    add_common_args(parser, "web")
 
     return parser
 

@@ -31,10 +31,8 @@ Fluxo:
 """
 
 import argparse
-import asyncio
 import logging
 import time
-from collections.abc import Awaitable
 from dataclasses import asdict, dataclass
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
@@ -49,6 +47,7 @@ from mytools.core.utils import (
     init_scanner,
     print_exploit_info,
     print_json,
+    run_concurrent,
     run_main_loop,
     safe_asyncio_run,
     write_output,
@@ -1006,28 +1005,26 @@ async def run_scan(
 
         all_attempts: list[SSRFAttempt] = []
 
-        tasks: list[Awaitable[list[SSRFAttempt]]] = []
+        coros = []
 
         for cat in run_categories:
             if cat == "detect":
-                tasks.append(_test_detect(client, target, baseline))
+                coros.append(_test_detect(client, target, baseline))
 
             elif cat == "internal":
-                tasks.append(_test_internal(client, target, baseline))
+                coros.append(_test_internal(client, target, baseline))
 
             elif cat == "bypass":
-                tasks.append(_test_bypass(client, target, baseline))
+                coros.append(_test_bypass(client, target, baseline))
 
             elif cat == "cloud":
-                tasks.append(_test_cloud(client, target, baseline))
+                coros.append(_test_cloud(client, target, baseline))
 
             elif cat == "header":
-                tasks.append(_test_header(client, target, baseline))
+                coros.append(_test_header(client, target, baseline))
 
-        if tasks:
-            results_list = await asyncio.gather(*tasks, return_exceptions=True)
-
-            for r in results_list:
+        if coros:
+            for r in await run_concurrent(coros, concurrency):
                 if isinstance(r, list):
                     all_attempts.extend(r)
 
@@ -1123,7 +1120,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Requisicoes simultaneas (default: 5)",
     )
 
-    add_common_args(parser)
+    add_common_args(parser, "web")
 
     return parser
 

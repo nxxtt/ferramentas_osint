@@ -29,9 +29,7 @@ Fluxo:
 """
 
 import argparse
-import asyncio
 import logging
-from collections.abc import Awaitable
 from dataclasses import asdict, dataclass
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
@@ -46,6 +44,7 @@ from mytools.core.utils import (
     init_scanner,
     print_exploit_info,
     print_json,
+    run_concurrent,
     run_main_loop,
     safe_asyncio_run,
     write_output,
@@ -518,18 +517,12 @@ async def run_scan(
             logger.info("Nenhum parametro LFI detectado na URL, testando com 'file'")
             params = ["file"]
 
-        sem = asyncio.Semaphore(concurrency)
-
-        async def _limited(coro: Awaitable[object]) -> object:
-            async with sem:
-                return await coro
-
-        tasks: list[Awaitable[object]] = []
+        coros = []
 
         if category in ("all", "lfi"):
-            tasks.append(_limited(_test_lfi(client, url, params, baseline)))
+            coros.append(_test_lfi(client, url, params, baseline))
         if category in ("all", "rfi"):
-            tasks.append(_limited(_test_rfi(client, url, params, baseline)))
+            coros.append(_test_rfi(client, url, params, baseline))
 
         if category not in ("all", "lfi", "rfi"):
             return LFIFindings(
@@ -543,7 +536,7 @@ async def run_scan(
                 overall_status="error",
             )
 
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+        results = await run_concurrent(coros, concurrency)
 
         all_attempts: list[LFIAttempt] = []
         for r in results:
@@ -669,7 +662,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=5,
         help="Requisicoes simultaneas (default: 5)",
     )
-    add_common_args(parser)
+    add_common_args(parser, "web")
     return parser
 
 

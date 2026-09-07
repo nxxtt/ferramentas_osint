@@ -429,7 +429,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Verificacao de vazamentos de emails (Email Breach Check).",
     )
-    add_common_args(parser)
+    add_common_args(parser, "osint")
     parser.add_argument("emails", nargs="*", help="Email(s) para consultar.")
     parser.add_argument(
         "-f", "--file", dest="email_file", help="Arquivo com emails (um por linha)."

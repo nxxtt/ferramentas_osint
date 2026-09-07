@@ -1112,7 +1112,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Categoria de testes (default: todas)",
     )
 
-    add_common_args(parser)
+    add_common_args(parser, "web")
 
     return parser
 

@@ -33,9 +33,7 @@ Fluxo:
 """
 
 import argparse
-import asyncio
 import logging
-from collections.abc import Awaitable
 from dataclasses import dataclass
 from urllib.parse import quote, urlparse, urlunparse
 
@@ -47,6 +45,7 @@ from mytools.core.utils import (
     color,
     create_async_client,
     print_exploit_info,
+    run_concurrent,
 )
 
 logger = logging.getLogger("mytools.doubleurlencode")
@@ -630,31 +629,24 @@ async def scan_double_url_encode(
 
         baseline = (b_status, b_size, b_body)
 
-        sem = asyncio.Semaphore(concurrency)
-
-        async def _limited(coro: Awaitable[object]) -> object:
-
-            async with sem:
-                return await coro
-
-        tasks: list[Awaitable[object]] = []
+        coros = []
 
         selected = _CATEGORY_MAP.get(category, []) if category else []
 
         if not category or category == "url":
-            tasks.append(_limited(_test_double_url(client, url, baseline)))
+            coros.append(_test_double_url(client, url, baseline))
 
         if not category or category == "param":
-            tasks.append(_limited(_test_double_params(client, url, baseline)))
+            coros.append(_test_double_params(client, url, baseline))
 
         if not category or category == "traversal":
-            tasks.append(_limited(_test_double_traversal(client, url, baseline)))
+            coros.append(_test_double_traversal(client, url, baseline))
 
         if not category or category == "header":
-            tasks.append(_limited(_test_double_headers(client, url, baseline)))
+            coros.append(_test_double_headers(client, url, baseline))
 
         if not category or category == "waf":
-            tasks.append(_limited(_test_double_waf(client, url, baseline)))
+            coros.append(_test_double_waf(client, url, baseline))
 
         if category and not selected:
             return DoubleURLEncodeResult(
@@ -669,7 +661,7 @@ async def scan_double_url_encode(
                 overall_status="error",
             )
 
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+        results = await run_concurrent(coros, concurrency)
 
         all_attempts: list[DoubleURLEncodeAttempt] = []
 

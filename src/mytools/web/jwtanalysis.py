@@ -969,7 +969,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--url", help="URL alvo para testes ativos (envia tokens forjados)"
     )
     parser.add_argument("--wordlist", help="Arquivo com secrets para brute-force HMAC")
-    add_common_args(parser)
+    add_common_args(parser, "web")
     return parser
 
 

@@ -2153,7 +2153,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Auditoria web red/blue para laboratorios e alvos autorizados."
     )
-    add_common_args(parser)
+    add_common_args(parser, "web")
     parser.add_argument("url", nargs="?", help="URL alvo. Ex: https://example.com")
     parser.add_argument(
         "-l",

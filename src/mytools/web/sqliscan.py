@@ -25,11 +25,9 @@ Testa se o servidor e vulneravel a SQL injection via parametros de URL:
 """
 
 import argparse
-import asyncio
 import logging
 import re
 import time
-from collections.abc import Awaitable
 from dataclasses import asdict, dataclass
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
@@ -44,6 +42,7 @@ from mytools.core.utils import (
     init_scanner,
     print_exploit_info,
     print_json,
+    run_concurrent,
     run_main_loop,
     safe_asyncio_run,
     write_output,
@@ -873,35 +872,27 @@ async def run_scan(
                 overall_status="error",
             )
 
-        sem = asyncio.Semaphore(concurrency)
-
-        async def _limited(coro: Awaitable[object]) -> object:
-            async with sem:
-                return await coro
-
-        tasks: list[Awaitable[object]] = []
+        coros = []
 
         if category in ("all", "error"):
-            tasks.append(_limited(_test_error(client, url, params, baseline)))
+            coros.append(_test_error(client, url, params, baseline))
         if category in ("all", "blind"):
-            tasks.append(_limited(_test_boolean_blind(client, url, params, baseline)))
-            tasks.append(
-                _limited(
-                    _test_time_blind(
-                        client,
-                        url,
-                        params,
-                        baseline,
-                        time_threshold=time_threshold,
-                    )
+            coros.append(_test_boolean_blind(client, url, params, baseline))
+            coros.append(
+                _test_time_blind(
+                    client,
+                    url,
+                    params,
+                    baseline,
+                    time_threshold=time_threshold,
                 )
             )
         if category in ("all", "union"):
-            tasks.append(_limited(_test_union(client, url, params, baseline)))
+            coros.append(_test_union(client, url, params, baseline))
         if category in ("all", "bypass"):
-            tasks.append(_limited(_test_bypass(client, url, params, baseline)))
+            coros.append(_test_bypass(client, url, params, baseline))
 
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+        results = await run_concurrent(coros, concurrency)
 
         all_attempts: list[SQLiAttempt] = []
         for r in results:
@@ -1046,7 +1037,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=1.5,
         help="Threshold em segundos para time-based blind (default: 1.5)",
     )
-    add_common_args(parser)
+    add_common_args(parser, "web")
     return parser
 
 

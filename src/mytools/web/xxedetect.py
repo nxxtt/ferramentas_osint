@@ -33,10 +33,8 @@ Fluxo:
 """
 
 import argparse
-import asyncio
 import codecs
 import logging
-from collections.abc import Awaitable
 from dataclasses import asdict, dataclass
 
 import httpx
@@ -50,6 +48,7 @@ from mytools.core.utils import (
     init_scanner,
     print_exploit_info,
     print_json,
+    run_concurrent,
     run_main_loop,
     safe_asyncio_run,
     write_output,
@@ -1043,28 +1042,26 @@ async def run_scan(
 
         all_attempts: list[XXEAttempt] = []
 
-        tasks: list[Awaitable[list[XXEAttempt]]] = []
+        coros = []
 
         for cat in run_categories:
             if cat == "detect":
-                tasks.append(_test_detect(client, target, baseline))
+                coros.append(_test_detect(client, target, baseline))
 
             elif cat == "file_read":
-                tasks.append(_test_file_read(client, target, baseline))
+                coros.append(_test_file_read(client, target, baseline))
 
             elif cat == "ssrf":
-                tasks.append(_test_ssrf(client, target, baseline))
+                coros.append(_test_ssrf(client, target, baseline))
 
             elif cat == "blind":
-                tasks.append(_test_blind(client, target, baseline))
+                coros.append(_test_blind(client, target, baseline))
 
             elif cat == "bypass":
-                tasks.append(_test_bypass(client, target, baseline))
+                coros.append(_test_bypass(client, target, baseline))
 
-        if tasks:
-            results_list = await asyncio.gather(*tasks, return_exceptions=True)
-
-            for r in results_list:
+        if coros:
+            for r in await run_concurrent(coros, concurrency):
                 if isinstance(r, list):
                     all_attempts.extend(r)
 
@@ -1154,7 +1151,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Requisicoes simultaneas (default: 5)",
     )
 
-    add_common_args(parser)
+    add_common_args(parser, "web")
 
     return parser
 

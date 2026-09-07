@@ -35,7 +35,7 @@ import threading
 import time
 import tomllib
 from collections import OrderedDict
-from collections.abc import Callable, Mapping
+from collections.abc import Awaitable, Callable, Iterable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -50,6 +50,20 @@ if TYPE_CHECKING:
 logger = logging.getLogger("mytools")
 
 _SECRET_PATTERNS = re.compile(r"(ghp_|sk-|gho_|glpat-|xox[bsrp]-|AKIA|^[^:]+:\S+$)")
+
+_STDOUT_CONFIGURED = False
+
+
+def _ensure_utf8_stdout() -> None:
+    """Configura stdout para UTF-8 uma unica vez por processo."""
+    global _STDOUT_CONFIGURED
+    if _STDOUT_CONFIGURED:
+        return
+    stdout: Any = sys.stdout
+    with contextlib.suppress(AttributeError, ValueError):
+        stdout.reconfigure(encoding="utf-8")
+    _STDOUT_CONFIGURED = True
+
 
 __all__ = [
     "NVD_API_URL",
@@ -90,10 +104,12 @@ __all__ = [
     "resolve_cred",
     "resolve_cred_async",
     "resolve_target_urls",
+    "run_concurrent",
     "run_interactive_shell",
     "run_main_loop",
     "safe_asyncio_run",
     "set_color",
+    "set_fetch_cache_ttl",
     "setup_logging",
     "severity_color",
     "show_banner",
@@ -690,6 +706,12 @@ _FETCH_CACHE_TTL = 60.0
 _FETCH_CACHE_MAX = 5000
 
 
+def set_fetch_cache_ttl(seconds: float) -> None:
+    """Define o TTL global do cache de fetch() em segundos."""
+    global _FETCH_CACHE_TTL
+    _FETCH_CACHE_TTL = seconds
+
+
 async def fetch(
     client: httpx.AsyncClient,
     url: str,
@@ -700,6 +722,7 @@ async def fetch(
     rate_limiter: RateLimiter | None = None,
     headers: dict[str, str] | None = None,
     content: bytes | None = None,
+    cache_ttl: float | None = None,
 ) -> tuple[int, Mapping[str, str], bytes, dict[str, list[str]]]:
     """Realiza uma requisicao HTTP async e retorna status, headers, corpo e raw_headers.
 
@@ -726,7 +749,8 @@ async def fetch(
     )
     now = time.monotonic()
     cached = _fetch_cache.get(cache_key)
-    if cached is not None and now - cached[0] < _FETCH_CACHE_TTL:
+    effective_ttl = cache_ttl if cache_ttl is not None else _FETCH_CACHE_TTL
+    if cached is not None and now - cached[0] < effective_ttl:
         _fetch_cache.move_to_end(cache_key)
         logger.debug("cache hit %s %s", method, url)
         return cached[1]
@@ -803,6 +827,36 @@ async def fetch(
             if attempt < max_retries - 1:
                 await asyncio.sleep(0.5 * (attempt + 1))
     raise FetchError(url=url, attempts=max_retries, last_error=last_error)
+
+
+async def run_concurrent(
+    coros: Iterable[Awaitable[object]],
+    concurrency: int = 5,
+) -> list[object]:
+    """Executa coroutines concorrentemente com limite de paralelismo.
+
+    Deduplica o boilerplate semáforo + wrapper + gather repetido em ~22 módulos
+    web. Cada coroutine é executada sob um semaphore compartilhado.
+
+    Args:
+        coros: Iterável de coroutines (não chamadas — passar a chamada, não o
+               resultado da chamada).
+        concurrency: Número máximo de requisições simultâneas.
+
+    Returns:
+        Lista com o resultado de cada coroutine na ordem original.
+        Exceções são capturadas e aparecem como BaseException na lista
+        (comportamento padrão de asyncio.gather com return_exceptions=True).
+    """
+    sem = asyncio.Semaphore(concurrency)
+
+    async def _limited(coro: Awaitable[object]) -> object:
+        async with sem:
+            return await coro
+
+    return list(
+        await asyncio.gather(*[_limited(c) for c in coros], return_exceptions=True)
+    )
 
 
 def status_color(status: int) -> str:
@@ -945,9 +999,7 @@ def print_table(
         alignments: Alinhamento por coluna ('left' ou 'right').
         row_styles_fn: Funcao que recebe uma row e retorna estilos por coluna.
     """
-    stdout: Any = sys.stdout
-    with contextlib.suppress(AttributeError, ValueError):
-        stdout.reconfigure(encoding="utf-8")
+    _ensure_utf8_stdout()
     if not rows:
         print(color(empty_message, Cyber.RED))
         return
@@ -1016,9 +1068,7 @@ def write_output(
 
 def print_json(data: Any) -> None:
     """Imprime dados como JSON formatado no stdout (para piping com jq/grep)."""
-    stdout: Any = sys.stdout
-    with contextlib.suppress(AttributeError, ValueError):
-        stdout.reconfigure(encoding="utf-8")
+    _ensure_utf8_stdout()
     json.dump(data, sys.stdout, indent=2, ensure_ascii=False, default=str)
     sys.stdout.write("\n")
 
@@ -1225,31 +1275,6 @@ def add_http_args(parser: argparse.ArgumentParser) -> None:
     )
 
 
-def _detect_module_type() -> str:
-    """Auto-detecta tipo do modulo chamador via sys._getframe().
-
-    Returns:
-        'web', 'dns', 'email', 'osint', 'network', 'vcs', 'config', ou 'core'.
-    """
-    frame = sys._getframe(1)
-    module_name = frame.f_globals.get("__name__", "")
-    if "web" in module_name:
-        return "web"
-    if "dns" in module_name:
-        return "dns"
-    if "email" in module_name:
-        return "email"
-    if "osint" in module_name:
-        return "osint"
-    if "network" in module_name:
-        return "network"
-    if "vcs" in module_name:
-        return "vcs"
-    if "config" in module_name:
-        return "config"
-    return "core"
-
-
 # Compatibilidade de flags stealth por tipo de modulo
 _STEALTH_COMPAT: dict[str, set[str]] = {
     "web": {
@@ -1303,15 +1328,13 @@ _STEALTH_COMPAT: dict[str, set[str]] = {
 
 
 def add_stealth_args(
-    parser: argparse.ArgumentParser, module_type: str | None = None
+    parser: argparse.ArgumentParser, module_type: str = "core"
 ) -> None:
     """Adiciona argumentos stealth anti-detection ao parser.
 
     Apenas flags compativel com o tipo de modulo sao adicionadas.
     Flags incompatíveis NAO aparecem no -h.
     """
-    if module_type is None:
-        module_type = _detect_module_type()
     compat = _STEALTH_COMPAT.get(module_type, _STEALTH_COMPAT["core"])
 
     if "random-delay" in compat:
@@ -1393,9 +1416,12 @@ def validate_stealth_args(
     Raises:
         SystemExit: se flag incompativel for usada (erro de usage, code 2).
     """
-    if module_type is None:
-        module_type = _detect_module_type()
-    compat = _STEALTH_COMPAT.get(module_type, _STEALTH_COMPAT["core"])
+    resolved: str = (
+        module_type
+        if module_type is not None
+        else getattr(args, "_module_type", "core")
+    )
+    compat = _STEALTH_COMPAT.get(resolved, _STEALTH_COMPAT["core"])
 
     stealth_flags = [
         "random_delay",
@@ -1432,7 +1458,7 @@ def validate_stealth_args(
         if compat_name not in compat:
             print(
                 color(
-                    f"Erro: --{compat_name.replace('_', '-')} nao e compativel com modulo {module_type}",
+                    f"Erro: --{compat_name.replace('_', '-')} nao e compativel com modulo {resolved}",
                     Cyber.RED,
                 ),
                 file=sys.stderr,
@@ -1440,11 +1466,12 @@ def validate_stealth_args(
             raise SystemExit(2)
 
 
-def add_common_args(parser: argparse.ArgumentParser) -> None:
+def add_common_args(parser: argparse.ArgumentParser, module_type: str = "core") -> None:
     """Adiciona argumentos compartilhados (base + HTTP + stealth) a um parser."""
     add_base_args(parser)
     add_http_args(parser)
-    add_stealth_args(parser)
+    add_stealth_args(parser, module_type)
+    parser.set_defaults(_module_type=module_type)
 
 
 def apply_session_auth(

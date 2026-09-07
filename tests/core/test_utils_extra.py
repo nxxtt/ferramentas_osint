@@ -29,6 +29,7 @@ from mytools.core.utils import (
     run_interactive_shell,
     run_main_loop,
     safe_asyncio_run,
+    set_fetch_cache_ttl,
     show_banner,
     validate_stealth_args,
     write_output,
@@ -585,7 +586,86 @@ class TestFetchCacheHit:
         utils._fetch_cache.clear()
 
 
-class TestFetchStealthBranches:
+class TestFetchCacheNegative:
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_404_cached_within_ttl(self):
+        calls: list[None] = []
+
+        def _handler(request):
+            calls.append(None)
+            return httpx.Response(404, text="not found")
+
+        respx.get("http://example.com/neg").mock(side_effect=_handler)
+        client = create_async_client()
+        r1 = await fetch(client, "http://example.com/neg")
+        r2 = await fetch(client, "http://example.com/neg")
+        assert r1[0] == 404
+        assert r2[0] == 404
+        assert r1 == r2
+        assert len(calls) == 1
+        await client.aclose()
+        utils._fetch_cache.clear()
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_cache_expires_after_ttl(self):
+        calls: list[None] = []
+
+        def _handler(request):
+            calls.append(None)
+            return httpx.Response(200, content=b"fresh")
+
+        respx.get("http://example.com/ttl").mock(side_effect=_handler)
+        client = create_async_client()
+        await fetch(client, "http://example.com/ttl", cache_ttl=0.0)
+        await fetch(client, "http://example.com/ttl", cache_ttl=0.0)
+        assert len(calls) == 2
+        await client.aclose()
+        utils._fetch_cache.clear()
+
+
+class TestFetchCacheCustomTTL:
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_custom_cache_ttl_short(self):
+        calls: list[None] = []
+
+        def _handler(request):
+            calls.append(None)
+            return httpx.Response(200, content=b"ok")
+
+        respx.get("http://example.com/custom").mock(side_effect=_handler)
+        client = create_async_client()
+        await fetch(client, "http://example.com/custom", cache_ttl=0.0)
+        await fetch(client, "http://example.com/custom", cache_ttl=0.0)
+        assert len(calls) == 2
+        await client.aclose()
+        utils._fetch_cache.clear()
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_custom_cache_ttl_long(self):
+        calls: list[None] = []
+
+        def _handler(request):
+            calls.append(None)
+            return httpx.Response(200, content=b"ok")
+
+        respx.get("http://example.com/long").mock(side_effect=_handler)
+        client = create_async_client()
+        await fetch(client, "http://example.com/long", cache_ttl=300.0)
+        await fetch(client, "http://example.com/long", cache_ttl=300.0)
+        assert len(calls) == 1
+        await client.aclose()
+        utils._fetch_cache.clear()
+
+    def test_set_fetch_cache_ttl(self):
+        original = utils._FETCH_CACHE_TTL
+        set_fetch_cache_ttl(120.0)
+        assert utils._FETCH_CACHE_TTL == 120.0
+        set_fetch_cache_ttl(original)
+
     @respx.mock
     @pytest.mark.asyncio
     async def test_random_delay_and_waf_with_headers(self):
@@ -690,108 +770,6 @@ class TestAddBaseArgsOutputDirPresent:
 
         add_base_args(parser)
         assert parser._option_string_actions["--output-dir"] is not None
-
-
-class TestDetectModuleType:
-    def test_web(self):
-        from mytools.core.utils import _detect_module_type
-
-        def fake_frame(name):
-            import types
-
-            module = types.ModuleType(name)
-            return type("F", (), {"f_globals": module.__dict__})()
-
-        real = sys._getframe
-        try:
-            sys._getframe = lambda depth=0: fake_frame("mytools.web.xxedetect")
-            assert _detect_module_type() == "web"
-        finally:
-            sys._getframe = real
-
-    def test_dns(self):
-        from mytools.core.utils import _detect_module_type
-
-        real = sys._getframe
-        try:
-            sys._getframe = lambda depth=0: type(
-                "F", (), {"f_globals": {"__name__": "mytools.dns.subdomain"}}
-            )()
-            assert _detect_module_type() == "dns"
-        finally:
-            sys._getframe = real
-
-    def test_email(self):
-        from mytools.core.utils import _detect_module_type
-
-        real = sys._getframe
-        try:
-            sys._getframe = lambda depth=0: type(
-                "F", (), {"f_globals": {"__name__": "mytools.email.phishing"}}
-            )()
-            assert _detect_module_type() == "email"
-        finally:
-            sys._getframe = real
-
-    def test_osint(self):
-        from mytools.core.utils import _detect_module_type
-
-        real = sys._getframe
-        try:
-            sys._getframe = lambda depth=0: type(
-                "F", (), {"f_globals": {"__name__": "mytools.osint.dorking"}}
-            )()
-            assert _detect_module_type() == "osint"
-        finally:
-            sys._getframe = real
-
-    def test_network(self):
-        from mytools.core.utils import _detect_module_type
-
-        real = sys._getframe
-        try:
-            sys._getframe = lambda depth=0: type(
-                "F", (), {"f_globals": {"__name__": "mytools.network.portscan"}}
-            )()
-            assert _detect_module_type() == "network"
-        finally:
-            sys._getframe = real
-
-    def test_vcs(self):
-        from mytools.core.utils import _detect_module_type
-
-        real = sys._getframe
-        try:
-            sys._getframe = lambda depth=0: type(
-                "F", (), {"f_globals": {"__name__": "mytools.vcs.git"}}
-            )()
-            assert _detect_module_type() == "vcs"
-        finally:
-            sys._getframe = real
-
-    def test_config(self):
-        from mytools.core.utils import _detect_module_type
-
-        real = sys._getframe
-        try:
-            sys._getframe = lambda depth=0: type(
-                "F", (), {"f_globals": {"__name__": "mytools.config.backupfile"}}
-            )()
-            assert _detect_module_type() == "config"
-        finally:
-            sys._getframe = real
-
-    def test_core_fallback(self):
-        from mytools.core.utils import _detect_module_type
-
-        real = sys._getframe
-        try:
-            sys._getframe = lambda depth=0: type(
-                "F", (), {"f_globals": {"__name__": "mytools.core.utils"}}
-            )()
-            assert _detect_module_type() == "core"
-        finally:
-            sys._getframe = real
 
 
 class TestPrintTableStylesNone:

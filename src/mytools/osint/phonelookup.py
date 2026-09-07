@@ -466,7 +466,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Phone Lookup — informacoes de um numero de telefone.",
     )
-    add_common_args(parser)
+    add_common_args(parser, "osint")
     parser.add_argument("number", help="Numero de telefone (ex.: +5511987654321).")
     parser.add_argument(
         "--region",

@@ -830,7 +830,7 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["all", "query", "body", "header", "json", "bypass"],
         help="Categoria de testes (default: todas)",
     )
-    add_common_args(parser)
+    add_common_args(parser, "web")
     return parser
 
 

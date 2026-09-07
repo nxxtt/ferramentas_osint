@@ -37,9 +37,7 @@ Fluxo:
 """
 
 import argparse
-import asyncio
 import logging
-from collections.abc import Awaitable
 from dataclasses import dataclass
 from urllib.parse import urlparse, urlunparse
 
@@ -51,6 +49,7 @@ from mytools.core.utils import (
     color,
     create_async_client,
     print_exploit_info,
+    run_concurrent,
 )
 
 logger = logging.getLogger("mytools.pathtraversal")
@@ -623,31 +622,24 @@ async def scan_path_traversal(
 
         baseline = (b_status, b_size, b_body)
 
-        sem = asyncio.Semaphore(concurrency)
-
-        async def _limited(coro: Awaitable[object]) -> object:
-
-            async with sem:
-                return await coro
-
-        tasks: list[Awaitable[object]] = []
+        coros = []
 
         selected = _CATEGORY_MAP.get(category, []) if category else []
 
         if not category or category == "path":
-            tasks.append(_limited(_test_path_traversal(client, url, baseline)))
+            coros.append(_test_path_traversal(client, url, baseline))
 
         if not category or category == "param":
-            tasks.append(_limited(_test_param_traversal(client, url, baseline)))
+            coros.append(_test_param_traversal(client, url, baseline))
 
         if not category or category == "semicolon":
-            tasks.append(_limited(_test_semicolon_traversal(client, url, baseline)))
+            coros.append(_test_semicolon_traversal(client, url, baseline))
 
         if not category or category == "mixed":
-            tasks.append(_limited(_test_mixed_traversal(client, url, baseline)))
+            coros.append(_test_mixed_traversal(client, url, baseline))
 
         if not category or category == "platform":
-            tasks.append(_limited(_test_platform_traversal(client, url, baseline)))
+            coros.append(_test_platform_traversal(client, url, baseline))
 
         if category and not selected:
             return PathTraversalResult(
@@ -662,7 +654,7 @@ async def scan_path_traversal(
                 overall_status="error",
             )
 
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+        results = await run_concurrent(coros, concurrency)
 
         all_attempts: list[PathTraversalAttempt] = []
 

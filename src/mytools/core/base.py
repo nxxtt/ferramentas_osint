@@ -61,6 +61,7 @@ class BaseScanner(ABC):
     banner_text: str = ""
     banner_fn: Callable[[], None] | None = None
     group: ScanGroup = ScanGroup.B
+    module_type: str = "core"
 
     # ------------------------------------------------------------------
     # Parser
@@ -74,7 +75,7 @@ class BaseScanner(ABC):
             formatter_class=argparse.RawDescriptionHelpFormatter,
         )
         self._add_arguments(parser)
-        add_common_args(parser)
+        add_common_args(parser, self.module_type)
         return parser
 
     @abstractmethod

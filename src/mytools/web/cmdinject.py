@@ -31,10 +31,8 @@ Testa se o servidor e vulneravel a command injection via parametros:
 """
 
 import argparse
-import asyncio
 import logging
 import time
-from collections.abc import Awaitable
 from dataclasses import asdict, dataclass
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
@@ -49,6 +47,7 @@ from mytools.core.utils import (
     init_scanner,
     print_exploit_info,
     print_json,
+    run_concurrent,
     run_main_loop,
     safe_asyncio_run,
     write_output,
@@ -643,20 +642,14 @@ async def run_scan(
             logger.info("Nenhum parametro cmd detectado, testando com 'cmd'")
             params = ["cmd"]
 
-        sem = asyncio.Semaphore(concurrency)
-
-        async def _limited(coro: Awaitable[object]) -> object:
-            async with sem:
-                return await coro
-
-        tasks: list[Awaitable[object]] = []
+        coros = []
 
         if category in ("all", "os_command"):
-            tasks.append(_limited(_test_os_command(client, url, params, baseline)))
+            coros.append(_test_os_command(client, url, params, baseline))
         if category in ("all", "blind"):
-            tasks.append(_limited(_test_blind(client, url, params, baseline)))
+            coros.append(_test_blind(client, url, params, baseline))
         if category in ("all", "bypass"):
-            tasks.append(_limited(_test_bypass(client, url, params, baseline)))
+            coros.append(_test_bypass(client, url, params, baseline))
 
         if category not in ("all", "os_command", "blind", "bypass"):
             return CmdInjectResult(
@@ -670,7 +663,7 @@ async def run_scan(
                 overall_status="error",
             )
 
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+        results = await run_concurrent(coros, concurrency)
 
         all_attempts: list[CmdInjectAttempt] = []
         for r in results:
@@ -807,7 +800,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=5,
         help="Requisicoes simultaneas (default: 5)",
     )
-    add_common_args(parser)
+    add_common_args(parser, "web")
     return parser
 
 

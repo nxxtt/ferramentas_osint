@@ -16,11 +16,9 @@ Fluxo:
 """
 
 import argparse
-import asyncio
 import logging
 import re
 import time
-from collections.abc import Awaitable
 from dataclasses import asdict, dataclass
 
 import httpx
@@ -34,6 +32,7 @@ from mytools.core.utils import (
     init_scanner,
     print_exploit_info,
     print_json,
+    run_concurrent,
     run_main_loop,
     safe_asyncio_run,
     write_output,
@@ -764,29 +763,21 @@ async def run_scan(
         run_categories = categories or list(_CATEGORY_MAP.keys())
         all_attempts: list[SSIiAttempt] = []
 
-        sem = asyncio.Semaphore(concurrency)
-
-        async def _limited(
-            coro: Awaitable[list[SSIiAttempt]],
-        ) -> list[SSIiAttempt]:
-            async with sem:
-                return await coro
-
-        tasks: list[Awaitable[list[SSIiAttempt]]] = []
+        coros = []
         for cat in run_categories:
             if cat == "detect":
-                tasks.append(_limited(_test_detect(client, target, baseline)))
+                coros.append(_test_detect(client, target, baseline))
             elif cat == "rce":
-                tasks.append(_limited(_test_rce(client, target, baseline)))
+                coros.append(_test_rce(client, target, baseline))
             elif cat == "file_read":
-                tasks.append(_limited(_test_file_read(client, target, baseline)))
+                coros.append(_test_file_read(client, target, baseline))
             elif cat == "blind":
-                tasks.append(_limited(_test_blind(client, target, baseline)))
+                coros.append(_test_blind(client, target, baseline))
             elif cat == "bypass":
-                tasks.append(_limited(_test_bypass(client, target, baseline)))
+                coros.append(_test_bypass(client, target, baseline))
 
-        if tasks:
-            results_list = await asyncio.gather(*tasks, return_exceptions=True)
+        if coros:
+            results_list = await run_concurrent(coros, concurrency)
             for r in results_list:
                 if isinstance(r, list):
                     all_attempts.extend(r)
@@ -867,7 +858,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=5,
         help="Requisicoes simultaneas (default: 5)",
     )
-    add_common_args(parser)
+    add_common_args(parser, "web")
     return parser
 
 

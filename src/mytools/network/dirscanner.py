@@ -510,7 +510,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Directory/file scanner HTTP rapido para laboratorios e hosts autorizados."
     )
-    add_common_args(parser)
+    add_common_args(parser, "network")
     parser.add_argument("url", nargs="?", help="URL alvo. Ex: http://example.com")
     parser.add_argument(
         "-l",

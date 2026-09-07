@@ -30,7 +30,6 @@ Valide manualmente antes de assumir que um bucket e acessivel.
 """
 
 import argparse
-import asyncio
 import logging
 import time
 from dataclasses import asdict, dataclass
@@ -46,6 +45,7 @@ from mytools.core.utils import (
     create_banner,
     init_scanner,
     print_json,
+    run_concurrent,
     run_main_loop,
     safe_asyncio_run,
     write_output,
@@ -543,29 +543,20 @@ async def run_scan(
         user_agent="MyTools/cloudbucketenum",
         timeout=timeout,
     ) as client:
-        sem = asyncio.Semaphore(concurrency)
-
-        async def _limited(coro: object) -> object:
-            async with sem:
-                return await coro  # type: ignore[misc]
-
         all_attempts: list[BucketAttempt] = []
 
         for name in bucket_names:
-            tasks: list[object] = []
+            coros = []
 
             if providers in ("all", "s3"):
-                tasks.append(_test_s3(client, name, timeout))
+                coros.append(_test_s3(client, name, timeout))
             if providers in ("all", "gcp"):
-                tasks.append(_test_gcp(client, name, timeout))
+                coros.append(_test_gcp(client, name, timeout))
             if providers in ("all", "azure"):
-                tasks.append(_test_azure(client, name, timeout))
+                coros.append(_test_azure(client, name, timeout))
 
-            if tasks:  # pragma: no cover - providers validado apos gerar >=1 task
-                results = await asyncio.gather(
-                    *[_limited(t) for t in tasks],
-                    return_exceptions=True,
-                )
+            if coros:  # pragma: no cover - providers validado apos gerar >=1 task
+                results = await run_concurrent(coros, concurrency)
                 for r in results:
                     if isinstance(r, list):
                         all_attempts.extend(r)
@@ -677,7 +668,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=5,
         help="Requisicoes simultaneas (default: 5)",
     )
-    add_common_args(parser)
+    add_common_args(parser, "web")
     return parser
 
 

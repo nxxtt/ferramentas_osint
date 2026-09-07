@@ -49,9 +49,8 @@ Fluxo:
 """
 
 import argparse
-import asyncio
 import logging
-from collections.abc import Awaitable, Callable
+from collections.abc import Callable
 from dataclasses import dataclass
 from urllib.parse import urlparse, urlunparse
 
@@ -63,6 +62,7 @@ from mytools.core.utils import (
     color,
     create_async_client,
     print_exploit_info,
+    run_concurrent,
 )
 
 logger = logging.getLogger("mytools.overlongencoding")
@@ -650,28 +650,21 @@ async def scan_overlong_encoding(
 
         baseline = (b_status, b_size, b_body)
 
-        sem = asyncio.Semaphore(concurrency)
-
-        async def _limited(coro: Awaitable[object]) -> object:
-
-            async with sem:
-                return await coro
-
-        tasks: list[Awaitable[object]] = []
+        coros = []
 
         selected = _CATEGORY_MAP.get(category, []) if category else []
 
         if not category or category == "url":
-            tasks.append(_limited(_test_overlong_url(client, url, baseline)))
+            coros.append(_test_overlong_url(client, url, baseline))
 
         if not category or category == "param":
-            tasks.append(_limited(_test_overlong_params(client, url, baseline)))
+            coros.append(_test_overlong_params(client, url, baseline))
 
         if not category or category == "header":
-            tasks.append(_limited(_test_overlong_headers(client, url, baseline)))
+            coros.append(_test_overlong_headers(client, url, baseline))
 
         if not category or category == "waf":
-            tasks.append(_limited(_test_overlong_waf(client, url, baseline)))
+            coros.append(_test_overlong_waf(client, url, baseline))
 
         if category and not selected:
             return OverlongResult(
@@ -686,7 +679,7 @@ async def scan_overlong_encoding(
                 overall_status="error",
             )
 
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+        results = await run_concurrent(coros, concurrency)
 
         all_attempts: list[OverlongAttempt] = []
 

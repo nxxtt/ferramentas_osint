@@ -328,7 +328,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--exploits-only", action="store_true", help="Mostrar apenas exploits"
     )
-    add_common_args(parser)
+    add_common_args(parser, "web")
     return parser
 
 

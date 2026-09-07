@@ -33,9 +33,7 @@ Fluxo:
 """
 
 import argparse
-import asyncio
 import logging
-from collections.abc import Awaitable
 from dataclasses import asdict, dataclass
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
@@ -48,6 +46,7 @@ from mytools.core.utils import (
     create_async_client,
     create_banner,
     print_exploit_info,
+    run_concurrent,
     run_main_loop,
     safe_asyncio_run,
     write_output,
@@ -821,32 +820,26 @@ async def run_scan(
 
     all_attempts: list[CRLFAttempt] = []
 
-    sem = asyncio.Semaphore(concurrency)
-
-    async def _limited(coro: Awaitable[list[CRLFAttempt]]) -> list[CRLFAttempt]:
-        async with sem:
-            return await coro
-
-    tasks: list[Awaitable[list[CRLFAttempt]]] = []
+    coros = []
 
     for cat in run_categories:
         if cat == "param":
-            tasks.append(_limited(_test_param_crlf(client, target, baseline)))
+            coros.append(_test_param_crlf(client, target, baseline))
 
         elif cat == "header":
-            tasks.append(_limited(_test_header_crlf(client, target, baseline)))
+            coros.append(_test_header_crlf(client, target, baseline))
 
         elif cat == "path":
-            tasks.append(_limited(_test_path_crlf(client, target, baseline)))
+            coros.append(_test_path_crlf(client, target, baseline))
 
         elif cat == "split":
-            tasks.append(_limited(_test_split(client, target, baseline)))
+            coros.append(_test_split(client, target, baseline))
 
         elif cat == "bypass":
-            tasks.append(_limited(_test_bypass(client, target, baseline)))
+            coros.append(_test_bypass(client, target, baseline))
 
-    if tasks:
-        results_list = await asyncio.gather(*tasks, return_exceptions=True)
+    if coros:
+        results_list = await run_concurrent(coros, concurrency)
 
         for r in results_list:
             if isinstance(r, list):
@@ -915,7 +908,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Requisicoes simultaneas (default: 5)",
     )
 
-    add_common_args(parser)
+    add_common_args(parser, "web")
 
     return parser
 

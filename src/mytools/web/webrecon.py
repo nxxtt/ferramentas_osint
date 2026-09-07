@@ -1102,7 +1102,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="HTTP recon rapido para laboratorios e hosts autorizados."
     )
-    add_common_args(parser)
+    add_common_args(parser, "web")
     parser.add_argument("url", nargs="?", help="URL alvo. Ex: https://example.com")
     parser.add_argument(
         "-l",

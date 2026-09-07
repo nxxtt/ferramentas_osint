@@ -34,6 +34,7 @@ from mytools.core.utils import (
     create_banner,
     init_scanner,
     print_json,
+    run_concurrent,
     run_main_loop,
     safe_asyncio_run,
     write_output,
@@ -458,60 +459,58 @@ async def run_scan(
         )
 
     async with create_async_client(timeout=timeout) as client:
-        semaphore = asyncio.Semaphore(concurrency)
         attempts: list[TakeoverAttempt] = []
 
         async def _check_one(sub: str) -> TakeoverAttempt | None:
-            async with semaphore:
-                cname = await asyncio.to_thread(_resolve_cname, sub, min(timeout, 5.0))
-                if not cname:
-                    return None
+            cname = await asyncio.to_thread(_resolve_cname, sub, min(timeout, 5.0))
+            if not cname:
+                return None
 
-                match = _match_service(cname, services)
-                if not match:
-                    logger.debug("CNAME %s -> %s (servico desconhecido)", sub, cname)
-                    return None
+            match = _match_service(cname, services)
+            if not match:
+                logger.debug("CNAME %s -> %s (servico desconhecido)", sub, cname)
+                return None
 
-                svc_name, _suffix = match
-                signatures = services[svc_name].get("http_signatures", [])
-                if not isinstance(signatures, list):
-                    signatures = []
+            svc_name, _suffix = match
+            signatures = services[svc_name].get("http_signatures", [])
+            if not isinstance(signatures, list):
+                signatures = []
 
-                http_status, http_match, matched_sig = await _check_http_fingerprint(
-                    client,
-                    sub,
-                    signatures,
-                )
+            http_status, http_match, matched_sig = await _check_http_fingerprint(
+                client,
+                sub,
+                signatures,
+            )
 
-                vulnerable = http_match
-                details = (
-                    f"CNAME -> {cname} [{svc_name}], HTTP {http_status}, match: '{matched_sig}'"
-                    if http_match
-                    else f"CNAME -> {cname} [{svc_name}], HTTP {http_status}, sem match"
-                )
+            vulnerable = http_match
+            details = (
+                f"CNAME -> {cname} [{svc_name}], HTTP {http_status}, match: '{matched_sig}'"
+                if http_match
+                else f"CNAME -> {cname} [{svc_name}], HTTP {http_status}, sem match"
+            )
 
-                logger.info(
-                    "%s %s -> %s [%s] HTTP %d %s",
-                    "VULN" if vulnerable else "OK",
-                    sub,
-                    cname,
-                    svc_name,
-                    http_status,
-                    f"match='{matched_sig}'" if http_match else "",
-                )
+            logger.info(
+                "%s %s -> %s [%s] HTTP %d %s",
+                "VULN" if vulnerable else "OK",
+                sub,
+                cname,
+                svc_name,
+                http_status,
+                f"match='{matched_sig}'" if http_match else "",
+            )
 
-                return TakeoverAttempt(
-                    subdomain=sub,
-                    cname_target=cname,
-                    service=svc_name,
-                    http_status=http_status,
-                    http_match=http_match,
-                    vulnerable=vulnerable,
-                    details=details,
-                )
+            return TakeoverAttempt(
+                subdomain=sub,
+                cname_target=cname,
+                service=svc_name,
+                http_status=http_status,
+                http_match=http_match,
+                vulnerable=vulnerable,
+                details=details,
+            )
 
-        tasks = [_check_one(sub) for sub in subdomains]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+        coros = [_check_one(sub) for sub in subdomains]
+        results = await run_concurrent(coros, concurrency)
 
         dangling_count = 0
         vuln_subs: list[str] = []
@@ -635,7 +634,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=10,
         help="Requisicoes simultaneas (default: 10)",
     )
-    add_common_args(parser)
+    add_common_args(parser, "web")
     return parser
 
 

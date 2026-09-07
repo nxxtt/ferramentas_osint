@@ -565,7 +565,7 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["all", "user_agent", "referer", "custom_header", "url_path", "bypass"],
         help="Categoria de testes (default: todas)",
     )
-    add_common_args(parser)
+    add_common_args(parser, "web")
     return parser
 
 

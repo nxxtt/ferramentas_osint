@@ -498,7 +498,7 @@ def build_parser() -> argparse.ArgumentParser:
         description="RTL Override Bypass — detecta bypass via caracteres Unicode de direcao."
     )
 
-    add_common_args(parser)
+    add_common_args(parser, "web")
 
     parser.add_argument("url", nargs="?", help="URL alvo. Ex: https://target.com")
 

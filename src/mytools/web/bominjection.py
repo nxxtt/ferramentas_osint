@@ -41,9 +41,7 @@ Fluxo:
 """
 
 import argparse
-import asyncio
 import logging
-from collections.abc import Awaitable
 from dataclasses import dataclass
 from urllib.parse import urlparse, urlunparse
 
@@ -55,6 +53,7 @@ from mytools.core.utils import (
     color,
     create_async_client,
     print_exploit_info,
+    run_concurrent,
 )
 
 logger = logging.getLogger("mytools.bominjection")
@@ -587,28 +586,21 @@ async def scan_bom_injection(
 
         baseline = (b_status, b_size, b_body)
 
-        sem = asyncio.Semaphore(concurrency)
-
-        async def _limited(coro: Awaitable[object]) -> object:
-
-            async with sem:
-                return await coro
-
-        tasks: list[Awaitable[object]] = []
+        coros = []
 
         selected = _CATEGORY_MAP.get(category, []) if category else []
 
         if not category or category == "url":
-            tasks.append(_limited(_test_bom_url(client, url, baseline)))
+            coros.append(_test_bom_url(client, url, baseline))
 
         if not category or category == "header":
-            tasks.append(_limited(_test_bom_headers(client, url, baseline)))
+            coros.append(_test_bom_headers(client, url, baseline))
 
         if not category or category == "body":
-            tasks.append(_limited(_test_bom_body(client, url, baseline)))
+            coros.append(_test_bom_body(client, url, baseline))
 
         if not category or category == "upload":
-            tasks.append(_limited(_test_bom_upload(client, url, baseline)))
+            coros.append(_test_bom_upload(client, url, baseline))
 
         if category and not selected:
             return BomResult(
@@ -623,7 +615,7 @@ async def scan_bom_injection(
                 overall_status="error",
             )
 
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+        results = await run_concurrent(coros, concurrency)
 
         all_attempts: list[BomAttempt] = []
 

@@ -39,9 +39,7 @@ Fluxo:
 """
 
 import argparse
-import asyncio
 import logging
-from collections.abc import Awaitable
 from dataclasses import dataclass
 from urllib.parse import urlparse, urlunparse
 
@@ -53,6 +51,7 @@ from mytools.core.utils import (
     color,
     create_async_client,
     print_exploit_info,
+    run_concurrent,
 )
 
 logger = logging.getLogger("mytools.charsetbypass")
@@ -800,31 +799,24 @@ async def scan_charset_bypass(
 
         baseline = (b_status, b_size, b_body)
 
-        sem = asyncio.Semaphore(concurrency)
-
-        async def _limited(coro: Awaitable[object]) -> object:
-
-            async with sem:
-                return await coro
-
-        tasks: list[Awaitable[object]] = []
+        coros = []
 
         selected = _CATEGORY_MAP.get(category, []) if category else []
 
         if not category or category == "meta":
-            tasks.append(_limited(_test_meta_charset(client, url, baseline)))
+            coros.append(_test_meta_charset(client, url, baseline))
 
         if not category or category == "content_type":
-            tasks.append(_limited(_test_content_type_charset(client, url, baseline)))
+            coros.append(_test_content_type_charset(client, url, baseline))
 
         if not category or category == "bom":
-            tasks.append(_limited(_test_bom_charset(client, url, baseline)))
+            coros.append(_test_bom_charset(client, url, baseline))
 
         if not category or category == "xml":
-            tasks.append(_limited(_test_xml_charset(client, url, baseline)))
+            coros.append(_test_xml_charset(client, url, baseline))
 
         if not category or category == "mixed":
-            tasks.append(_limited(_test_mixed_charset(client, url, baseline)))
+            coros.append(_test_mixed_charset(client, url, baseline))
 
         if category and not selected:
             return CharsetBypassResult(
@@ -839,7 +831,7 @@ async def scan_charset_bypass(
                 overall_status="error",
             )
 
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+        results = await run_concurrent(coros, concurrency)
 
         all_attempts: list[CharsetBypassAttempt] = []
 

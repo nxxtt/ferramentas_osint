@@ -434,7 +434,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Descoberta de source maps de JavaScript expostos.",
     )
-    add_common_args(parser)
+    add_common_args(parser, "web")
     parser.add_argument("url", nargs="?", help="URL alvo. Ex: http://example.com")
     parser.add_argument(
         "-l",

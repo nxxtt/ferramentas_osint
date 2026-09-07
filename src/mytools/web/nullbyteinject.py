@@ -33,9 +33,7 @@ Fluxo:
 """
 
 import argparse
-import asyncio
 import logging
-from collections.abc import Awaitable
 from dataclasses import dataclass
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
@@ -47,6 +45,7 @@ from mytools.core.utils import (
     color,
     create_async_client,
     print_exploit_info,
+    run_concurrent,
 )
 
 logger = logging.getLogger("mytools.nullbyteinject")
@@ -708,31 +707,24 @@ async def scan_null_byte(
 
         baseline = (b_status, b_size, b_body)
 
-        sem = asyncio.Semaphore(concurrency)
-
-        async def _limited(coro: Awaitable[object]) -> object:
-
-            async with sem:
-                return await coro
-
-        tasks: list[Awaitable[object]] = []
+        coros = []
 
         selected = _CATEGORY_MAP.get(category, []) if category else []
 
         if not category or category == "url":
-            tasks.append(_limited(_test_null_in_url(client, url, baseline)))
+            coros.append(_test_null_in_url(client, url, baseline))
 
         if not category or category == "header":
-            tasks.append(_limited(_test_null_in_headers(client, url, baseline)))
+            coros.append(_test_null_in_headers(client, url, baseline))
 
         if not category or category == "param":
-            tasks.append(_limited(_test_null_in_params(client, url, baseline)))
+            coros.append(_test_null_in_params(client, url, baseline))
 
         if not category or category == "traversal":
-            tasks.append(_limited(_test_path_traversal(client, url, baseline)))
+            coros.append(_test_path_traversal(client, url, baseline))
 
         if not category or category == "auth":
-            tasks.append(_limited(_test_auth_bypass(client, url, baseline)))
+            coros.append(_test_auth_bypass(client, url, baseline))
 
         if category and not selected:
             return NullByteResult(
@@ -747,7 +739,7 @@ async def scan_null_byte(
                 overall_status="error",
             )
 
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+        results = await run_concurrent(coros, concurrency)
 
         all_attempts: list[NullByteAttempt] = []
 

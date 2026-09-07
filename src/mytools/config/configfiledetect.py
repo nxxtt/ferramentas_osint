@@ -604,7 +604,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Deteccao de arquivos de configuracao expostos em servidores web.",
     )
-    add_common_args(parser)
+    add_common_args(parser, "config")
     parser.add_argument("url", nargs="?", help="URL alvo. Ex: http://example.com")
     parser.add_argument(
         "-l",

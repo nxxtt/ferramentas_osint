@@ -1051,7 +1051,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=5,
         help="Requisicoes simultaneas (default: 5)",
     )
-    add_common_args(parser)
+    add_common_args(parser, "web")
     return parser
 
 

@@ -769,7 +769,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     parser.add_argument("--dns-domains", nargs="+", help="Domínios para DNS timing")
 
-    add_common_args(parser)
+    add_common_args(parser, "web")
 
     return parser
 

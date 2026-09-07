@@ -1469,7 +1469,7 @@ def build_parser() -> argparse.ArgumentParser:
         choices=list(_CATEGORY_MAP.keys()),
         help="Categorias para testar (default: todas)",
     )
-    add_common_args(parser)
+    add_common_args(parser, "web")
     return parser
 
 

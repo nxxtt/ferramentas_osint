@@ -436,7 +436,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Deteccao de controle de versao (.git, .svn, .hg) exposto em servidores web.",
     )
-    add_common_args(parser)
+    add_common_args(parser, "vcs")
     parser.add_argument("url", nargs="?", help="URL alvo. Ex: http://example.com")
     parser.add_argument(
         "-l",

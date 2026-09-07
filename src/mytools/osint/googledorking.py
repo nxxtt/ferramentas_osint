@@ -454,7 +454,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Google Dorking e OSINT search — gera dorks e busca via DuckDuckGo.",
     )
-    add_common_args(parser)
+    add_common_args(parser, "osint")
     parser.add_argument("domain", nargs="?", help="Dominio alvo. Ex: example.com")
     parser.add_argument(
         "-l", "--list", dest="target_list", help="Arquivo com dominios (um por linha)."

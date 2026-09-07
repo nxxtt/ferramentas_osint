@@ -32,10 +32,9 @@ Fuzzing generico de APIs REST testando:
 """
 
 import argparse
-import asyncio
 import json
 import logging
-from collections.abc import Awaitable, Sequence
+from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
@@ -50,6 +49,7 @@ from mytools.core.utils import (
     init_scanner,
     print_exploit_info,
     print_json,
+    run_concurrent,
     run_main_loop,
     safe_asyncio_run,
     write_output,
@@ -1048,12 +1048,6 @@ async def run_scan(
     ) as client:
         ep_list = await _get_endpoints(client, base_url, endpoints)
 
-        sem = asyncio.Semaphore(concurrency)
-
-        async def _limited(coro: Awaitable[object]) -> object:
-            async with sem:
-                return await coro
-
         all_attempts: list[RestFuzzAttempt] = []
         b_status = 0
 
@@ -1068,20 +1062,18 @@ async def run_scan(
 
             logger.info("Endpoint %s: baseline %d", endpoint, b_status)
 
-            tasks: list[Awaitable[object]] = []
+            coros = []
 
             if "auth_bypass" in cats:
-                tasks.append(_limited(_test_auth_bypass(client, endpoint, baseline)))
+                coros.append(_test_auth_bypass(client, endpoint, baseline))
             if "content_type" in cats:
-                tasks.append(_limited(_test_content_type(client, endpoint, baseline)))
+                coros.append(_test_content_type(client, endpoint, baseline))
             if "version_enum" in cats:
-                tasks.append(
-                    _limited(_test_version_enum(client, endpoint, base_url, baseline))
-                )
+                coros.append(_test_version_enum(client, endpoint, base_url, baseline))
             if "hateoas" in cats:
-                tasks.append(_limited(_test_hateoas(client, endpoint, baseline)))
+                coros.append(_test_hateoas(client, endpoint, baseline))
 
-            results = await asyncio.gather(*tasks, return_exceptions=True)
+            results = await run_concurrent(coros, concurrency)
             for r in results:
                 if isinstance(r, list):
                     all_attempts.extend(r)
@@ -1217,7 +1209,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=5,
         help="Requisicoes simultaneas (default: 5)",
     )
-    add_common_args(parser)
+    add_common_args(parser, "web")
     return parser
 
 

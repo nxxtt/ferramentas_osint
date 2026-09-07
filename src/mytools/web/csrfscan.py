@@ -24,9 +24,7 @@ este modulo faz testes ativos:
 """
 
 import argparse
-import asyncio
 import logging
-from collections.abc import Awaitable
 from dataclasses import asdict, dataclass
 from html.parser import HTMLParser
 from urllib.parse import urlparse, urlunparse
@@ -42,6 +40,7 @@ from mytools.core.utils import (
     init_scanner,
     print_exploit_info,
     print_json,
+    run_concurrent,
     run_main_loop,
     safe_asyncio_run,
     write_output,
@@ -519,22 +518,16 @@ async def run_scan(
         ]
         logger.info("Forms state-changing: %d", len(state_forms))
 
-        sem = asyncio.Semaphore(concurrency)
-
-        async def _limited(coro: Awaitable[object]) -> object:
-            async with sem:
-                return await coro
-
-        tasks: list[Awaitable[object]] = []
+        coros = []
 
         if category in ("all", "form_detection"):
-            tasks.append(_limited(_test_form_detection(client, url, b_body)))
+            coros.append(_test_form_detection(client, url, b_body))
         if category in ("all", "cookie_analysis"):
-            tasks.append(_limited(_test_cookie_analysis(client, url, b_cookies)))
+            coros.append(_test_cookie_analysis(client, url, b_cookies))
         if category in ("all", "origin_referer"):
-            tasks.append(_limited(_test_origin_referer(client, url, b_body)))
+            coros.append(_test_origin_referer(client, url, b_body))
         if category in ("all", "token_analysis"):
-            tasks.append(_limited(_test_token_analysis(client, url, b_body)))
+            coros.append(_test_token_analysis(client, url, b_body))
 
         if category not in (
             "all",
@@ -555,7 +548,7 @@ async def run_scan(
                 overall_status="error",
             )
 
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+        results = await run_concurrent(coros, concurrency)
 
         all_attempts: list[CSRFAttempt] = []
         for r in results:
@@ -685,7 +678,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=5,
         help="Requisicoes simultaneas (default: 5)",
     )
-    add_common_args(parser)
+    add_common_args(parser, "web")
     return parser
 
 
